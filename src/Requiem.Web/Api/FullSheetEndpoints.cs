@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Requiem.Data;
 using Requiem.Data.Entities;
+using Requiem.Shared.Accounts;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Contracts;
 using Requiem.Shared.Rules;
+using Requiem.Web.Auth;
 
 namespace Requiem.Web.Api;
 
@@ -13,7 +15,7 @@ public static class FullSheetEndpoints
 {
     public static RouteGroupBuilder MapFullSheetEndpoints(this RouteGroupBuilder api)
     {
-        var characters = api.MapGroup("/characters").WithTags("Characters");
+        var characters = api.MapGroup("/characters").WithTags("Characters").RequireAuthorization(Policies.GameMaster);
 
         characters.MapGet("/{id:guid}/full-sheet", GetAsync);
         characters.MapPost("/full-sheet", CreateAsync);
@@ -23,18 +25,20 @@ public static class FullSheetEndpoints
         return api;
     }
 
-    private static async Task<Results<Ok<FullSheetForm>, NotFound>> GetAsync(Guid id, RequiemDbContext db, CancellationToken ct)
+    private static async Task<Results<Ok<FullSheetForm>, NotFound>> GetAsync(
+        Guid id, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
-        var character = await LoadAsync(db, id, CharacterTier.FullSheet, tracked: false, ct);
+        var character = await LoadAsync(access, id, CharacterTier.FullSheet, tracked: false, ct);
         return character is null ? TypedResults.NotFound() : TypedResults.Ok(FullSheetMapper.ToForm(character));
     }
 
     private static async Task<Results<Created<FullSheetForm>, ValidationProblem>> CreateAsync(
-        FullSheetForm form, RequiemDbContext db, TimeProvider time, CancellationToken ct)
+        FullSheetForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
-        if (await ValidateAsync(form, null, db, ct) is { } errors) return TypedResults.ValidationProblem(errors);
+        if (await ValidateAsync(form, null, db, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
 
-        var character = new Character { Name = form.Name };
+        // New NPCs go to the creating GM's personal roster.
+        var character = new Character { Name = form.Name, OwnerUserId = access.UserId };
         FullSheetMapper.Apply(form, character, time.GetUtcNow());
         db.Characters.Add(character);
         await db.SaveChangesAsync(ct);
@@ -43,11 +47,11 @@ public static class FullSheetEndpoints
     }
 
     private static async Task<Results<Ok<FullSheetForm>, NotFound, ValidationProblem, Conflict<ProblemDetailsBody>>> UpdateAsync(
-        Guid id, FullSheetForm form, RequiemDbContext db, TimeProvider time, CancellationToken ct)
+        Guid id, FullSheetForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
-        if (await ValidateAsync(form, id, db, ct) is { } errors) return TypedResults.ValidationProblem(errors);
+        if (await ValidateAsync(form, id, db, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
 
-        var character = await LoadAsync(db, id, CharacterTier.FullSheet, tracked: true, ct);
+        var character = await LoadAsync(access, id, CharacterTier.FullSheet, tracked: true, ct);
         if (character is null) return TypedResults.NotFound();
 
         db.Entry(character).Property(c => c.Version).OriginalValue = form.Version;
@@ -68,9 +72,9 @@ public static class FullSheetEndpoints
     }
 
     private static async Task<Results<Ok<FullSheetForm>, NotFound, Conflict<ProblemDetailsBody>>> PromoteAsync(
-        Guid id, PromoteRequest request, RequiemDbContext db, CancellationToken ct)
+        Guid id, PromoteRequest request, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
-        var character = await LoadAsync(db, id, CharacterTier.SupportingCast, tracked: true, ct);
+        var character = await LoadAsync(access, id, CharacterTier.SupportingCast, tracked: true, ct);
         if (character is null) return TypedResults.NotFound();
 
         db.Entry(character).Property(c => c.Version).OriginalValue = request.Version;
@@ -89,9 +93,9 @@ public static class FullSheetEndpoints
         return TypedResults.Ok(FullSheetMapper.ToForm(character));
     }
 
-    private static Task<Character?> LoadAsync(RequiemDbContext db, Guid id, CharacterTier tier, bool tracked, CancellationToken ct)
+    private static Task<Character?> LoadAsync(CampaignAccess access, Guid id, CharacterTier tier, bool tracked, CancellationToken ct)
     {
-        var query = db.Characters
+        var query = access.ManagedCharacters()
             .Include(c => c.Attributes).Include(c => c.Skills).Include(c => c.Specialties)
             .Include(c => c.Disciplines).Include(c => c.LearnedPowers).Include(c => c.Merits).Include(c => c.Wounds)
             .Include(c => c.Stains).Include(c => c.Compels).Include(c => c.Conditions).Include(c => c.Scripts)
@@ -145,7 +149,7 @@ public static class FullSheetEndpoints
 
     /// <returns>Errors keyed by form property name, or null when valid.</returns>
     private static async Task<Dictionary<string, string[]>?> ValidateAsync(
-        FullSheetForm form, Guid? id, RequiemDbContext db, CancellationToken ct)
+        FullSheetForm form, Guid? id, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
         // Tidy the form for its kind first (e.g. a ghoul keeps at most 8 Vitae), as saving would.
         form.NormalizeForKind();
@@ -178,7 +182,7 @@ public static class FullSheetEndpoints
         {
             if (sireId == id)
                 results.Add(new ValidationResult("A character can't be their own sire.", [nameof(form.SireId)]));
-            else if (!await db.Characters.AnyAsync(c => c.Id == sireId, ct))
+            else if (!await access.CanManageCharacterAsync(sireId, ct))
                 results.Add(new ValidationResult("Unknown sire.", [nameof(form.SireId)]));
         }
 

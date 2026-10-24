@@ -9,7 +9,10 @@ internal sealed class SceneConfiguration : IEntityTypeConfiguration<Scene>, IEnt
     public void Configure(EntityTypeBuilder<Scene> b)
     {
         b.Property(x => x.Name).HaveNameLength();
+        b.Property(x => x.OwnerUserId).HasMaxLength(Lengths.UserId);
         b.HasIndex(x => x.UpdatedAt);
+        b.HasIndex(x => x.OwnerUserId);
+        b.HasOne<Campaign>().WithMany().HasForeignKey(x => x.CampaignId).OnDelete(DeleteBehavior.Restrict);
         b.HasMany(x => x.Members).WithOne().HasForeignKey(x => x.SceneId).OnDelete(DeleteBehavior.Cascade);
     }
 

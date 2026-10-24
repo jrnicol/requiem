@@ -57,7 +57,12 @@ public static class AuthSetup
         });
 
         services.AddAuthorizationBuilder()
-            .AddPolicy(Policies.GameMaster, policy => policy.RequireRole(Roles.GameMaster));
+            .AddPolicy(Policies.GameMaster, policy => policy.RequireRole(Roles.GameMaster))
+            .AddPolicy(Policies.Member, policy => policy.RequireAuthenticatedUser());
+
+        // Per-request answers to "may this user see or change that?" (PHASE2.md §4).
+        services.AddHttpContextAccessor();
+        services.AddScoped<CampaignAccess>();
 
         return services;
     }

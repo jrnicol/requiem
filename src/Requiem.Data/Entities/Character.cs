@@ -1,3 +1,4 @@
+using Requiem.Shared.Campaigns;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Rules;
 
@@ -61,9 +62,25 @@ public class Character
     public bool IsMasquerading { get; set; }
     public bool IsUnderDominion { get; set; }
 
-    // Ownership and lifecycle. Owner and campaign stay null until Phase 2.
+    // Ownership and lifecycle (PHASE2.md §3).
+    /// <summary>
+    /// The GM who made an NPC or the player who owns a PC. Null on characters made before Phase 2:
+    /// those belong to every site GM's personal roster.
+    /// </summary>
     public string? OwnerUserId { get; set; }
+    /// <summary>Null for the site GM's personal roster.</summary>
     public Guid? CampaignId { get; set; }
+    public Campaign? Campaign { get; set; }
+    public bool IsPlayerCharacter { get; set; }
+    public CharacterStatus Status { get; set; } = CharacterStatus.Active;
+    /// <summary>NPCs only: whether players know this NPC (and see its public card).</summary>
+    public NpcVisibility Visibility { get; set; } = NpcVisibility.Hidden;
+    /// <summary>What other players see on the character's public card.</summary>
+    public string? PublicDescription { get; set; }
+    /// <summary>Ghouls: the vampire whose blood they drink, in the app (DomitorId) or by name.</summary>
+    public Guid? DomitorId { get; set; }
+    public Character? Domitor { get; set; }
+    public string? DomitorName { get; set; }
     public bool IsArchived { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
@@ -85,5 +102,6 @@ public class Character
     public List<CorruptionMark> CorruptionMarks { get; set; } = [];
     public List<CharacterItem> Items { get; set; } = [];
     public List<XpEntry> XpLedger { get; set; } = [];
+    public List<CharacterLink> Links { get; set; } = [];
     public List<Tag> Tags { get; set; } = [];
 }

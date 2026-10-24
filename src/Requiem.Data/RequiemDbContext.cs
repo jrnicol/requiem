@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Requiem.Data.Entities;
+using Requiem.Shared.Campaigns;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Rules;
 
@@ -31,6 +32,12 @@ public class RequiemDbContext(DbContextOptions<RequiemDbContext> options, TimePr
     // Table play
     public DbSet<Scene> Scenes => Set<Scene>();
 
+    // Campaigns (Phase 2)
+    public DbSet<Campaign> Campaigns => Set<Campaign>();
+    public DbSet<CampaignMember> CampaignMembers => Set<CampaignMember>();
+    public DbSet<CampaignInvite> CampaignInvites => Set<CampaignInvite>();
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         // Identity's users, roles, claims and logins (AspNet* tables).
@@ -57,6 +64,11 @@ public class RequiemDbContext(DbContextOptions<RequiemDbContext> options, TimePr
         builder.Properties<ItemKind>().HaveConversion<string>().HaveMaxLength(16);
         builder.Properties<PurchaseKind>().HaveConversion<string>().HaveMaxLength(32);
         builder.Properties<RelationshipKind>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<CampaignRole>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<CharacterStatus>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<NpcVisibility>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<LinkKind>().HaveConversion<string>().HaveMaxLength(16);
+        // CharacterTemplates is a [Flags] enum and stays numeric, like NpcEdge.
 
         // SQLite can't compare or sort DateTimeOffset values; store them as sortable integers there.
         if (Database.IsSqlite())
@@ -76,7 +88,7 @@ public class RequiemDbContext(DbContextOptions<RequiemDbContext> options, TimePr
     }
 
     /// <summary>
-    /// Deletes a character and everything that points at it: its childer lose their Sire link,
+    /// Deletes a character and everything that points at it: its childer lose their Sire link (and ghouls their domitor),
     /// and relationships, blood bonds and boons involving it are removed.
     /// Prefer archiving (<see cref="Character.IsArchived"/>) for NPCs you might bring back.
     /// </summary>
@@ -89,6 +101,8 @@ public class RequiemDbContext(DbContextOptions<RequiemDbContext> options, TimePr
 
             await Characters.Where(c => c.SireId == id)
                 .ExecuteUpdateAsync(s => s.SetProperty(c => c.SireId, (Guid?)null), ct);
+            await Characters.Where(c => c.DomitorId == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.DomitorId, (Guid?)null), ct);
             await Relationships.Where(r => r.FromCharacterId == id || r.ToCharacterId == id)
                 .ExecuteDeleteAsync(ct);
             await BloodBonds.Where(b => b.ThrallId == id || b.RegnantId == id)

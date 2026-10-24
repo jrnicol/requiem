@@ -160,6 +160,51 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Requiem.Data.Entities.AuditEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("At")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("CampaignId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CharacterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UndoData")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("UndoneAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId", "At");
+
+                    b.HasIndex("CharacterId", "At");
+
+                    b.ToTable("AuditEntries", (string)null);
+                });
+
             modelBuilder.Entity("Requiem.Data.Entities.BloodBond", b =>
                 {
                     b.Property<int>("Id")
@@ -273,6 +318,116 @@ namespace Requiem.Data.Sqlite.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Requiem.Data.Entities.Campaign", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AllowedTemplates")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ArchivedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ChronicleTenet")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CoterieScript")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Campaigns");
+                });
+
+            modelBuilder.Entity("Requiem.Data.Entities.CampaignInvite", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CreatedByUserId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ExpiresAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("RevokedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TokenHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .IsFixedLength();
+
+                    b.Property<int?>("UsesLeft")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique();
+
+                    b.ToTable("CampaignInvites", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CampaignInvite_UsesLeft", "UsesLeft IS NULL OR UsesLeft >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("Requiem.Data.Entities.CampaignMember", b =>
+                {
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("JoinedAt")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("CampaignId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("CampaignMembers", (string)null);
+                });
+
             modelBuilder.Entity("Requiem.Data.Entities.Character", b =>
                 {
                     b.Property<Guid>("Id")
@@ -306,6 +461,13 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("DomitorId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DomitorName")
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("Edges")
                         .HasColumnType("INTEGER");
 
@@ -332,6 +494,9 @@ namespace Requiem.Data.Sqlite.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsMasquerading")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPlayerCharacter")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsStaked")
@@ -379,6 +544,10 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.Property<int?>("PredatorTypeId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("PublicDescription")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("SireId")
                         .HasColumnType("TEXT");
 
@@ -387,6 +556,11 @@ namespace Requiem.Data.Sqlite.Migrations
 
                     b.Property<int?>("Social")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Tier")
                         .IsRequired()
@@ -416,6 +590,11 @@ namespace Requiem.Data.Sqlite.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Visibility")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("VitaeCurrent")
                         .HasColumnType("INTEGER");
 
@@ -430,6 +609,8 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.HasIndex("BloodlineId");
 
                     b.HasIndex("CampaignId");
+
+                    b.HasIndex("DomitorId");
 
                     b.HasIndex("Name");
 
@@ -589,6 +770,38 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.HasIndex("CharacterId");
 
                     b.ToTable("CharacterItems", (string)null);
+                });
+
+            modelBuilder.Entity("Requiem.Data.Entities.CharacterLink", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("At")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("CharacterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.PrimitiveCollection<string>("WithCharacterIds")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CharacterId", "At");
+
+                    b.ToTable("CharacterLinks", (string)null);
                 });
 
             modelBuilder.Entity("Requiem.Data.Entities.CharacterMerit", b =>
@@ -1300,6 +1513,9 @@ namespace Requiem.Data.Sqlite.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("CampaignId")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
@@ -1308,10 +1524,18 @@ namespace Requiem.Data.Sqlite.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("OwnerUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("UpdatedAt")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CampaignId");
+
+                    b.HasIndex("OwnerUserId");
 
                     b.HasIndex("UpdatedAt");
 
@@ -1370,6 +1594,9 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.Property<long>("CreatedAt")
                         .HasColumnType("INTEGER");
 
+                    b.Property<int?>("FromDots")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("PurchaseKind")
                         .HasMaxLength(32)
                         .HasColumnType("TEXT");
@@ -1377,6 +1604,17 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RecordedByUserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ToDots")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Trait")
+                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -1490,12 +1728,47 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.Navigation("Debtor");
                 });
 
+            modelBuilder.Entity("Requiem.Data.Entities.CampaignInvite", b =>
+                {
+                    b.HasOne("Requiem.Data.Entities.Campaign", null)
+                        .WithMany("Invites")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Requiem.Data.Entities.CampaignMember", b =>
+                {
+                    b.HasOne("Requiem.Data.Entities.Campaign", null)
+                        .WithMany("Members")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Requiem.Data.Entities.RequiemUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Requiem.Data.Entities.Character", b =>
                 {
                     b.HasOne("Requiem.Data.Entities.Bloodline", "Bloodline")
                         .WithMany()
                         .HasForeignKey("BloodlineId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Requiem.Data.Entities.Campaign", "Campaign")
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Requiem.Data.Entities.Character", "Domitor")
+                        .WithMany()
+                        .HasForeignKey("DomitorId");
 
                     b.HasOne("Requiem.Data.Entities.PredatorType", "PredatorType")
                         .WithMany()
@@ -1507,6 +1780,10 @@ namespace Requiem.Data.Sqlite.Migrations
                         .HasForeignKey("SireId");
 
                     b.Navigation("Bloodline");
+
+                    b.Navigation("Campaign");
+
+                    b.Navigation("Domitor");
 
                     b.Navigation("PredatorType");
 
@@ -1561,6 +1838,15 @@ namespace Requiem.Data.Sqlite.Migrations
                 {
                     b.HasOne("Requiem.Data.Entities.Character", null)
                         .WithMany("Items")
+                        .HasForeignKey("CharacterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Requiem.Data.Entities.CharacterLink", b =>
+                {
+                    b.HasOne("Requiem.Data.Entities.Character", null)
+                        .WithMany("Links")
                         .HasForeignKey("CharacterId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1715,6 +2001,14 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.Navigation("Bloodline");
                 });
 
+            modelBuilder.Entity("Requiem.Data.Entities.Scene", b =>
+                {
+                    b.HasOne("Requiem.Data.Entities.Campaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("Requiem.Data.Entities.SceneMember", b =>
                 {
                     b.HasOne("Requiem.Data.Entities.Character", "Character")
@@ -1746,6 +2040,13 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.Navigation("PowerGroups");
                 });
 
+            modelBuilder.Entity("Requiem.Data.Entities.Campaign", b =>
+                {
+                    b.Navigation("Invites");
+
+                    b.Navigation("Members");
+                });
+
             modelBuilder.Entity("Requiem.Data.Entities.Character", b =>
                 {
                     b.Navigation("Attributes");
@@ -1763,6 +2064,8 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.Navigation("Items");
 
                     b.Navigation("LearnedPowers");
+
+                    b.Navigation("Links");
 
                     b.Navigation("Merits");
 

@@ -3,8 +3,10 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Requiem.Data;
 using Requiem.Data.Entities;
+using Requiem.Shared.Accounts;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Contracts;
+using Requiem.Web.Auth;
 
 namespace Requiem.Web.Api;
 
@@ -12,7 +14,7 @@ public static class CharacterEndpoints
 {
     public static RouteGroupBuilder MapCharacterEndpoints(this RouteGroupBuilder api)
     {
-        var characters = api.MapGroup("/characters").WithTags("Characters");
+        var characters = api.MapGroup("/characters").WithTags("Characters").RequireAuthorization(Policies.GameMaster);
 
         characters.MapGet("/", ListAsync);
         characters.MapGet("/{id:guid}/supporting-cast", GetSupportingCastAsync);
@@ -24,9 +26,9 @@ public static class CharacterEndpoints
     }
 
     private static async Task<List<CharacterSummary>> ListAsync(
-        [AsParameters] CharacterQuery query, RequiemDbContext db, CancellationToken ct)
+        [AsParameters] CharacterQuery query, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
-        var characters = db.Characters.AsNoTracking();
+        var characters = access.ManagedCharacters(db.Characters.AsNoTracking());
         if (!query.IncludeArchived) characters = characters.Where(c => !c.IsArchived);
         if (query.Tier is { } tier) characters = characters.Where(c => c.Tier == tier);
         if (query.Kind is { } kind) characters = characters.Where(c => c.Kind == kind);
@@ -57,18 +59,19 @@ public static class CharacterEndpoints
     }
 
     private static async Task<Results<Ok<SupportingCastForm>, NotFound>> GetSupportingCastAsync(
-        Guid id, RequiemDbContext db, CancellationToken ct)
+        Guid id, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
-        var character = await LoadSupportingCastAsync(db, id, tracked: false, ct);
+        var character = await LoadSupportingCastAsync(db, access, id, tracked: false, ct);
         return character is null ? TypedResults.NotFound() : TypedResults.Ok(SupportingCastMapper.ToForm(character));
     }
 
     private static async Task<Results<Created<SupportingCastForm>, ValidationProblem>> CreateSupportingCastAsync(
-        SupportingCastForm form, RequiemDbContext db, CancellationToken ct)
+        SupportingCastForm form, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
         if (await ValidateAsync(form, db, ct) is { } errors) return TypedResults.ValidationProblem(errors);
 
-        var character = new Character { Name = form.Name };
+        // New NPCs go to the creating GM's personal roster.
+        var character = new Character { Name = form.Name, OwnerUserId = access.UserId };
         SupportingCastMapper.Apply(form, character);
         db.Characters.Add(character);
         await db.SaveChangesAsync(ct);
@@ -77,11 +80,11 @@ public static class CharacterEndpoints
     }
 
     private static async Task<Results<Ok<SupportingCastForm>, NotFound, ValidationProblem, Conflict<ProblemDetailsBody>>>
-        UpdateSupportingCastAsync(Guid id, SupportingCastForm form, RequiemDbContext db, CancellationToken ct)
+        UpdateSupportingCastAsync(Guid id, SupportingCastForm form, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
         if (await ValidateAsync(form, db, ct) is { } errors) return TypedResults.ValidationProblem(errors);
 
-        var character = await LoadSupportingCastAsync(db, id, tracked: true, ct);
+        var character = await LoadSupportingCastAsync(db, access, id, tracked: true, ct);
         if (character is null) return TypedResults.NotFound();
 
         // Compare against the version the client loaded, not the one just read.
@@ -103,12 +106,16 @@ public static class CharacterEndpoints
         return TypedResults.Ok(SupportingCastMapper.ToForm(character));
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteAsync(Guid id, RequiemDbContext db, CancellationToken ct) =>
-        await db.DeleteCharacterAsync(id, ct) ? TypedResults.NoContent() : TypedResults.NotFound();
+    private static async Task<Results<NoContent, NotFound>> DeleteAsync(
+        Guid id, RequiemDbContext db, CampaignAccess access, CancellationToken ct) =>
+        await access.CanManageCharacterAsync(id, ct) && await db.DeleteCharacterAsync(id, ct)
+            ? TypedResults.NoContent()
+            : TypedResults.NotFound();
 
-    private static Task<Character?> LoadSupportingCastAsync(RequiemDbContext db, Guid id, bool tracked, CancellationToken ct)
+    private static Task<Character?> LoadSupportingCastAsync(
+        RequiemDbContext db, CampaignAccess access, Guid id, bool tracked, CancellationToken ct)
     {
-        var query = db.Characters.Include(c => c.Specialties).Include(c => c.Items).AsSplitQuery();
+        var query = access.ManagedCharacters().Include(c => c.Specialties).Include(c => c.Items).AsSplitQuery();
         if (!tracked) query = query.AsNoTracking();
         return query.SingleOrDefaultAsync(c => c.Id == id && c.Tier == CharacterTier.SupportingCast, ct);
     }

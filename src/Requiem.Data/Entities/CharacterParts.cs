@@ -159,6 +159,12 @@ public class XpEntry
     public int Amount { get; set; }
     public required string Reason { get; set; }
     public PurchaseKind? PurchaseKind { get; set; }
+    /// <summary>Spends: what was bought and the dots before and after, so the spend can be shown and undone.</summary>
+    public string? Trait { get; set; }
+    public int? FromDots { get; set; }
+    public int? ToDots { get; set; }
+    /// <summary>Who recorded it (Phase 2); null for entries made before then.</summary>
+    public string? RecordedByUserId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
 }
 

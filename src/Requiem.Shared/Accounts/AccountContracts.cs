@@ -10,7 +10,11 @@ public static class Roles
 /// <summary>Authorization policy names, registered on both the server and the browser client.</summary>
 public static class Policies
 {
+    /// <summary>Site GMs: the personal NPC roster, scenes, table play and catalog edits.</summary>
     public const string GameMaster = "GameMaster";
+
+    /// <summary>Anyone signed in, players included: e.g. reading the powers catalog.</summary>
+    public const string Member = "Member";
 }
 
 public static class PasswordRules

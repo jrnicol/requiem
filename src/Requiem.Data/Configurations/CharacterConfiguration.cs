@@ -38,6 +38,13 @@ internal sealed class CharacterConfiguration : IEntityTypeConfiguration<Characte
         b.HasOne(x => x.PredatorType).WithMany().HasForeignKey(x => x.PredatorTypeId).OnDelete(DeleteBehavior.SetNull);
         // SQL Server rejects ON DELETE SET NULL on a self-reference; DeleteCharacterAsync clears it instead.
         b.HasOne(x => x.Sire).WithMany(x => x.Childer).HasForeignKey(x => x.SireId).OnDelete(DeleteBehavior.ClientSetNull);
+        // Same for a ghoul's domitor.
+        b.HasOne(x => x.Domitor).WithMany().HasForeignKey(x => x.DomitorId).OnDelete(DeleteBehavior.ClientSetNull);
+        b.Property(x => x.DomitorName).HasMaxLength(Lengths.Name);
+        b.Property(x => x.PublicDescription).HasMaxLength(Lengths.Short);
+        // A campaign with characters can't be deleted, only archived.
+        b.HasOne(x => x.Campaign).WithMany().HasForeignKey(x => x.CampaignId).OnDelete(DeleteBehavior.Restrict);
+        b.HasMany(x => x.Links).WithOne().HasForeignKey(x => x.CharacterId);
 
         b.HasMany(x => x.Attributes).WithOne().HasForeignKey(x => x.CharacterId);
         b.HasMany(x => x.Skills).WithOne().HasForeignKey(x => x.CharacterId);
@@ -152,6 +159,8 @@ internal sealed class CharacterPartsConfiguration :
     {
         b.ToTable("XpEntries");
         b.Property(x => x.Reason).HasMaxLength(Lengths.Short);
+        b.Property(x => x.Trait).HasMaxLength(64);
+        b.Property(x => x.RecordedByUserId).HasMaxLength(Lengths.UserId);
         b.HasIndex(x => new { x.CharacterId, x.CreatedAt });
     }
 

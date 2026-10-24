@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Requiem.Data;
 using Requiem.Data.Entities;
+using Requiem.Shared.Accounts;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Contracts;
 using Requiem.Shared.Rules;
+using Requiem.Web.Auth;
 
 namespace Requiem.Web.Api;
 
@@ -17,11 +19,11 @@ public static class PlayEndpoints
 {
     public static RouteGroupBuilder MapPlayEndpoints(this RouteGroupBuilder api)
     {
-        var characters = api.MapGroup("/characters").WithTags("Play");
+        var characters = api.MapGroup("/characters").WithTags("Play").RequireAuthorization(Policies.GameMaster);
         characters.MapGet("/{id:guid}/play", GetAsync);
         characters.MapPost("/{id:guid}/play", ActAsync);
 
-        var scenes = api.MapGroup("/scenes").WithTags("Scenes");
+        var scenes = api.MapGroup("/scenes").WithTags("Scenes").RequireAuthorization(Policies.GameMaster);
         scenes.MapGet("/", ListScenesAsync);
         scenes.MapPost("/", CreateSceneAsync);
         scenes.MapGet("/{id:guid}", GetSceneAsync);
@@ -33,18 +35,19 @@ public static class PlayEndpoints
 
     // ---------- Characters ----------
 
-    private static async Task<Results<Ok<PlayCharacter>, NotFound>> GetAsync(Guid id, RequiemDbContext db, CancellationToken ct)
+    private static async Task<Results<Ok<PlayCharacter>, NotFound>> GetAsync(
+        Guid id, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
-        var character = await LoadAsync(db, [id], tracked: false, ct);
+        var character = await LoadAsync(access, [id], tracked: false, ct);
         return character.Count == 0
             ? TypedResults.NotFound()
             : TypedResults.Ok(PlayMapper.ToPlay(character[0], await CatalogAsync(db, ct)));
     }
 
     private static async Task<Results<Ok<PlayCharacter>, NotFound, ValidationProblem>> ActAsync(
-        Guid id, PlayAction action, RequiemDbContext db, TimeProvider time, CancellationToken ct)
+        Guid id, PlayAction action, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
-        var loaded = await LoadAsync(db, [id], tracked: true, ct);
+        var loaded = await LoadAsync(access, [id], tracked: true, ct);
         if (loaded.Count == 0) return TypedResults.NotFound();
         var character = loaded[0];
 
@@ -194,49 +197,54 @@ public static class PlayEndpoints
 
     // ---------- Scenes ----------
 
-    private static async Task<List<SceneSummary>> ListScenesAsync(RequiemDbContext db, CancellationToken ct)
+    private static async Task<List<SceneSummary>> ListScenesAsync(CampaignAccess access, CancellationToken ct)
     {
-        var scenes = await db.Scenes.AsNoTracking()
+        var scenes = await access.ManagedScenes().AsNoTracking()
             .Select(s => new { s.Id, s.Name, Count = s.Members.Count, s.UpdatedAt })
             .ToListAsync(ct);
         return scenes.OrderByDescending(s => s.UpdatedAt).Select(s => new SceneSummary(s.Id, s.Name, s.Count, s.UpdatedAt)).ToList();
     }
 
     private static async Task<Results<Created<SceneView>, ValidationProblem>> CreateSceneAsync(
-        SceneForm form, RequiemDbContext db, TimeProvider time, CancellationToken ct)
+        SceneForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
-        if (await ValidateSceneAsync(form, db, ct) is { } errors) return TypedResults.ValidationProblem(errors);
+        if (await ValidateSceneAsync(form, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
 
         var now = time.GetUtcNow();
-        var scene = new Scene { Id = Guid.CreateVersion7(now), Name = form.Name.Trim(), CreatedAt = now, UpdatedAt = now };
+        // New scenes go to the creating GM's personal space.
+        var scene = new Scene
+        {
+            Id = Guid.CreateVersion7(now), Name = form.Name.Trim(), OwnerUserId = access.UserId, CreatedAt = now, UpdatedAt = now,
+        };
         SetMembers(scene, form.CharacterIds);
         db.Scenes.Add(scene);
         await db.SaveChangesAsync(ct);
-        return TypedResults.Created($"/api/scenes/{scene.Id}", await ViewAsync(db, scene, ct));
+        return TypedResults.Created($"/api/scenes/{scene.Id}", await ViewAsync(db, access, scene, ct));
     }
 
-    private static async Task<Results<Ok<SceneView>, NotFound>> GetSceneAsync(Guid id, RequiemDbContext db, CancellationToken ct)
+    private static async Task<Results<Ok<SceneView>, NotFound>> GetSceneAsync(
+        Guid id, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
-        var scene = await db.Scenes.AsNoTracking().Include(s => s.Members).SingleOrDefaultAsync(s => s.Id == id, ct);
-        return scene is null ? TypedResults.NotFound() : TypedResults.Ok(await ViewAsync(db, scene, ct));
+        var scene = await access.ManagedScenes().AsNoTracking().Include(s => s.Members).SingleOrDefaultAsync(s => s.Id == id, ct);
+        return scene is null ? TypedResults.NotFound() : TypedResults.Ok(await ViewAsync(db, access, scene, ct));
     }
 
     private static async Task<Results<Ok<SceneView>, NotFound, ValidationProblem>> UpdateSceneAsync(
-        Guid id, SceneForm form, RequiemDbContext db, TimeProvider time, CancellationToken ct)
+        Guid id, SceneForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
-        if (await ValidateSceneAsync(form, db, ct) is { } errors) return TypedResults.ValidationProblem(errors);
-        var scene = await db.Scenes.Include(s => s.Members).SingleOrDefaultAsync(s => s.Id == id, ct);
+        var scene = await access.ManagedScenes().Include(s => s.Members).SingleOrDefaultAsync(s => s.Id == id, ct);
         if (scene is null) return TypedResults.NotFound();
+        if (await ValidateSceneAsync(form, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
 
         scene.Name = form.Name.Trim();
         scene.UpdatedAt = time.GetUtcNow();
         SetMembers(scene, form.CharacterIds);
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await ViewAsync(db, scene, ct));
+        return TypedResults.Ok(await ViewAsync(db, access, scene, ct));
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteSceneAsync(Guid id, RequiemDbContext db, CancellationToken ct) =>
-        await db.Scenes.Where(s => s.Id == id).ExecuteDeleteAsync(ct) > 0 ? TypedResults.NoContent() : TypedResults.NotFound();
+    private static async Task<Results<NoContent, NotFound>> DeleteSceneAsync(Guid id, CampaignAccess access, CancellationToken ct) =>
+        await access.ManagedScenes().Where(s => s.Id == id).ExecuteDeleteAsync(ct) > 0 ? TypedResults.NoContent() : TypedResults.NotFound();
 
     private static void SetMembers(Scene scene, List<Guid> characterIds)
     {
@@ -250,12 +258,12 @@ public static class PlayEndpoints
         }
     }
 
-    private static async Task<Dictionary<string, string[]>?> ValidateSceneAsync(SceneForm form, RequiemDbContext db, CancellationToken ct)
+    private static async Task<Dictionary<string, string[]>?> ValidateSceneAsync(SceneForm form, CampaignAccess access, CancellationToken ct)
     {
         var results = new List<ValidationResult>();
         Validator.TryValidateObject(form, new ValidationContext(form), results, validateAllProperties: true);
-        var ids = form.CharacterIds.Distinct().ToList();
-        if (ids.Count > 0 && await db.Characters.CountAsync(c => ids.Contains(c.Id), ct) != ids.Count)
+        // Only characters the user runs can join their scene; anything else reads as unknown.
+        if (!await access.CanManageAllAsync(form.CharacterIds, ct))
             results.Add(new ValidationResult("Unknown character.", [nameof(form.CharacterIds)]));
         return results.Count == 0
             ? null
@@ -263,10 +271,10 @@ public static class PlayEndpoints
                 .ToDictionary(g => g.Key, g => g.Select(r => r.ErrorMessage ?? "Invalid value.").ToArray());
     }
 
-    private static async Task<SceneView> ViewAsync(RequiemDbContext db, Scene scene, CancellationToken ct)
+    private static async Task<SceneView> ViewAsync(RequiemDbContext db, CampaignAccess access, Scene scene, CancellationToken ct)
     {
         var order = scene.Members.OrderBy(m => m.SortOrder).Select(m => m.CharacterId).ToList();
-        var characters = await LoadAsync(db, order, tracked: false, ct);
+        var characters = await LoadAsync(access, order, tracked: false, ct);
         var catalog = await CatalogAsync(db, ct);
         var members = order.Select(id => characters.FirstOrDefault(c => c.Id == id)).OfType<Character>()
             .Select(c => PlayMapper.ToPlay(c, catalog)).ToList();
@@ -275,9 +283,9 @@ public static class PlayEndpoints
 
     // ---------- Loading ----------
 
-    private static async Task<List<Character>> LoadAsync(RequiemDbContext db, List<Guid> ids, bool tracked, CancellationToken ct)
+    private static async Task<List<Character>> LoadAsync(CampaignAccess access, List<Guid> ids, bool tracked, CancellationToken ct)
     {
-        var query = db.Characters
+        var query = access.ManagedCharacters()
             .Include(c => c.Bloodline)
             .Include(c => c.Attributes).Include(c => c.Skills).Include(c => c.Specialties)
             .Include(c => c.Disciplines).ThenInclude(d => d.PowerGroup)

@@ -52,9 +52,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
-// Everything under /api requires a signed-in GM, except the account endpoints (which opt out).
+// Everything under /api needs a signed-in user, except the account endpoints (which opt out).
+// GM-only groups add the GameMaster policy, and CampaignAccess narrows each request to what the
+// user may see (PHASE2.md §4).
 app.MapGroup("/api")
-    .RequireAuthorization(Policies.GameMaster)
+    .RequireAuthorization(Policies.Member)
     .MapAccountEndpoints()
     .MapCatalogEndpoints()
     .MapCharacterEndpoints()

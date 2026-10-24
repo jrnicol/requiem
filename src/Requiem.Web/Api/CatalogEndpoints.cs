@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.EntityFrameworkCore;
 using Requiem.Data;
 using Requiem.Data.Entities;
+using Requiem.Shared.Accounts;
 using Requiem.Shared.Contracts;
 
 namespace Requiem.Web.Api;
@@ -61,7 +62,8 @@ public static class CatalogEndpoints
                 .ToList();
         });
 
-        catalog.MapPut("/powers/{id:int}", UpdatePowerAsync);
+        // Players read the catalog to build characters; only site GMs correct it.
+        catalog.MapPut("/powers/{id:int}", UpdatePowerAsync).RequireAuthorization(Policies.GameMaster);
 
         catalog.MapGet("/merits", async (RequiemDbContext db, CancellationToken ct) =>
         {
