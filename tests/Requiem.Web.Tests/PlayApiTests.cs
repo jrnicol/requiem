@@ -49,6 +49,8 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
         Assert.Equal(8, play.Pools.Single(p => p.Label == "Social").Dice);
         Assert.Equal("Supporting Cast never spend Willpower.",
             await ActErrorAsync(npc.Id!.Value, new PlayAction { Kind = PlayActionKind.AdjustWillpower, Amount = -1 }));
+        Assert.Equal("Supporting Cast never spend Willpower.",
+            await ActErrorAsync(npc.Id!.Value, new PlayAction { Kind = PlayActionKind.RegainWillpower, Source = WillpowerSource.Virtue }));
     }
 
     // ---------- Actions ----------
@@ -91,6 +93,32 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
         Assert.Equal(0, drained.VitaeCurrent);
         Assert.Equal("Only 0 Vitae left.", await ActErrorAsync(id, new PlayAction { Kind = PlayActionKind.AdjustVitae, Amount = -1 }));
         Assert.Equal(12, (await ActAsync(id, new PlayAction { Kind = PlayActionKind.AdjustVitae, Amount = 99 })).VitaeCurrent);
+    }
+
+    [Fact]
+    public async Task Concept_virtue_and_vice_restore_willpower()
+    {
+        var concept = (await _http.GetFromJsonAsync<List<ConceptOption>>("/api/catalog/concepts", RequiemJson.Options))!.First();
+        var id = (await CreateVampireAsync("Ventrue", configure: f =>
+        {
+            f.Concept = concept.Name.ToUpperInvariant();
+            (f.Virtue, f.VirtueDetail, f.Vice, f.ViceDetail) = ("Loyal", "to the Prince", "Greedy", "hoards favors");
+        })).Id!.Value;
+
+        var motives = (await PlayAsync(id)).Motives!;
+        Assert.Equal(concept.WillpowerTrigger, motives.ConceptTrigger);
+        Assert.Equal(("Loyal", "to the Prince", "Greedy", "hoards favors"), (motives.Virtue, motives.VirtueDetail, motives.Vice, motives.ViceDetail));
+
+        Assert.Equal("Willpower is already full.",
+            await ActErrorAsync(id, new PlayAction { Kind = PlayActionKind.RegainWillpower, Source = WillpowerSource.Vice }));
+        await ActAsync(id, new PlayAction { Kind = PlayActionKind.AdjustWillpower, Amount = -5 });
+        Assert.Equal(1, (await ActAsync(id, new PlayAction { Kind = PlayActionKind.RegainWillpower, Source = WillpowerSource.Vice })).WillpowerCurrent);
+        Assert.Equal(2, (await ActAsync(id, new PlayAction { Kind = PlayActionKind.RegainWillpower, Source = WillpowerSource.Concept })).WillpowerCurrent);
+        Assert.Equal(5, (await ActAsync(id, new PlayAction { Kind = PlayActionKind.RegainWillpower, Source = WillpowerSource.Virtue })).WillpowerCurrent);
+
+        await ActAsync(id, new PlayAction { Kind = PlayActionKind.AdjustWillpower, Amount = -1 });
+        Assert.StartsWith("Say what restored it",
+            await ActErrorAsync(id, new PlayAction { Kind = PlayActionKind.RegainWillpower }));
     }
 
     [Fact]
@@ -276,7 +304,7 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
 
     // ---------- Helpers ----------
 
-    private async Task<FullSheetForm> CreateVampireAsync(string bloodline, int dominate = 0, string name = "Table NPC")
+    private async Task<FullSheetForm> CreateVampireAsync(string bloodline, int dominate = 0, string name = "Table NPC", Action<FullSheetForm>? configure = null)
     {
         var bloodlines = (await _http.GetFromJsonAsync<List<BloodlineOption>>("/api/catalog/bloodlines", RequiemJson.Options))!;
         var groups = (await _http.GetFromJsonAsync<List<DisciplineOption>>("/api/catalog/disciplines", RequiemJson.Options))!;
@@ -292,6 +320,7 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
         form.Attributes[CharacterAttribute.Wits] = 2;
         form.Attributes[CharacterAttribute.Manipulation] = 3;
         form.Skills[Skill.Expression] = 2;
+        configure?.Invoke(form);
 
         var response = await _http.PostAsJsonAsync("/api/characters/full-sheet", form, RequiemJson.Options);
         Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());

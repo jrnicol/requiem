@@ -5,11 +5,21 @@ using Requiem.Shared.Rules;
 
 namespace Requiem.Web.Api;
 
+/// <summary>The catalog data the table view needs.</summary>
+/// <param name="ConceptTriggers">Concept name (case-insensitive) to how it regains Willpower.</param>
+internal sealed record PlayCatalog(IReadOnlyList<Power> Powers, IReadOnlyDictionary<string, string> ConceptTriggers);
+
 /// <summary>Builds the table view of a character, full sheet or Supporting Cast.</summary>
 internal static class PlayMapper
 {
-    /// <param name="catalog">Every catalog power (light-weight: no bonus options needed).</param>
-    public static PlayCharacter ToPlay(Character c, IReadOnlyList<Power> catalog)
+    /// <param name="catalog">Every catalog power (light-weight: no bonus options needed), and the Concepts' Willpower triggers.</param>
+    public static PlayCharacter ToPlay(Character c, PlayCatalog catalog) => ToPlay(c, catalog.Powers) with
+    {
+        Motives = new PlayMotives(c.Concept, c.Concept is { } concept ? catalog.ConceptTriggers.GetValueOrDefault(concept) : null,
+            c.Virtue, c.VirtueDetail, c.Vice, c.ViceDetail),
+    };
+
+    private static PlayCharacter ToPlay(Character c, IReadOnlyList<Power> catalog)
     {
         var isFull = c.Tier == CharacterTier.FullSheet;
         var attributes = isFull

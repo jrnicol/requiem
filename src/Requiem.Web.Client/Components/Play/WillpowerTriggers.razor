@@ -1,0 +1,60 @@
+@* Concept, Virtue and Vice with what restores Willpower from each (WoD Core p.91). A tap applies it at once.
+   Vice is once per scene: the table keeps track, as on paper. *@
+
+@if (Npc.Motives is { Any: true } motives)
+{
+    var full = Npc.WillpowerCurrent >= Npc.WillpowerDots;
+    var disabled = Busy || full || !Npc.CanSpendWillpower;
+    <div class="willpower-triggers">
+        @if (motives.Concept is { } concept)
+        {
+            <div class="play-row">
+                <span class="play-label">Concept</span>
+                <span style="flex:1">
+                    <strong>@concept</strong>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                        @(motives.ConceptTrigger ?? WillpowerRules.Describe(WillpowerSource.Concept))
+                    </MudText>
+                </span>
+                @Button(WillpowerSource.Concept, "+1", disabled)
+            </div>
+        }
+        @if (motives.Virtue is { } virtue)
+        {
+            <div class="play-row">
+                <span class="play-label">Virtue</span>
+                <span style="flex:1">
+                    <strong>@virtue</strong>@(motives.VirtueDetail is { } d ? $": {d}" : "")
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@WillpowerRules.Describe(WillpowerSource.Virtue)</MudText>
+                </span>
+                @Button(WillpowerSource.Virtue, "Refill", disabled)
+            </div>
+        }
+        @if (motives.Vice is { } vice)
+        {
+            <div class="play-row">
+                <span class="play-label">Vice</span>
+                <span style="flex:1">
+                    <strong>@vice</strong>@(motives.ViceDetail is { } d ? $": {d}" : "")
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@WillpowerRules.Describe(WillpowerSource.Vice)</MudText>
+                </span>
+                @Button(WillpowerSource.Vice, "+1", disabled)
+            </div>
+            @if (Npc.CanSpendWillpower && WillpowerRules.ViceApplies(Npc.WillpowerCurrent))
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1">Out of Willpower: their Vice (@vice) applies as a Condition.</MudAlert>
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public PlayCharacter Npc { get; set; } = null!;
+    [Parameter] public EventCallback<PlayAction> OnAct { get; set; }
+    [Parameter] public bool Busy { get; set; }
+
+    private RenderFragment Button(WillpowerSource source, string label, bool disabled) =>
+        @<MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="disabled"
+                    aria-label="@($"Regain Willpower from {source}")"
+                    OnClick="() => OnAct.InvokeAsync(new PlayAction { Kind = PlayActionKind.RegainWillpower, Source = source })">@label</MudButton>;
+}

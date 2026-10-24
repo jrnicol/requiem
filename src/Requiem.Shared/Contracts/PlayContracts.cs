@@ -25,6 +25,15 @@ public sealed record PlaySpecialty(Skill? Skill, string Name)
 public sealed record PlayPool(string Label, int Dice, string Detail, string Group);
 
 /// <summary>
+/// Who the character is and what restores their Willpower (WoD Core p.55–62): their Concept (with the
+/// book's trigger, when it's one of the book's), Virtue and Vice, each with what it means to them.
+/// </summary>
+public sealed record PlayMotives(string? Concept, string? ConceptTrigger, string? Virtue, string? VirtueDetail, string? Vice, string? ViceDetail)
+{
+    [JsonIgnore] public bool Any => Concept is not null || Virtue is not null || Vice is not null;
+}
+
+/// <summary>
 /// Everything the GM needs to run one NPC at the table, full sheet or Supporting Cast alike.
 /// Changes go through <see cref="PlayAction"/> and save straight onto the character.
 /// </summary>
@@ -59,7 +68,8 @@ public sealed record PlayCharacter(
     IReadOnlyList<string> Assets,
     string? Notes,
     string? GmNotes,
-    bool IsPlayerCharacter = false)
+    bool IsPlayerCharacter = false,
+    PlayMotives? Motives = null)
 {
     [JsonIgnore] public bool IsVampire => Kind == CharacterKind.Vampire;
     [JsonIgnore] public bool IsFullSheet => Tier == CharacterTier.FullSheet;
@@ -101,6 +111,8 @@ public enum PlayActionKind
     /// Vampires and ghouls heal a whole wound with Vitae (VtR p.19, p.62): see <see cref="HealingRules.Cost"/>.
     /// </summary>
     HealWithVitae,
+    /// <summary>Acting on their Concept, Virtue or Vice restores Willpower: see <see cref="WillpowerRules.Regain"/>.</summary>
+    RegainWillpower,
 }
 
 /// <summary>One change made at the table. Only the fields its <see cref="Kind"/> needs are read.</summary>
@@ -115,6 +127,8 @@ public sealed class PlayAction
     public int? TargetId { get; set; }
     [StringLength(200)] public string? EndsWhen { get; set; }
     public FortifyDiscipline? Boost { get; set; }
+    /// <summary>For <see cref="PlayActionKind.RegainWillpower"/>: what they did.</summary>
+    public WillpowerSource? Source { get; set; }
 }
 
 public sealed record SceneSummary(Guid Id, string Name, int MemberCount, DateTimeOffset UpdatedAt, Guid? CampaignId = null);

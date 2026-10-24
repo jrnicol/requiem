@@ -121,6 +121,17 @@ public static class PlayEndpoints
                 c.WillpowerCurrent = Math.Min(willpower, dots);
                 return null;
 
+            case PlayActionKind.RegainWillpower:
+            {
+                if (c.Tier != CharacterTier.FullSheet) return "Supporting Cast never spend Willpower.";
+                if (action.Source is not { } source) return "Say what restored it: Concept, Virtue or Vice.";
+                var max = c.WillpowerDots ?? 0;
+                var current = c.WillpowerCurrent ?? max;
+                if (current >= max) return "Willpower is already full.";
+                c.WillpowerCurrent = WillpowerRules.Regain(source, current, max);
+                return null;
+            }
+
             case PlayActionKind.AdjustVitae:
             {
                 if (GhoulRules.VitaeCapacity(c.Kind, c.BloodPotency, c.IsThinblood) is not { } capacity)
@@ -309,6 +320,7 @@ public static class PlayEndpoints
         return await query.Where(c => ids.Contains(c.Id)).ToListAsync(ct);
     }
 
-    private static async Task<List<Power>> CatalogAsync(RequiemDbContext db, CancellationToken ct) =>
-        await db.Powers.AsNoTracking().Include(p => p.PowerGroup).ToListAsync(ct);
+    private static async Task<PlayCatalog> CatalogAsync(RequiemDbContext db, CancellationToken ct) => new(
+        await db.Powers.AsNoTracking().Include(p => p.PowerGroup).ToListAsync(ct),
+        await db.ConceptDefinitions.AsNoTracking().ToDictionaryAsync(c => c.Name, c => c.WillpowerTrigger, StringComparer.OrdinalIgnoreCase, ct));
 }
