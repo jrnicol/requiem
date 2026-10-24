@@ -7,16 +7,16 @@
 <PageTitle>Campaigns · Requiem</PageTitle>
 
 <MudText Typo="Typo.h4" Class="brand-font mb-1">Campaigns</MudText>
-<MudText Color="Color.Secondary" Class="mb-4">The chronicles you run or play in.</MudText>
+<MudText Color="Color.Secondary" Class="mb-4">The chronicles you tell or play in.</MudText>
 
-<AuthorizeView Policy="@Policies.GameMaster">
-    <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mb-4">
-        <MudTextField T="string" @bind-Value="_name" Label="New campaign" Placeholder="e.g. Chicago by Night" Variant="Variant.Outlined"
-                      Margin="Margin.Dense" MaxLength="200" Immediate="true" OnKeyDown="OnKeyAsync" Style="min-width:16rem" />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="mt-1"
-                   Disabled="string.IsNullOrWhiteSpace(_name) || _creating" OnClick="CreateAsync">Create</MudButton>
-    </MudStack>
-</AuthorizeView>
+@* Anyone can start a campaign and tell it. *@
+<MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mb-4">
+    <MudTextField T="string" @bind-Value="_name" Label="Start a campaign" Placeholder="e.g. Chicago by Night" Variant="Variant.Outlined"
+                  Margin="Margin.Dense" MaxLength="200" Immediate="true" OnKeyDown="OnKeyAsync" Style="min-width:16rem"
+                  HelperText="You'll be its Storyteller" />
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="mt-1"
+               Disabled="string.IsNullOrWhiteSpace(_name) || _creating" OnClick="CreateAsync">Create</MudButton>
+</MudStack>
 
 @if (_campaigns is null)
 {
@@ -24,16 +24,9 @@
 }
 else if (_campaigns.Count == 0)
 {
-    <AuthorizeView Policy="@Policies.GameMaster">
-        <Authorized>
-            <MudText Color="Color.Secondary">No campaigns yet. Name one above to start.</MudText>
-        </Authorized>
-        <NotAuthorized>
-            <MudText Color="Color.Secondary">
-                You're not in any campaigns yet. Ask your Storyteller for an invite link.
-            </MudText>
-        </NotAuthorized>
-    </AuthorizeView>
+    <MudText Color="Color.Secondary">
+        You're not in any campaigns yet. Start one above, or ask a Storyteller for an invite link.
+    </MudText>
 }
 else
 {

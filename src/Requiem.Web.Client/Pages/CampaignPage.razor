@@ -175,35 +175,18 @@ else
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Description"
                                Href="@($"sheets/new?campaign={Id}")">New full sheet</MudButton>
                 </MudStack>
-                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
-                    <MudAutocomplete T="CharacterSummary" @bind-Value="_pick" Label="Bring in from your personal roster" Variant="Variant.Outlined"
-                                     Margin="Margin.Dense" SearchFunc="SearchPersonalAsync" ToStringFunc="@(c => c?.Name ?? string.Empty)"
-                                     Clearable="true" ResetValueOnEmptyText="true" Style="min-width:16rem" />
-                    <MudButton Variant="Variant.Outlined" Class="mt-1" Disabled="_pick is null || _busy" OnClick="BringInAsync">Bring in</MudButton>
-                </MudStack>
-                @if (_npcs is null)
+                @* Only Storytellers of more than one campaign have anywhere to bring NPCs from. *@
+                @if (_elsewhere.Count > 0)
                 {
-                    <MudProgressLinear Indeterminate="true" />
+                    <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+                        <MudAutocomplete T="CharacterSummary" @bind-Value="_pick" Label="Move in from another of your campaigns" Variant="Variant.Outlined"
+                                         Margin="Margin.Dense" SearchFunc="SearchElsewhereAsync" ToStringFunc="ElsewhereLabel"
+                                         Clearable="true" ResetValueOnEmptyText="true" Style="min-width:18rem"
+                                         HelperText="Sire and domitor links don't come along" />
+                        <MudButton Variant="Variant.Outlined" Class="mt-1" Disabled="_pick is null || _busy" OnClick="BringInAsync">Move in</MudButton>
+                    </MudStack>
                 }
-                else if (_npcs.Count == 0)
-                {
-                    <MudText Color="Color.Secondary">No NPCs in this campaign yet.</MudText>
-                }
-                else
-                {
-                    <MudGrid Spacing="2">
-                        @foreach (var npc in _npcs)
-                        {
-                            <MudItem xs="12" sm="6" lg="4" @key="npc.Id">
-                                <a href="@(npc.Tier == CharacterTier.FullSheet ? $"sheets/{npc.Id}" : $"npcs/{npc.Id}")" class="npc-card-link">
-                                    <NpcCard Npc="npc" />
-                                </a>
-                                <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.Logout"
-                                           Disabled="_busy" OnClick="() => MoveOutAsync(npc)">Move to my personal roster</MudButton>
-                            </MudItem>
-                        }
-                    </MudGrid>
-                }
+                <CampaignRoster @ref="_roster" CampaignId="Id" />
             </MudTabPanel>
 
             <MudTabPanel Text="Scenes" Icon="@Icons.Material.Filled.Casino">
@@ -247,8 +230,9 @@ else
     private CampaignForm? _settings;
     private InviteForm _invite = new();
     private string? _newLink;
-    private List<CharacterSummary>? _npcs;
-    private List<CharacterSummary> _personal = [];
+    private CampaignRoster? _roster;
+    private List<CharacterSummary> _elsewhere = [];
+    private Dictionary<Guid, string> _campaignNames = [];
     private CharacterSummary? _pick;
     private List<SceneSummary>? _scenes;
     private string? _sceneName;
@@ -274,10 +258,17 @@ else
 
     private async Task LoadStorytellerDataAsync()
     {
-        _npcs = await Api.ListCharactersAsync(new CharacterQuery(CampaignId: Id));
-        _personal = await Api.ListCharactersAsync(new CharacterQuery(PersonalOnly: true));
+        // Without a campaign filter the list holds every campaign the user tells.
+        _elsewhere = (await Api.ListCharactersAsync(new CharacterQuery())).Where(c => c.CampaignId != Id).ToList();
+        if (_elsewhere.Count > 0)
+            _campaignNames = (await Api.ListCampaignsAsync()).ToDictionary(c => c.Id, c => c.Name);
         _scenes = await Api.ListCampaignScenesAsync(Id);
     }
+
+    private string ElsewhereLabel(CharacterSummary? c) =>
+        c is null ? string.Empty
+        : c.CampaignId is { } from && _campaignNames.TryGetValue(from, out var name) ? $"{c.Name} ({name})"
+        : c.Name;
 
     private async Task RunAsync(Func<Task> action)
     {
@@ -377,10 +368,10 @@ else
         return $"{uses} · until {invite.ExpiresAt.ToLocalTime():d MMM}";
     }
 
-    private Task<IEnumerable<CharacterSummary>> SearchPersonalAsync(string? text, CancellationToken cancellationToken)
+    private Task<IEnumerable<CharacterSummary>> SearchElsewhereAsync(string? text, CancellationToken cancellationToken)
     {
         var search = text?.Trim();
-        return Task.FromResult<IEnumerable<CharacterSummary>>(_personal
+        return Task.FromResult<IEnumerable<CharacterSummary>>(_elsewhere
             .Where(c => string.IsNullOrEmpty(search) || c.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
             .OrderBy(c => c.Name).ToList());
     }
@@ -391,12 +382,7 @@ else
         if (await Api.MoveCharacterAsync(_pick.Id, Id) is { } problem) Snackbar.Add(problem, Severity.Warning);
         _pick = null;
         await LoadStorytellerDataAsync();
-    });
-
-    private Task MoveOutAsync(CharacterSummary npc) => RunAsync(async () =>
-    {
-        if (await Api.MoveCharacterAsync(npc.Id, null) is { } problem) Snackbar.Add(problem, Severity.Warning);
-        await LoadStorytellerDataAsync();
+        if (_roster is not null) await _roster.LoadAsync();
     });
 
     private Task CreateSceneAsync() => RunAsync(async () =>

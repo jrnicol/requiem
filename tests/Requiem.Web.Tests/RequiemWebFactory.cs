@@ -15,6 +15,9 @@ using Requiem.Shared.Contracts;
 
 namespace Requiem.Web.Tests;
 
+/// <summary>A signed-in client and the campaign it tells.</summary>
+public sealed record Storyteller(HttpClient Client, Guid CampaignId);
+
 /// <summary>
 /// Runs the real app against a throwaway SQLite file, migrated and seeded like the dev database.
 /// Each test class gets its own instance, so its own empty set of users.
@@ -64,11 +67,23 @@ public sealed class RequiemWebFactory : WebApplicationFactory<Program>
         }
     }
 
-    /// <summary>A client holding the auth cookie of a signed-in GM.</summary>
-    public async Task<HttpClient> CreateGmClientAsync(string email = "gm@example.test")
+    /// <summary>A client holding the auth cookie of a signed-in user (every account is alike).</summary>
+    public async Task<HttpClient> CreateMemberClientAsync(string email, params string[] roles)
     {
-        await CreateUserAsync(email, DefaultPassword, Roles.GameMaster);
+        await CreateUserAsync(email, DefaultPassword, roles);
         return await SignInAsync(email, DefaultPassword);
+    }
+
+    /// <summary>A signed-in user who has started a campaign, so tells it.</summary>
+    public async Task<Storyteller> CreateStorytellerAsync(
+        string email = "st@example.test", string campaign = "Test Chronicle", params string[] roles)
+    {
+        var client = await CreateMemberClientAsync(email, roles);
+        var response = await client.PostAsJsonAsync("/api/campaigns", new CampaignForm { Name = campaign }, RequiemJson.Options);
+        if (response.StatusCode != HttpStatusCode.Created)
+            throw new InvalidOperationException($"Creating a campaign as {email} failed: {(int)response.StatusCode}");
+        var view = (await response.Content.ReadFromJsonAsync<CampaignView>(RequiemJson.Options))!;
+        return new Storyteller(client, view.Id);
     }
 
     public async Task<HttpClient> SignInAsync(string email, string password)

@@ -14,7 +14,8 @@ public static class CharacterEndpoints
 {
     public static RouteGroupBuilder MapCharacterEndpoints(this RouteGroupBuilder api)
     {
-        var characters = api.MapGroup("/characters").WithTags("Characters").RequireAuthorization(Policies.GameMaster);
+        // Open to any member; CampaignAccess limits each request to the campaigns they tell.
+        var characters = api.MapGroup("/characters").WithTags("Characters");
 
         characters.MapGet("/", ListAsync);
         characters.MapGet("/{id:guid}/supporting-cast", GetSupportingCastAsync);
@@ -27,8 +28,8 @@ public static class CharacterEndpoints
     }
 
     /// <summary>
-    /// Moves an NPC you run between your personal roster (null) and a campaign you tell. Player
-    /// characters stay with their campaign.
+    /// Moves an NPC from one campaign you tell to another. Player characters stay with their campaign.
+    /// Sire and domitor links don't cross campaigns, so the move cuts them.
     /// </summary>
     private static async Task<Results<NoContent, NotFound, ValidationProblem>> MoveAsync(
         Guid id, MoveCharacterRequest request, RequiemDbContext db, CampaignAccess access, AuditLog audit, CancellationToken ct)
@@ -37,20 +38,17 @@ public static class CharacterEndpoints
         if (character is null) return TypedResults.NotFound();
         if (character.IsPlayerCharacter)
             return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [""] = ["Player characters stay in their campaign."] });
-        if (request.CampaignId is { } target && !await access.IsStorytellerAsync(target, ct))
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(request.CampaignId)] = ["Unknown campaign."] });
+        if (await access.CampaignProblemAsync(request.CampaignId, ct) is { } problem)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(request.CampaignId)] = [problem] });
         if (character.CampaignId == request.CampaignId) return TypedResults.NoContent();
 
-        var from = character.CampaignId;
-        character.CampaignId = request.CampaignId;
-        // On your personal roster an NPC needs an owner: you.
-        if (request.CampaignId is null) character.OwnerUserId = access.UserId;
-        db.Entry(character).Property(c => c.UpdatedAt).IsModified = true;
+        var from = character.CampaignId!.Value;
+        var names = await db.Campaigns.Where(c => c.Id == from || c.Id == request.CampaignId).ToDictionaryAsync(c => c.Id, c => c.Name, ct);
+        var summary = $"Moved {character.Name} from {names[from]} to {names[request.CampaignId]}.";
+        audit.Record(from, id, "character.move", summary);
+        audit.Record(request.CampaignId, id, "character.move", summary);
 
-        var summary = request.CampaignId is null ? $"Moved {character.Name} to a personal roster." : $"Moved {character.Name} into the campaign.";
-        if (from is not null) audit.Record(from, id, "character.move", summary);
-        if (request.CampaignId is not null) audit.Record(request.CampaignId, id, "character.move", summary);
-        await db.SaveChangesAsync(ct);
+        await db.MoveCharacterAsync(character, request.CampaignId, ct);
         return TypedResults.NoContent();
     }
 
@@ -62,7 +60,6 @@ public static class CharacterEndpoints
         if (query.Tier is { } tier) characters = characters.Where(c => c.Tier == tier);
         if (query.Kind is { } kind) characters = characters.Where(c => c.Kind == kind);
         if (query.CampaignId is { } campaignId) characters = characters.Where(c => c.CampaignId == campaignId);
-        else if (query.PersonalOnly) characters = characters.Where(c => c.CampaignId == null);
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             // LIKE is case-insensitive on both SQLite (ASCII) and SQL Server's default collation.
@@ -101,10 +98,9 @@ public static class CharacterEndpoints
         SupportingCastForm form, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
         if (await ValidateAsync(form, db, ct) is { } errors) return TypedResults.ValidationProblem(errors);
-        if (form.CampaignId is { } campaignId && !await access.IsStorytellerAsync(campaignId, ct))
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(form.CampaignId)] = ["Unknown campaign."] });
+        if (await access.CampaignProblemAsync(form.CampaignId, ct) is { } problem)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(form.CampaignId)] = [problem] });
 
-        // New NPCs go to the chosen campaign, or the creating GM's personal roster.
         var character = new Character { Name = form.Name, OwnerUserId = access.UserId, CampaignId = form.CampaignId };
         SupportingCastMapper.Apply(form, character);
         db.Characters.Add(character);

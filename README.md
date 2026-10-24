@@ -1,12 +1,13 @@
 # Requiem
 
-A Game Master's character manager for a homebrew **Vampire: The Requiem** ruleset (house VtR v2026.09.08 on house World of Darkness Core v2026.09.12). It keeps the NPC roster, full character sheets and a searchable Discipline powers catalog, and has a table mode for running NPCs during a session.
+A character manager for a homebrew **Vampire: The Requiem** ruleset (house VtR v2026.09.08 on house World of Darkness Core v2026.09.12). Anyone can start a campaign and tell it, or join one as a player. Each campaign keeps its NPC roster, full character sheets and scenes, with a searchable Discipline powers catalog shared by all and a table mode for running NPCs during a session.
 
 Built tablet-first and usable on a phone. It's meant to be hosted on Azure eventually; for now it runs locally on SQLite.
 
 ## Features
 
-- **NPC roster.** Two tiers of NPC:
+- **Campaigns** (`/campaigns`). Start one and you're its Storyteller; invite players with a link. One person can tell one campaign and play in another. Each campaign's page holds its overview, members, invites, NPCs and scenes.
+- **NPC roster,** per campaign. Two tiers of NPC:
   - **Supporting Cast:** quick stat blocks (Physical / Mental / Social, Edges, Specialties, Assets).
   - **Full sheets:** the whole paper sheet, covering attributes, skills, Disciplines, merits and flaws, health and wounds, compels, Scripts, Milestones and XP.
   - A Supporting Cast NPC can be promoted to a full sheet.
@@ -19,16 +20,16 @@ Built tablet-first and usable on a phone. It's meant to be hosted on Azure event
 - **Catalog.** Seeded from the rulebooks:
   - 13 Bloodlines and Magi Houses, 10 predator types, 115 merits and flaws, compels, NPC Edges and 25 power groups.
   - **174 Discipline powers** imported from the rulebook PDF by OCR.
-- **Powers review screen** (`/catalog/powers`). Search the full rules text and correct imported entries against the book, marking each one reviewed.
+- **Powers catalog** (`/catalog/powers`). Everyone can search the full rules text. The site admin corrects imported entries against the book, marking each one reviewed.
 - **Powers on the sheet:**
   - Each Discipline lists the powers its dots grant, with the full text.
   - Blood Sorcery rituals and Sabbat Ritae are learned one at a time.
   - Investiture records which power each dot bought.
 - **Table mode:**
-  - **Scenes** (`/scenes`) group the NPCs you run together. Each NPC gets a card with Health and described wounds, Willpower and Vitae boxes, Hunger dice, compels and conditions.
+  - **Scenes** (on each campaign's page) group the NPCs you run together. Each NPC gets a card with Health and described wounds, Willpower and Vitae boxes, Hunger dice, compels and conditions.
   - **The play view** (`/play/{id}`) adds dice pools ready to roll physically, with the wound penalty taken off and Hunger dice split out. It also has Fortify Form and a "spend Vitae" button on each power that costs Vitae.
   - Every change saves straight onto the character.
-- **GM sign-in.** ASP.NET Core Identity with a cookie session. The first visit runs a setup that creates the first Game Master account.
+- **Accounts.** ASP.NET Core Identity with a cookie session. Every account is alike; anyone can sign up at `/register`. The first visit runs a setup that creates the first account, the site admin, who looks after the shared catalog.
 
 ## Tech stack
 
@@ -48,8 +49,8 @@ dotnet run --project src/Requiem.Web --launch-profile http
 Then open http://localhost:5053.
 
 1. **Database.** In Development, the app applies migrations and seeds the catalog on startup. The SQLite file lives at `src/Requiem.Web/App_Data/requiem.db`, which is gitignored.
-2. **First run.** You'll be sent to `/setup` to create the first Game Master. Outside Development, setup is locked until you set `Auth:SetupCode` in the server configuration, then enter that code on the setup page.
-3. **Use it.** The nav links go to the NPC Roster, New Supporting Cast, New full sheet, Scenes and Powers.
+2. **First run.** You'll be sent to `/setup` to create the first account (the site admin). Outside Development, setup is locked until you set `Auth:SetupCode` in the server configuration, then enter that code on the setup page.
+3. **Use it.** Start a campaign on the Campaigns page; its NPCs and Scenes tabs hold the Storyteller tools. Powers is in the nav too.
 
 ### Configuration
 
@@ -58,6 +59,7 @@ Then open http://localhost:5053.
 | `Database:Provider` | `Sqlite` or `SqlServer` | `Sqlite` in Development |
 | `ConnectionStrings:Requiem` | Connection string for the chosen provider | `Data Source=App_Data/requiem.db` in Development |
 | `Auth:SetupCode` | One-time code for first-run setup | Not needed in Development |
+| `Auth:SignUpsPerHour` | New accounts allowed per hour, site-wide (sign-up and invite joins) | `30` |
 
 ## Project layout
 

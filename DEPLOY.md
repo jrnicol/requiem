@@ -112,9 +112,9 @@ The **deploy** job may fail the first time if GitHub made the new package privat
 
 The deploy job points the container app at the new image. On start, the app migrates the database and seeds the catalog.
 
-### 6. Create the first GM
+### 6. Create the first account
 
-Open the `appUrl` from step 1. The first load can take a minute while the app and database wake up. You'll be sent to `/setup`. Enter the **setup code** from step 1 and create your GM account.
+Open the `appUrl` from step 1. The first load can take a minute while the app and database wake up. You'll be sent to `/setup`. Enter the **setup code** from step 1 and create your account. It becomes the site admin, which edits the shared powers catalog; everyone else signs up at `/register`.
 
 Setup locks itself as soon as an account exists, so the code is useless from then on. Deleting it is tidying, not security.
 

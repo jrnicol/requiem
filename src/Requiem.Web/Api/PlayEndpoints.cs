@@ -19,11 +19,12 @@ public static class PlayEndpoints
 {
     public static RouteGroupBuilder MapPlayEndpoints(this RouteGroupBuilder api)
     {
-        var characters = api.MapGroup("/characters").WithTags("Play").RequireAuthorization(Policies.GameMaster);
+        // Open to any member; CampaignAccess limits each request to the campaigns they tell.
+        var characters = api.MapGroup("/characters").WithTags("Play");
         characters.MapGet("/{id:guid}/play", GetAsync);
         characters.MapPost("/{id:guid}/play", ActAsync);
 
-        var scenes = api.MapGroup("/scenes").WithTags("Scenes").RequireAuthorization(Policies.GameMaster);
+        var scenes = api.MapGroup("/scenes").WithTags("Scenes");
         scenes.MapGet("/", ListScenesAsync);
         scenes.MapPost("/", CreateSceneAsync);
         scenes.MapGet("/{id:guid}", GetSceneAsync);
@@ -212,12 +213,11 @@ public static class PlayEndpoints
     private static async Task<Results<Created<SceneView>, ValidationProblem>> CreateSceneAsync(
         SceneForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
-        if (await ValidateSceneAsync(form, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
-        if (form.CampaignId is { } campaignId && !await access.IsStorytellerAsync(campaignId, ct))
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(form.CampaignId)] = ["Unknown campaign."] });
+        if (await access.CampaignProblemAsync(form.CampaignId, ct) is { } problem)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(form.CampaignId)] = [problem] });
+        if (await ValidateSceneAsync(form, form.CampaignId, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
 
         var now = time.GetUtcNow();
-        // New scenes go to the chosen campaign, or the creating GM's personal space.
         var scene = new Scene
         {
             Id = Guid.CreateVersion7(now), Name = form.Name.Trim(), OwnerUserId = access.UserId, CampaignId = form.CampaignId,
@@ -241,7 +241,7 @@ public static class PlayEndpoints
     {
         var scene = await access.ManagedScenes().Include(s => s.Members).SingleOrDefaultAsync(s => s.Id == id, ct);
         if (scene is null) return TypedResults.NotFound();
-        if (await ValidateSceneAsync(form, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
+        if (await ValidateSceneAsync(form, scene.CampaignId, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
 
         scene.Name = form.Name.Trim();
         scene.UpdatedAt = time.GetUtcNow();
@@ -265,12 +265,13 @@ public static class PlayEndpoints
         }
     }
 
-    private static async Task<Dictionary<string, string[]>?> ValidateSceneAsync(SceneForm form, CampaignAccess access, CancellationToken ct)
+    private static async Task<Dictionary<string, string[]>?> ValidateSceneAsync(
+        SceneForm form, Guid? campaignId, CampaignAccess access, CancellationToken ct)
     {
         var results = new List<ValidationResult>();
         Validator.TryValidateObject(form, new ValidationContext(form), results, validateAllProperties: true);
-        // Only characters the user runs can join their scene; anything else reads as unknown.
-        if (!await access.CanManageAllAsync(form.CharacterIds, ct))
+        // Only the scene's own campaign's characters can join it; anything else reads as unknown.
+        if (!await access.AllInCampaignAsync(campaignId, form.CharacterIds, ct))
             results.Add(new ValidationResult("Unknown character.", [nameof(form.CharacterIds)]));
         return results.Count == 0
             ? null

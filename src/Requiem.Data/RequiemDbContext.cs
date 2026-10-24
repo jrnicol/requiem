@@ -122,6 +122,28 @@ public class RequiemDbContext(DbContextOptions<RequiemDbContext> options, TimePr
             return deleted > 0;
         }, cancellationToken);
 
+    /// <summary>
+    /// Moves a tracked character to another campaign and saves pending changes (e.g. audit entries) with it.
+    /// Sire and domitor links don't cross campaigns, so the move cuts them both ways.
+    /// </summary>
+    public Task MoveCharacterAsync(Character character, Guid campaignId, CancellationToken cancellationToken = default) =>
+        Database.CreateExecutionStrategy().ExecuteAsync(async ct =>
+        {
+            await using var transaction = await Database.BeginTransactionAsync(ct);
+
+            character.CampaignId = campaignId;
+            character.SireId = null;
+            character.DomitorId = null;
+            Entry(character).Property(c => c.UpdatedAt).IsModified = true;
+            await SaveChangesAsync(ct);
+            await Characters.Where(c => c.SireId == character.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.SireId, (Guid?)null), ct);
+            await Characters.Where(c => c.DomitorId == character.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.DomitorId, (Guid?)null), ct);
+
+            await transaction.CommitAsync(ct);
+        }, cancellationToken);
+
     private void StampCharacters()
     {
         var now = _time.GetUtcNow();

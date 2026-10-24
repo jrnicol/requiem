@@ -1,6 +1,6 @@
 @page "/sheets/new"
 @page "/sheets/{Id:guid}"
-@attribute [Authorize(Policy = Policies.GameMaster)]
+@attribute [Authorize(Policy = Policies.Member)]
 @inject RequiemApi Api
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -12,7 +12,7 @@
 {
     <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-4">
         This character doesn't exist any more.
-        <MudButton Href="" Variant="Variant.Text" Color="Color.Inherit">Back to the roster</MudButton>
+        <MudButton Href="campaigns" Variant="Variant.Text" Color="Color.Inherit">Back to your campaigns</MudButton>
     </MudAlert>
 }
 else if (_loadFailed)
@@ -29,7 +29,7 @@ else if (_form is null || _editContext is null)
 else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
-        <BackButton Label="Back" />
+        <BackButton Fallback="@CampaignUrl" Label="Back" />
         <MudText Typo="Typo.h5" Class="brand-font" Style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
             @(IsNew ? "New character" : string.IsNullOrWhiteSpace(_form.Name) ? "Unnamed character" : _form.Name)
         </MudText>
@@ -242,6 +242,9 @@ else
     /// <summary>New characters made from a campaign's page go straight into it.</summary>
     [SupplyParameterFromQuery(Name = "campaign")] public Guid? Campaign { get; set; }
 
+    /// <summary>The page of the campaign this character belongs to.</summary>
+    private string CampaignUrl => (_form?.CampaignId ?? Campaign) is { } c ? $"campaigns/{c}" : "campaigns";
+
     private BloodlineOption? SelectedBloodline => _bloodlines.FirstOrDefault(b => b.Id == _form?.BloodlineId);
     private PredatorTypeOption? SelectedPredator => _predatorTypes.FirstOrDefault(p => p.Id == _form?.PredatorTypeId);
 
@@ -265,14 +268,21 @@ else
             _merits = await Api.GetMeritsAsync();
             _compels = await Api.GetCompelsAsync();
             _powers = await Api.GetPowersAsync();
-            _roster = await Api.ListCharactersAsync(new CharacterQuery(IncludeArchived: true));
 
+            // Characters belong to a campaign; a new one is started from that campaign's page.
+            if (Id is null && Campaign is null)
+            {
+                Navigation.NavigateTo("campaigns", replace: true);
+                return;
+            }
             var form = Id is { } id ? await Api.GetFullSheetAsync(id) : new FullSheetForm { CampaignId = Campaign };
             if (form is null)
             {
                 _notFound = true;
                 return;
             }
+            // A sire comes from the same campaign.
+            _roster = await Api.ListCharactersAsync(new CharacterQuery(IncludeArchived: true, CampaignId: form.CampaignId));
             SetForm(form);
         }
         catch (HttpRequestException)
@@ -391,7 +401,7 @@ else
         {
             await Api.DeleteCharacterAsync(id);
             Snackbar.Add($"Deleted {_form.Name}.", Severity.Info);
-            Navigation.NavigateTo("");
+            Navigation.NavigateTo(CampaignUrl);
         }
         catch (HttpRequestException)
         {

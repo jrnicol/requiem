@@ -98,26 +98,8 @@ public sealed record InvitePreview(string? CampaignName, string? StorytellerName
     public bool IsUsable => Problem is null;
 }
 
-/// <summary>Creates a player account through an invite link, then joins the campaign.</summary>
-public sealed class JoinRequest
-{
-    [Required(ErrorMessage = "What should the app call you?"), StringLength(100)]
-    public string DisplayName { get; set; } = "";
-
-    [Required(ErrorMessage = "Enter your email."), EmailAddress(ErrorMessage = "That doesn't look like an email address."), StringLength(256)]
-    public string Email { get; set; } = "";
-
-    [Required(ErrorMessage = "Choose a password.")]
-    [StringLength(PasswordRules.MaxLength, MinimumLength = PasswordRules.MinLength,
-        ErrorMessage = "Use at least 12 characters. A passphrase of a few words works well.")]
-    public string Password { get; set; } = "";
-
-    [Required(ErrorMessage = "Type the password again."), Compare(nameof(Password), ErrorMessage = "The passwords don't match.")]
-    public string ConfirmPassword { get; set; } = "";
-}
-
 /// <summary>The result of accepting an invite or joining through one.</summary>
 public sealed record JoinedCampaign(Guid CampaignId, CurrentUser User);
 
-/// <summary>Moves an NPC between the GM's personal roster (null) and a campaign they tell.</summary>
-public sealed record MoveCharacterRequest(Guid? CampaignId);
+/// <summary>Moves an NPC into another campaign. The user must tell both.</summary>
+public sealed record MoveCharacterRequest(Guid CampaignId);

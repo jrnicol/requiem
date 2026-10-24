@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.RateLimiting;
 using Requiem.Data;
 using Requiem.Data.Entities;
 using Requiem.Shared.Accounts;
@@ -16,7 +17,8 @@ public static class AuthSetup
     /// Cookie sign-in with ASP.NET Core Identity. The browser app and API share an origin, so a
     /// SameSite=Strict, HttpOnly cookie is all the API needs; there are no tokens to store in the browser.
     /// </summary>
-    public static IServiceCollection AddRequiemAuth(this IServiceCollection services, IHostEnvironment environment)
+    public static IServiceCollection AddRequiemAuth(
+        this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         services
             .AddIdentityCore<RequiemUser>(options =>
@@ -64,8 +66,21 @@ public static class AuthSetup
         });
 
         services.AddAuthorizationBuilder()
-            .AddPolicy(Policies.GameMaster, policy => policy.RequireRole(Roles.GameMaster))
+            .AddPolicy(Policies.Admin, policy => policy.RequireRole(Roles.Admin))
             .AddPolicy(Policies.Member, policy => policy.RequireAuthenticatedUser());
+
+        // Sign-up is open to anyone, so cap how many accounts can be made in an hour. The hosted app
+        // sits behind a proxy, so this is one window for the whole site rather than per address.
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.AddFixedWindowLimiter(Api.AccountEndpoints.SignUpLimit, window =>
+            {
+                window.PermitLimit = configuration.GetValue("Auth:SignUpsPerHour", 30);
+                window.Window = TimeSpan.FromHours(1);
+                window.QueueLimit = 0;
+            });
+        });
 
         // Per-request answers to "may this user see or change that?" (PHASE2.md §4).
         services.AddHttpContextAccessor();

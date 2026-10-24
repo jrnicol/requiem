@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
+using Requiem.Shared.Accounts;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Contracts;
 using Requiem.Shared.Rules;
@@ -10,8 +11,11 @@ namespace Requiem.Web.Tests;
 public class PowerCatalogApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFactory>, IAsyncLifetime
 {
     private HttpClient _http = null!;
+    private Guid _campaign;
 
-    public async Task InitializeAsync() => _http = await factory.CreateGmClientAsync("powers@example.test");
+    // The site admin edits the catalog, and also tells a campaign to try powers on characters.
+    public async Task InitializeAsync() =>
+        (_http, _campaign) = await factory.CreateStorytellerAsync("powers@example.test", "Test Chronicle", Roles.Admin);
 
     public Task DisposeAsync() => Task.CompletedTask;
 
@@ -90,7 +94,7 @@ public class PowerCatalogApiTests(RequiemWebFactory factory) : IClassFixture<Req
     {
         var command = (await PowersAsync()).Single(p => p.Name == "Command");
         var response = await _http.PostAsJsonAsync("/api/characters/full-sheet",
-            new FullSheetForm { Name = "Wrong", LearnedPowerIds = [command.Id] }, RequiemJson.Options);
+            new FullSheetForm { Name = "Wrong", CampaignId = _campaign, LearnedPowerIds = [command.Id] }, RequiemJson.Options);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>(RequiemJson.Options);
         Assert.Contains(nameof(FullSheetForm.LearnedPowerIds), problem!.Errors.Keys);
@@ -103,7 +107,7 @@ public class PowerCatalogApiTests(RequiemWebFactory factory) : IClassFixture<Req
         var picks = (await PowersAsync()).Where(p => p.PowerGroupId == investiture).Take(3).Select(p => p.Id).ToList();
         FullSheetForm Sheet(int dots, IEnumerable<int> chosen) => new()
         {
-            Name = "Iron Saint", BloodPotency = 3,
+            Name = "Iron Saint", CampaignId = _campaign, BloodPotency = 3,
             Disciplines = dots > 0 ? [new() { PowerGroupId = investiture, Dots = dots }] : [],
             LearnedPowerIds = chosen.ToList(),
         };
@@ -136,6 +140,7 @@ public class PowerCatalogApiTests(RequiemWebFactory factory) : IClassFixture<Req
 
     private async Task<FullSheetForm> CreateAsync(FullSheetForm form)
     {
+        form.CampaignId = _campaign;
         var response = await _http.PostAsJsonAsync("/api/characters/full-sheet", form, RequiemJson.Options);
         Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<FullSheetForm>(RequiemJson.Options))!;

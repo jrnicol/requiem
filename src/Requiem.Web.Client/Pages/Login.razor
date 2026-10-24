@@ -30,6 +30,9 @@
                                Size="Size.Large" FullWidth="true" Disabled="_busy">
                         @(_busy ? "Signing in…" : "Sign in")
                     </MudButton>
+                    <MudText Typo="Typo.body2" Align="Align.Center">
+                        New here? <MudLink Href="register">Create an account</MudLink>
+                    </MudText>
                 </MudStack>
             </EditForm>
         }

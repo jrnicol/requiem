@@ -5,20 +5,25 @@ using System.Text;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Requiem.Data;
 using Requiem.Data.Entities;
+using Requiem.Data.Seeding;
 using Requiem.Shared.Accounts;
 
 namespace Requiem.Web.Api;
 
 /// <summary>
-/// Sign-in, sign-out, "who am I", and first-run setup. These are the only API endpoints open to
-/// anonymous callers.
+/// Sign-in, sign-out, sign-up, "who am I", and first-run setup. These (and the invite preview and
+/// join) are the only API endpoints open to anonymous callers.
 /// </summary>
 public static class AccountEndpoints
 {
     public const string SetupCodeSetting = "Auth:SetupCode";
 
-    // First-run setup must never create two GMs, even if two requests race.
+    /// <summary>The rate limit shared by everything that creates an account.</summary>
+    public const string SignUpLimit = "sign-up";
+
+    // First-run setup must never create two admins, even if two requests race.
     private static readonly SemaphoreSlim SetupLock = new(1, 1);
 
     public static RouteGroupBuilder MapAccountEndpoints(this RouteGroupBuilder api)
@@ -28,11 +33,41 @@ public static class AccountEndpoints
         account.MapGet("/me", GetCurrentUserAsync);
         account.MapPost("/login", LoginAsync);
         account.MapPost("/logout", LogoutAsync);
+        account.MapPost("/register", RegisterAsync).RequireRateLimiting(SignUpLimit);
         account.MapGet("/setup", GetSetupStatusAsync);
         account.MapPost("/setup", SetupAsync);
 
         return api;
     }
+
+    /// <summary>
+    /// Open sign-up. Every account is the same: what someone can do depends on the campaigns they start
+    /// or join. Once the site has its first account, that is; until then this is refused, so the
+    /// setup page (and its code) decides who becomes the admin.
+    /// </summary>
+    private static async Task<Results<Ok<CurrentUser>, ValidationProblem, ProblemHttpResult>> RegisterAsync(
+        RegisterRequest request, UserManager<RequiemUser> users, SignInManager<RequiemUser> signIn)
+    {
+        if (Validate(request) is { } errors) return TypedResults.ValidationProblem(errors);
+        if (!await users.Users.AnyAsync())
+            return TypedResults.Problem("This site hasn't been set up yet.", statusCode: StatusCodes.Status409Conflict);
+
+        var email = request.Email.Trim();
+        var user = new RequiemUser { UserName = email, Email = email, EmailConfirmed = false, DisplayName = request.DisplayName.Trim() };
+        var created = await users.CreateAsync(user, request.Password);
+        if (!created.Succeeded) return TypedResults.ValidationProblem(CreationErrors(created));
+
+        await signIn.SignInAsync(user, isPersistent: true);
+        return TypedResults.Ok(await ToCurrentUserAsync(user, users));
+    }
+
+    /// <summary>Identity's reasons an account wasn't created, keyed to the form field they're about.</summary>
+    internal static Dictionary<string, string[]> CreationErrors(IdentityResult result) => new()
+    {
+        [result.Errors.Any(e => e.Code.StartsWith("Password", StringComparison.Ordinal))
+            ? nameof(RegisterRequest.Password)
+            : nameof(RegisterRequest.Email)] = result.Errors.Select(e => e.Description).ToArray(),
+    };
 
     private static async Task<CurrentUser> GetCurrentUserAsync(ClaimsPrincipal principal, UserManager<RequiemUser> users)
     {
@@ -72,6 +107,7 @@ public static class AccountEndpoints
     private static async Task<Results<Ok<CurrentUser>, ValidationProblem, Conflict<ProblemDetailsBody>, ProblemHttpResult>>
         SetupAsync(
             SetupRequest request,
+            RequiemDbContext db,
             UserManager<RequiemUser> users,
             RoleManager<IdentityRole> roles,
             SignInManager<RequiemUser> signIn,
@@ -92,8 +128,8 @@ public static class AccountEndpoints
                         { [nameof(SetupRequest.SetupCode)] = ["That setup code isn't right."] })
                     : TypedResults.Problem(setupProblem, statusCode: StatusCodes.Status403Forbidden);
 
-            if (!await roles.RoleExistsAsync(Roles.GameMaster))
-                await roles.CreateAsync(new IdentityRole(Roles.GameMaster));
+            if (!await roles.RoleExistsAsync(Roles.Admin))
+                await roles.CreateAsync(new IdentityRole(Roles.Admin));
 
             var email = request.Email.Trim();
             var user = new RequiemUser
@@ -104,15 +140,11 @@ public static class AccountEndpoints
                 DisplayName = request.DisplayName.Trim(),
             };
             var created = await users.CreateAsync(user, request.Password);
-            if (!created.Succeeded)
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    [created.Errors.Any(e => e.Code.StartsWith("Password", StringComparison.Ordinal))
-                        ? nameof(SetupRequest.Password)
-                        : nameof(SetupRequest.Email)] = created.Errors.Select(e => e.Description).ToArray(),
-                });
+            if (!created.Succeeded) return TypedResults.ValidationProblem(CreationErrors(created));
 
-            await users.AddToRoleAsync(user, Roles.GameMaster);
+            await users.AddToRoleAsync(user, Roles.Admin);
+            // Characters made before anyone signed up now have someone to tell them.
+            await AccountsUpgrade.RunAsync(db);
             await signIn.SignInAsync(user, isPersistent: true);
             return TypedResults.Ok(await ToCurrentUserAsync(user, users));
         }

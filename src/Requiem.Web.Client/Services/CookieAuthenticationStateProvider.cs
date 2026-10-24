@@ -63,9 +63,24 @@ public sealed class CookieAuthenticationStateProvider(HttpClient http) : Authent
         }
     }
 
-    /// <summary>Makes a player account through an invite link, joins the campaign and signs in.</summary>
+    /// <summary>Open sign-up: makes an account and signs in.</summary>
+    public async Task<AuthResult> RegisterAsync(RegisterRequest request)
+    {
+        using var response = await http.PostAsJsonAsync("api/account/register", request, RequiemJson.Options);
+        return response.StatusCode switch
+        {
+            HttpStatusCode.OK => await SignedInAsync(response),
+            HttpStatusCode.BadRequest => new AuthResult(false, "Check the highlighted fields.", await ReadErrorsAsync(response)),
+            HttpStatusCode.TooManyRequests => new AuthResult(false, TooManySignUps),
+            _ => new AuthResult(false, await ReadDetailAsync(response) ?? $"Sign-up failed ({(int)response.StatusCode})."),
+        };
+    }
+
+    private const string TooManySignUps = "A lot of accounts were made in the last hour. Try again later.";
+
+    /// <summary>Makes an account through an invite link, joins the campaign and signs in.</summary>
     /// <returns>The campaign joined, or null with the reason in the result.</returns>
-    public async Task<(AuthResult Result, Guid? CampaignId)> JoinAsync(string token, JoinRequest request)
+    public async Task<(AuthResult Result, Guid? CampaignId)> JoinAsync(string token, RegisterRequest request)
     {
         using var response = await http.PostAsJsonAsync($"api/invites/{Uri.EscapeDataString(token)}/join", request, RequiemJson.Options);
         switch (response.StatusCode)
@@ -76,6 +91,8 @@ public sealed class CookieAuthenticationStateProvider(HttpClient http) : Authent
                 return (new AuthResult(true), joined.CampaignId);
             case HttpStatusCode.BadRequest:
                 return (new AuthResult(false, "Check the highlighted fields.", await ReadErrorsAsync(response)), null);
+            case HttpStatusCode.TooManyRequests:
+                return (new AuthResult(false, TooManySignUps), null);
             default:
                 return (new AuthResult(false, await ReadDetailAsync(response) ?? $"Joining failed ({(int)response.StatusCode})."), null);
         }

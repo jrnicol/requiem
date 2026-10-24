@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Requiem.Data;
+using Requiem.Shared.Accounts;
 using Requiem.Shared.Campaigns;
 using Requiem.Shared.Contracts;
 
@@ -15,7 +16,7 @@ public class CampaignApiTests(RequiemWebFactory factory) : IClassFixture<Requiem
     // ---------- Creating ----------
 
     [Fact]
-    public async Task A_gm_creates_a_campaign_and_runs_it()
+    public async Task Anyone_creates_a_campaign_and_tells_it()
     {
         var gm = await GmAsync();
         var campaign = await CreateCampaignAsync(gm, "Chicago by Night");
@@ -27,9 +28,15 @@ public class CampaignApiTests(RequiemWebFactory factory) : IClassFixture<Requiem
     }
 
     [Fact]
-    public async Task Players_cannot_create_campaigns() =>
-        Assert.Equal(HttpStatusCode.Forbidden,
-            (await (await PlayerAsync()).PostAsJsonAsync("/api/campaigns", new CampaignForm { Name = "Mine" }, RequiemJson.Options)).StatusCode);
+    public async Task A_player_in_one_campaign_can_tell_their_own()
+    {
+        var (_, player, joined) = await CampaignWithPlayerAsync();
+        var own = await CreateCampaignAsync(player, "Mine");
+
+        var roles = (await ListAsync(player)).ToDictionary(c => c.Id, c => c.MyRole);
+        Assert.Equal(CampaignRole.Player, roles[joined.Id]);
+        Assert.Equal(CampaignRole.Storyteller, roles[own.Id]);
+    }
 
     [Fact]
     public async Task A_campaign_must_allow_some_kind_of_character()
@@ -135,7 +142,7 @@ public class CampaignApiTests(RequiemWebFactory factory) : IClassFixture<Requiem
         var response = await factory.CreateClient().PostAsJsonAsync($"/api/invites/{invite.Token}/join",
             NewPlayer("Copycat", email), RequiemJson.Options);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Contains(nameof(JoinRequest.Email), (await response.Content.ReadFromJsonAsync<ValidationProblemDetails>(RequiemJson.Options))!.Errors.Keys);
+        Assert.Contains(nameof(RegisterRequest.Email), (await response.Content.ReadFromJsonAsync<ValidationProblemDetails>(RequiemJson.Options))!.Errors.Keys);
 
         // The failed attempt neither spent the link's one use nor left a member behind.
         var view = (await gm.GetFromJsonAsync<CampaignView>($"/api/campaigns/{campaign.Id}", RequiemJson.Options))!;
@@ -222,24 +229,37 @@ public class CampaignApiTests(RequiemWebFactory factory) : IClassFixture<Requiem
     // ---------- Campaign NPCs and scenes ----------
 
     [Fact]
-    public async Task Npcs_are_created_in_moved_between_and_listed_by_campaign()
+    public async Task Npcs_are_listed_by_campaign_and_move_between_a_storytellers_campaigns()
     {
         var gm = await GmAsync();
-        var campaign = await CreateCampaignAsync(gm, "Roster");
-        var inCampaign = await CreateNpcAsync(gm, "Sheriff", campaign.Id);
-        var personal = await CreateNpcAsync(gm, "Contact", null);
+        var first = await CreateCampaignAsync(gm, "First");
+        var second = await CreateCampaignAsync(gm, "Second");
+        var sheriff = await CreateNpcAsync(gm, "Sheriff", first.Id);
+        var contact = await CreateNpcAsync(gm, "Contact", second.Id);
 
-        Assert.Equal([inCampaign], (await RosterAsync(gm, $"campaignId={campaign.Id}")).Select(c => c.Id));
-        Assert.Contains(await RosterAsync(gm, "personalOnly=true"), c => c.Id == personal);
-        Assert.DoesNotContain(await RosterAsync(gm, "personalOnly=true"), c => c.Id == inCampaign);
-
-        Assert.Equal(HttpStatusCode.NoContent,
-            (await gm.PostAsJsonAsync($"/api/characters/{personal}/move", new MoveCharacterRequest(campaign.Id), RequiemJson.Options)).StatusCode);
-        Assert.Equal(2, (await RosterAsync(gm, $"campaignId={campaign.Id}")).Count);
+        Assert.Equal([sheriff], (await RosterAsync(gm, $"campaignId={first.Id}")).Select(c => c.Id));
+        Assert.Equal(2, (await RosterAsync(gm, "")).Count(c => c.Id == sheriff || c.Id == contact));
 
         Assert.Equal(HttpStatusCode.NoContent,
-            (await gm.PostAsJsonAsync($"/api/characters/{inCampaign}/move", new MoveCharacterRequest(null), RequiemJson.Options)).StatusCode);
-        Assert.Contains(await RosterAsync(gm, "personalOnly=true"), c => c.Id == inCampaign);
+            (await gm.PostAsJsonAsync($"/api/characters/{contact}/move", new MoveCharacterRequest(first.Id), RequiemJson.Options)).StatusCode);
+        Assert.Equal(2, (await RosterAsync(gm, $"campaignId={first.Id}")).Count);
+        Assert.Empty(await RosterAsync(gm, $"campaignId={second.Id}"));
+    }
+
+    [Fact]
+    public async Task Moving_an_npc_cuts_its_sire_links()
+    {
+        var gm = await GmAsync();
+        var first = await CreateCampaignAsync(gm, "Old city");
+        var second = await CreateCampaignAsync(gm, "New city");
+        var sire = await CreateSheetAsync(gm, "Sire", first.Id, sireId: null);
+        var childe = await CreateSheetAsync(gm, "Childe", first.Id, sireId: sire);
+
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await gm.PostAsJsonAsync($"/api/characters/{sire}/move", new MoveCharacterRequest(second.Id), RequiemJson.Options)).StatusCode);
+
+        var reloaded = (await gm.GetFromJsonAsync<FullSheetForm>($"/api/characters/{childe}/full-sheet", RequiemJson.Options))!;
+        Assert.Null(reloaded.SireId);
     }
 
     [Fact]
@@ -248,12 +268,13 @@ public class CampaignApiTests(RequiemWebFactory factory) : IClassFixture<Requiem
         var owner = await GmAsync();
         var campaign = await CreateCampaignAsync(owner, "Not yours");
         var other = await GmAsync();
+        var others = await CreateCampaignAsync(other, "Mine");
 
         var create = await other.PostAsJsonAsync("/api/characters/supporting-cast",
             new SupportingCastForm { Name = "Spy", CampaignId = campaign.Id }, RequiemJson.Options);
         Assert.Equal(HttpStatusCode.BadRequest, create.StatusCode);
 
-        var mine = await CreateNpcAsync(other, "Mine", null);
+        var mine = await CreateNpcAsync(other, "Mine", others.Id);
         var move = await other.PostAsJsonAsync($"/api/characters/{mine}/move", new MoveCharacterRequest(campaign.Id), RequiemJson.Options);
         Assert.Equal(HttpStatusCode.BadRequest, move.StatusCode);
 
@@ -276,8 +297,9 @@ public class CampaignApiTests(RequiemWebFactory factory) : IClassFixture<Requiem
 
     // ---------- Helpers ----------
 
+    /// <summary>Any user: they become a Storyteller by starting a campaign.</summary>
     private async Task<HttpClient> GmAsync(string? name = null) =>
-        await factory.CreateGmClientAsync($"{name ?? "gm"}-{Guid.NewGuid():N}@example.test");
+        await factory.CreateMemberClientAsync($"{name ?? "gm"}-{Guid.NewGuid():N}@example.test");
 
     private async Task<HttpClient> PlayerAsync()
     {
@@ -286,7 +308,7 @@ public class CampaignApiTests(RequiemWebFactory factory) : IClassFixture<Requiem
         return await factory.SignInAsync(email, RequiemWebFactory.DefaultPassword);
     }
 
-    private static JoinRequest NewPlayer(string name, string? email = null) => new()
+    private static RegisterRequest NewPlayer(string name, string? email = null) => new()
     {
         DisplayName = name, Email = email ?? $"{name.ToLowerInvariant()}-{Guid.NewGuid():N}@example.test",
         Password = RequiemWebFactory.DefaultPassword, ConfirmPassword = RequiemWebFactory.DefaultPassword,
@@ -325,6 +347,14 @@ public class CampaignApiTests(RequiemWebFactory factory) : IClassFixture<Requiem
             new SupportingCastForm { Name = name, CampaignId = campaignId }, RequiemJson.Options);
         Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<SupportingCastForm>(RequiemJson.Options))!.Id!.Value;
+    }
+
+    private static async Task<Guid> CreateSheetAsync(HttpClient gm, string name, Guid campaignId, Guid? sireId)
+    {
+        var response = await gm.PostAsJsonAsync("/api/characters/full-sheet",
+            new FullSheetForm { Name = name, Kind = Requiem.Shared.Characters.CharacterKind.Vampire, CampaignId = campaignId, SireId = sireId }, RequiemJson.Options);
+        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<FullSheetForm>(RequiemJson.Options))!.Id!.Value;
     }
 
     private static async Task<List<CharacterSummary>> RosterAsync(HttpClient gm, string query) =>

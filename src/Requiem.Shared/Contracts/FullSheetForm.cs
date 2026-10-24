@@ -81,7 +81,7 @@ public sealed class FullSheetForm : IValidatableObject
 
     public Guid? Id { get; set; }
 
-    /// <summary>The campaign it belongs to; null for the GM's personal roster. Set on create; moving uses its own endpoint.</summary>
+    /// <summary>The campaign it belongs to (required on create). Moving uses its own endpoint.</summary>
     public Guid? CampaignId { get; set; }
 
     [Required(ErrorMessage = "Every character needs a name."), StringLength(200)]

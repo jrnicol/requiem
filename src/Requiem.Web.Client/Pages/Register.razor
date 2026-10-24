@@ -1,0 +1,96 @@
+@page "/register"
+@inject CookieAuthenticationStateProvider Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Create an account · Requiem</PageTitle>
+
+<div class="auth-page">
+    <MudPaper Outlined="true" Class="pa-6 auth-card">
+        <MudText Typo="Typo.h4" Align="Align.Center" Class="brand-font mb-1">Requiem</MudText>
+        <MudText Align="Align.Center" Color="Color.Secondary" Class="mb-6">
+            Start your own campaign, or join one with a Storyteller's invite link.
+        </MudText>
+
+        <EditForm EditContext="_editContext" OnValidSubmit="RegisterAsync">
+            <DataAnnotationsValidator />
+            <MudStack Spacing="3">
+                @if (_error is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true">@_error</MudAlert>
+                }
+                <MudTextField @bind-Value="_request.DisplayName" For="() => _request.DisplayName" Label="Your name"
+                              HelperText="What other players and Storytellers see" Variant="Variant.Outlined" AutoFocus="true"
+                              UserAttributes="@(new() { ["autocomplete"] = "nickname" })" />
+                <MudTextField @bind-Value="_request.Email" For="() => _request.Email" Label="Email"
+                              InputType="InputType.Email" Variant="Variant.Outlined"
+                              UserAttributes="@(new() { ["autocomplete"] = "username" })" />
+                <MudTextField @bind-Value="_request.Password" For="() => _request.Password" Label="Password"
+                              HelperText="At least 12 characters. A passphrase of a few words works well."
+                              InputType="InputType.Password" Variant="Variant.Outlined"
+                              UserAttributes="@(new() { ["autocomplete"] = "new-password" })" />
+                <MudTextField @bind-Value="_request.ConfirmPassword" For="() => _request.ConfirmPassword" Label="Password again"
+                              InputType="InputType.Password" Variant="Variant.Outlined"
+                              UserAttributes="@(new() { ["autocomplete"] = "new-password" })" />
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                           Size="Size.Large" FullWidth="true" Disabled="_busy">
+                    @(_busy ? "Creating…" : "Create account")
+                </MudButton>
+                <MudText Typo="Typo.body2" Align="Align.Center">
+                    Already have an account? <MudLink Href="login">Sign in</MudLink>
+                </MudText>
+            </MudStack>
+        </EditForm>
+    </MudPaper>
+</div>
+
+@code {
+    private readonly RegisterRequest _request = new();
+    private EditContext _editContext = null!;
+    private ValidationMessageStore _serverErrors = null!;
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _editContext = new EditContext(_request);
+        _serverErrors = new ValidationMessageStore(_editContext);
+        _editContext.OnFieldChanged += (_, e) => _serverErrors.Clear(e.FieldIdentifier);
+
+        // Already signed in: nothing to do here.
+        if ((await Auth.GetAuthenticationStateAsync()).User.Identity?.IsAuthenticated == true)
+            Navigation.NavigateTo("campaigns", replace: true);
+    }
+
+    private async Task RegisterAsync()
+    {
+        _busy = true;
+        _error = null;
+        _serverErrors.Clear();
+        try
+        {
+            var result = await Auth.RegisterAsync(_request);
+            if (result.Succeeded)
+            {
+                Navigation.NavigateTo("campaigns", replace: true);
+                return;
+            }
+
+            _error = result.Message;
+            foreach (var (field, messages) in result.Errors ?? new Dictionary<string, string[]>())
+            {
+                var property = typeof(RegisterRequest).GetProperties()
+                    .FirstOrDefault(p => string.Equals(p.Name, field, StringComparison.OrdinalIgnoreCase))?.Name ?? "";
+                _serverErrors.Add(new FieldIdentifier(_request, property), messages);
+            }
+            _editContext.NotifyValidationStateChanged();
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Couldn't reach the server. Try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

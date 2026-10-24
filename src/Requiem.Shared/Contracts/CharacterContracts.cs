@@ -27,12 +27,10 @@ public sealed record CharacterSummary(
     int? Morality = null,
     Guid? CampaignId = null);
 
-/// <param name="CampaignId">Only that campaign's characters.</param>
-/// <param name="PersonalOnly">Only the GM's personal roster (characters in no campaign).</param>
+/// <param name="CampaignId">Only that campaign's characters; otherwise those of every campaign the user tells.</param>
 public sealed record CharacterQuery(
     string? Search = null,
     CharacterTier? Tier = null,
     CharacterKind? Kind = null,
     bool IncludeArchived = false,
-    Guid? CampaignId = null,
-    bool PersonalOnly = false);
+    Guid? CampaignId = null);

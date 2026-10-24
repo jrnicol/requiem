@@ -8,7 +8,7 @@
     <MudPaper Outlined="true" Class="pa-6 auth-card">
         <MudText Typo="Typo.h4" Align="Align.Center" Class="brand-font mb-1">Requiem</MudText>
         <MudText Align="Align.Center" Color="Color.Secondary" Class="mb-6">
-            Create the GM account. This only happens once.
+            Create the first account. It looks after the shared rules catalog. This only happens once.
         </MudText>
 
         @if (_status is null)
@@ -25,7 +25,7 @@
                         <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true">@_error</MudAlert>
                     }
                     <MudTextField @bind-Value="_request.DisplayName" For="() => _request.DisplayName" Label="Your name"
-                                  HelperText="Shown in the app, e.g. 'The Storyteller'" Variant="Variant.Outlined" AutoFocus="true" />
+                                  HelperText="What other players and Storytellers see" Variant="Variant.Outlined" AutoFocus="true" />
                     <MudTextField @bind-Value="_request.Email" For="() => _request.Email" Label="Email"
                                   InputType="InputType.Email" Variant="Variant.Outlined"
                                   UserAttributes="@(new() { ["autocomplete"] = "username" })" />
@@ -44,7 +44,7 @@
                     }
                     <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
                                Size="Size.Large" FullWidth="true" Disabled="_busy">
-                        @(_busy ? "Creating…" : "Create GM account")
+                        @(_busy ? "Creating…" : "Create account")
                     </MudButton>
                 </MudStack>
             </EditForm>

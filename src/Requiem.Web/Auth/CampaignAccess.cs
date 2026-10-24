@@ -8,9 +8,11 @@ using Requiem.Shared.Campaigns;
 namespace Requiem.Web.Auth;
 
 /// <summary>
-/// What the signed-in user may see and change (PHASE2.md §4). Every endpoint that touches characters or
-/// scenes filters through here, so access is enforced on the server rather than by what the UI shows.
-/// A character outside the user's reach reads as "not found", so its existence doesn't leak.
+/// What the signed-in user may see and change (PHASE2.md §4). There are no Storyteller accounts: the
+/// user's role comes from each campaign they belong to, so the same person can tell one campaign and
+/// play in another. Every endpoint that touches characters or scenes filters through here, so access is
+/// enforced on the server rather than by what the UI shows. Anything outside the user's reach reads as
+/// "not found", so its existence doesn't leak.
 /// </summary>
 public sealed class CampaignAccess(RequiemDbContext db, IHttpContextAccessor http)
 {
@@ -20,8 +22,8 @@ public sealed class CampaignAccess(RequiemDbContext db, IHttpContextAccessor htt
     public string UserId =>
         User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("No signed-in user.");
 
-    /// <summary>Site GMs keep a personal roster and create campaigns.</summary>
-    public bool IsSiteGm => User.IsInRole(Roles.GameMaster);
+    /// <summary>Looks after the shared rules catalog. Gives no say in anyone's campaign.</summary>
+    public bool IsAdmin => User.IsInRole(Roles.Admin);
 
     /// <summary>Campaigns in which the user is a Storyteller.</summary>
     public IQueryable<Guid> StorytellerCampaignIds()
@@ -32,29 +34,18 @@ public sealed class CampaignAccess(RequiemDbContext db, IHttpContextAccessor htt
             .Select(m => m.CampaignId);
     }
 
-    /// <summary>
-    /// Characters the user runs as GM: a site GM's personal roster (their own, plus characters made
-    /// before Phase 2, which have no owner) and every character in a campaign they tell.
-    /// </summary>
+    /// <summary>Characters the user runs: every character in a campaign they tell.</summary>
     public IQueryable<Character> ManagedCharacters(IQueryable<Character>? source = null)
     {
-        var userId = UserId;
-        var siteGm = IsSiteGm;
         var storyteller = StorytellerCampaignIds();
-        return (source ?? db.Characters).Where(c =>
-            (c.CampaignId == null && siteGm && (c.OwnerUserId == null || c.OwnerUserId == userId))
-            || (c.CampaignId != null && storyteller.Contains(c.CampaignId.Value)));
+        return (source ?? db.Characters).Where(c => c.CampaignId != null && storyteller.Contains(c.CampaignId.Value));
     }
 
-    /// <summary>Scenes the user runs: personal ones (as for characters) and their campaigns' scenes.</summary>
+    /// <summary>Scenes the user runs: those of the campaigns they tell.</summary>
     public IQueryable<Scene> ManagedScenes(IQueryable<Scene>? source = null)
     {
-        var userId = UserId;
-        var siteGm = IsSiteGm;
         var storyteller = StorytellerCampaignIds();
-        return (source ?? db.Scenes).Where(s =>
-            (s.CampaignId == null && siteGm && (s.OwnerUserId == null || s.OwnerUserId == userId))
-            || (s.CampaignId != null && storyteller.Contains(s.CampaignId.Value)));
+        return (source ?? db.Scenes).Where(s => s.CampaignId != null && storyteller.Contains(s.CampaignId.Value));
     }
 
     /// <summary>The user's role in a campaign, or null when they aren't a member (or it doesn't exist).</summary>
@@ -70,10 +61,17 @@ public sealed class CampaignAccess(RequiemDbContext db, IHttpContextAccessor htt
     public async Task<bool> IsStorytellerAsync(Guid campaignId, CancellationToken ct) =>
         await RoleInAsync(campaignId, ct) == CampaignRole.Storyteller;
 
+    /// <summary>Why the user can't add a character or scene to <paramref name="campaignId"/>, or null when they can.</summary>
+    public async Task<string?> CampaignProblemAsync(Guid? campaignId, CancellationToken ct) =>
+        campaignId is not { } id ? "Choose a campaign."
+        : await IsStorytellerAsync(id, ct) ? null
+        : "Unknown campaign.";
+
     public Task<bool> CanManageCharacterAsync(Guid id, CancellationToken ct) =>
         ManagedCharacters().AnyAsync(c => c.Id == id, ct);
 
-    /// <summary>True when every one of <paramref name="ids"/> is a character the user runs.</summary>
-    public async Task<bool> CanManageAllAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
-        ids.Count == 0 || await ManagedCharacters().CountAsync(c => ids.Contains(c.Id), ct) == ids.Distinct().Count();
+    /// <summary>True when every one of <paramref name="ids"/> is a character of <paramref name="campaignId"/> the user runs.</summary>
+    public async Task<bool> AllInCampaignAsync(Guid? campaignId, IReadOnlyCollection<Guid> ids, CancellationToken ct) =>
+        ids.Count == 0
+        || await ManagedCharacters().CountAsync(c => c.CampaignId == campaignId && ids.Contains(c.Id), ct) == ids.Distinct().Count();
 }

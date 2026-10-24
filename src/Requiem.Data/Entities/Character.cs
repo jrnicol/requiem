@@ -64,11 +64,13 @@ public class Character
 
     // Ownership and lifecycle (PHASE2.md §3).
     /// <summary>
-    /// The GM who made an NPC or the player who owns a PC. Null on characters made before Phase 2:
-    /// those belong to every site GM's personal roster.
+    /// The Storyteller who made an NPC or the player who owns a PC. Null on characters made before Phase 2.
     /// </summary>
     public string? OwnerUserId { get; set; }
-    /// <summary>Null for the site GM's personal roster.</summary>
+    /// <summary>
+    /// Every character belongs to a campaign, and only its Storytellers run it. Null only on data from
+    /// before campaigns, which <see cref="Seeding.AccountsUpgrade"/> moves into one at startup.
+    /// </summary>
     public Guid? CampaignId { get; set; }
     public Campaign? Campaign { get; set; }
     public bool IsPlayerCharacter { get; set; }

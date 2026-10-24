@@ -1,5 +1,5 @@
 @page "/play/{Id:guid}"
-@attribute [Authorize(Policy = Policies.GameMaster)]
+@attribute [Authorize(Policy = Policies.Member)]
 @inject RequiemApi Api
 @inject ISnackbar Snackbar
 
@@ -231,7 +231,7 @@ else
         _compels = await Api.GetCompelsAsync();
     }
 
-    private string BackUrl => Scene is { } scene ? $"scenes/{scene}" : "";
+    private string BackUrl => Scene is { } scene ? $"scenes/{scene}" : "campaigns";
     private string EditUrl => _npc?.IsFullSheet == true ? $"sheets/{Id}" : $"npcs/{Id}";
 
     private string Subtitle => string.Join(" · ", new[]

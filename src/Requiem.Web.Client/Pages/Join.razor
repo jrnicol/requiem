@@ -51,7 +51,7 @@
                 <EditForm Model="_request" OnValidSubmit="JoinAsync">
                     <DataAnnotationsValidator />
                     <MudStack Spacing="3">
-                        <MudText Typo="Typo.subtitle1">Make your player account</MudText>
+                        <MudText Typo="Typo.subtitle1">Make your account</MudText>
                         <MudTextField @bind-Value="_request.DisplayName" For="() => _request.DisplayName" Label="Your name"
                                       Variant="Variant.Outlined" AutoFocus="true" HelperText="What the Storyteller and other players see"
                                       UserAttributes="@(new() { ["autocomplete"] = "nickname" })" />
@@ -84,7 +84,7 @@
 
     private InvitePreview? _preview;
     private string? _signedInAs;
-    private readonly JoinRequest _request = new();
+    private readonly RegisterRequest _request = new();
     private string? _error;
     private bool _busy;
 

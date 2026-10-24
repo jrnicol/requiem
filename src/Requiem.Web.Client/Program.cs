@@ -29,7 +29,7 @@ builder.Services.AddScoped<NavigationHistory>();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthorizationCore(options =>
 {
-    options.AddPolicy(Policies.GameMaster, policy => policy.RequireRole(Roles.GameMaster));
+    options.AddPolicy(Policies.Admin, policy => policy.RequireRole(Roles.Admin));
     options.AddPolicy(Policies.Member, policy => policy.RequireAuthenticatedUser());
 });
 

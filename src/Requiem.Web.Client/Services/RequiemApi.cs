@@ -70,7 +70,6 @@ public sealed class RequiemApi(HttpClient http)
         if (query.Kind is { } kind) parameters.Add($"kind={kind}");
         if (query.IncludeArchived) parameters.Add("includeArchived=true");
         if (query.CampaignId is { } campaignId) parameters.Add($"campaignId={campaignId}");
-        else if (query.PersonalOnly) parameters.Add("personalOnly=true");
         var url = parameters.Count == 0 ? "api/characters" : $"api/characters?{string.Join('&', parameters)}";
         return GetAsync<List<CharacterSummary>>(url);
     }
@@ -154,7 +153,6 @@ public sealed class RequiemApi(HttpClient http)
         return result.Errors is { Count: > 0 } errors ? result with { Message = string.Join(" ", errors.Values.SelectMany(v => v)) } : result;
     }
 
-    public Task<List<SceneSummary>> ListScenesAsync() => GetAsync<List<SceneSummary>>("api/scenes");
 
     /// <returns>Null when the scene doesn't exist.</returns>
     public async Task<SceneView?> GetSceneAsync(Guid id)
@@ -256,9 +254,9 @@ public sealed class RequiemApi(HttpClient http)
         return (null, await ReadDetailAsync(response) ?? $"Couldn't join ({(int)response.StatusCode}).");
     }
 
-    /// <summary>Moves an NPC between your personal roster (null) and a campaign you run.</summary>
+    /// <summary>Moves an NPC into another campaign you tell.</summary>
     /// <returns>Null when moved; otherwise why not.</returns>
-    public async Task<string?> MoveCharacterAsync(Guid id, Guid? campaignId)
+    public async Task<string?> MoveCharacterAsync(Guid id, Guid campaignId)
     {
         using var response = await http.PostAsJsonAsync($"api/characters/{id}/move", new MoveCharacterRequest(campaignId), RequiemJson.Options);
         if (response.IsSuccessStatusCode) return null;

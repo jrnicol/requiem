@@ -10,8 +10,9 @@ namespace Requiem.Web.Tests;
 public class ApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFactory>, IAsyncLifetime
 {
     private HttpClient _http = null!;
+    private Guid _campaign;
 
-    public async Task InitializeAsync() => _http = await factory.CreateGmClientAsync();
+    public async Task InitializeAsync() => (_http, _campaign) = await factory.CreateStorytellerAsync();
 
     public Task DisposeAsync() => Task.CompletedTask;
 
@@ -106,6 +107,7 @@ public class ApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFacto
     [MemberData(nameof(InvalidForms))]
     public async Task Invalid_forms_are_rejected_with_field_errors(string field, SupportingCastForm form)
     {
+        form.CampaignId = _campaign;
         var response = await _http.PostAsJsonAsync("/api/characters/supporting-cast", form, RequiemJson.Options);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>(RequiemJson.Options);
@@ -208,6 +210,7 @@ public class ApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFacto
 
     private async Task<SupportingCastForm> CreateAsync(SupportingCastForm form)
     {
+        form.CampaignId = _campaign;
         var response = await _http.PostAsJsonAsync("/api/characters/supporting-cast", form, RequiemJson.Options);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<SupportingCastForm>(RequiemJson.Options))!;

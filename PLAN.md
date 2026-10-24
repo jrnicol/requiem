@@ -246,16 +246,16 @@ Built Azure-ready from day one: managed-identity SQL auth, health checks, Applic
 - ASP.NET Core Identity, with users and roles in the main database (`AspNet*` tables).
 - **Cookie:** `requiem.auth`, HttpOnly and SameSite=Strict, plus HTTPS-only outside Development. It lasts 14 days, renewed while you use the app.
 - **Who can use what:**
-  - Everything under `/api` needs the `GameMaster` role and answers 401/403 rather than redirecting.
-  - `/api/account/*` (me, login, logout, setup) is open to anyone.
+  - Everything under `/api` needs a signed-in user and answers 401/403 rather than redirecting. What each user sees depends on their role in each campaign (PHASE2.md §4; there are no account types since 2026-10-24).
+  - `/api/account/*` (me, login, logout, register, setup) is open to anyone.
   - The page shell is served to anyone; the browser app decides what to show.
-- **First run:** `/setup` creates the first GM, once only. Outside Development it also needs `Auth:SetupCode` from the server configuration (in Azure, the app setting `Auth__SetupCode`). Remove the code after setup.
+- **First run:** `/setup` creates the first account, the site admin (who edits the catalog), once only. Outside Development it also needs `Auth:SetupCode` from the server configuration (in Azure, the app setting `Auth__SetupCode`). Remove the code after setup. After that, anyone can sign up at `/register`.
 - **Passwords:** at least 12 characters, with no composition rules. 5 failed sign-ins lock the account for 15 minutes.
 - **Signed-out handling:** the browser app checks `/api/account/me`. Any 401 from the API signs it out and sends you to `/login?returnUrl=…`, and only app-relative return URLs are followed.
 - **Not yet:**
   - Password reset (no email sender yet).
   - Changing your password in the app.
-  - Player accounts and invites (Phase 2).
+  - Email confirmation for new sign-ups (no email sender yet).
 5. Discipline catalog: import tool, review screen, search UI, link powers to characters.
 6. Table Mode + dice roller.
 7. Relationships: sire tree, blood bonds, boons ledger, free-form links.

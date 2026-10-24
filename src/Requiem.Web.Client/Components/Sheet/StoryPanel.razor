@@ -31,7 +31,7 @@
         <MudItem xs="12" sm="6">
             <MudSelect T="Guid?" Value="Form.SireId" ValueChanged="v => Update(() => Form.SireId = v)" Label="Sire"
                        Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense"
-                       ToStringFunc="SireName" HelperText="Any vampire on the roster">
+                       ToStringFunc="SireName" HelperText="Any vampire in this campaign">
                 @foreach (var candidate in SireCandidates)
                 {
                     <MudSelectItem T="Guid?" Value="candidate.Id">@candidate.Name</MudSelectItem>

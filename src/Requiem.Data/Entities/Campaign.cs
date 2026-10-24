@@ -3,7 +3,7 @@ using Requiem.Shared.Campaigns;
 namespace Requiem.Data.Entities;
 
 /// <summary>
-/// A chronicle the GM runs with players (Phase 2, PHASE2.md §3). The database refuses to delete a
+/// A chronicle its Storytellers run with players (Phase 2, PHASE2.md §3). The database refuses to delete a
 /// campaign that still has characters or scenes, but EF would quietly detach any it has loaded, so
 /// code that deletes a campaign must check for them first (or archive instead).
 /// </summary>

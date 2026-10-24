@@ -15,7 +15,8 @@ public static class FullSheetEndpoints
 {
     public static RouteGroupBuilder MapFullSheetEndpoints(this RouteGroupBuilder api)
     {
-        var characters = api.MapGroup("/characters").WithTags("Characters").RequireAuthorization(Policies.GameMaster);
+        // Open to any member; CampaignAccess limits each request to the campaigns they tell.
+        var characters = api.MapGroup("/characters").WithTags("Characters");
 
         characters.MapGet("/{id:guid}/full-sheet", GetAsync);
         characters.MapPost("/full-sheet", CreateAsync);
@@ -36,10 +37,9 @@ public static class FullSheetEndpoints
         FullSheetForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
         if (await ValidateAsync(form, null, db, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
-        if (form.CampaignId is { } campaignId && !await access.IsStorytellerAsync(campaignId, ct))
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(form.CampaignId)] = ["Unknown campaign."] });
+        if (await access.CampaignProblemAsync(form.CampaignId, ct) is { } problem)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(form.CampaignId)] = [problem] });
 
-        // New NPCs go to the chosen campaign, or the creating GM's personal roster.
         var character = new Character { Name = form.Name, OwnerUserId = access.UserId, CampaignId = form.CampaignId };
         FullSheetMapper.Apply(form, character, time.GetUtcNow());
         db.Characters.Add(character);
@@ -182,9 +182,13 @@ public static class FullSheetEndpoints
 
         if (form.SireId is { } sireId)
         {
+            // The sire must be in the same campaign: the form's for a new character, its own otherwise.
+            var campaignId = id is null
+                ? form.CampaignId
+                : await access.ManagedCharacters().Where(c => c.Id == id).Select(c => c.CampaignId).FirstOrDefaultAsync(ct);
             if (sireId == id)
                 results.Add(new ValidationResult("A character can't be their own sire.", [nameof(form.SireId)]));
-            else if (!await access.CanManageCharacterAsync(sireId, ct))
+            else if (!await access.AllInCampaignAsync(campaignId, [sireId], ct))
                 results.Add(new ValidationResult("Unknown sire.", [nameof(form.SireId)]));
         }
 

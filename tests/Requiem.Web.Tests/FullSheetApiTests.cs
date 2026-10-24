@@ -10,8 +10,9 @@ namespace Requiem.Web.Tests;
 public class FullSheetApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFactory>, IAsyncLifetime
 {
     private HttpClient _http = null!;
+    private Guid _campaign;
 
-    public async Task InitializeAsync() => _http = await factory.CreateGmClientAsync("sheets@example.test");
+    public async Task InitializeAsync() => (_http, _campaign) = await factory.CreateStorytellerAsync("sheets@example.test");
 
     public Task DisposeAsync() => Task.CompletedTask;
 
@@ -261,6 +262,7 @@ public class FullSheetApiTests(RequiemWebFactory factory) : IClassFixture<Requie
 
     private async Task AssertRejectedAsync(string field, FullSheetForm form)
     {
+        form.CampaignId = _campaign;
         var response = await _http.PostAsJsonAsync("/api/characters/full-sheet", form, RequiemJson.Options);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>(RequiemJson.Options);
@@ -271,6 +273,7 @@ public class FullSheetApiTests(RequiemWebFactory factory) : IClassFixture<Requie
 
     private async Task<FullSheetForm> CreateAsync(FullSheetForm form)
     {
+        form.CampaignId = _campaign;
         var response = await _http.PostAsJsonAsync("/api/characters/full-sheet", form, RequiemJson.Options);
         Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<FullSheetForm>(RequiemJson.Options))!;
@@ -278,6 +281,7 @@ public class FullSheetApiTests(RequiemWebFactory factory) : IClassFixture<Requie
 
     private async Task<SupportingCastForm> CreateSupportingCastAsync(SupportingCastForm form)
     {
+        form.CampaignId = _campaign;
         var response = await _http.PostAsJsonAsync("/api/characters/supporting-cast", form, RequiemJson.Options);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<SupportingCastForm>(RequiemJson.Options))!;

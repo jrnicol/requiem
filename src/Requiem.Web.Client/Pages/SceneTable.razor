@@ -1,5 +1,5 @@
 @page "/scenes/{Id:guid}"
-@attribute [Authorize(Policy = Policies.GameMaster)]
+@attribute [Authorize(Policy = Policies.Member)]
 @inject RequiemApi Api
 @inject NavigationManager Navigation
 @inject ISnackbar Snackbar
@@ -9,7 +9,7 @@
 
 @if (_notFound)
 {
-    <MudAlert Severity="Severity.Warning">This scene no longer exists. <MudLink Href="scenes">Back to scenes</MudLink></MudAlert>
+    <MudAlert Severity="Severity.Warning">This scene no longer exists. <MudLink Href="campaigns">Back to your campaigns</MudLink></MudAlert>
 }
 else if (_scene is null)
 {
@@ -18,7 +18,7 @@ else if (_scene is null)
 else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-3">
-        <BackButton Fallback="scenes" Label="Back" />
+        <BackButton Fallback="@CampaignUrl" Label="Back" />
         @if (_renaming)
         {
             <MudTextField T="string" @bind-Value="_name" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200"
@@ -74,11 +74,14 @@ else
     private bool _renaming;
     private string? _name;
 
+    private string CampaignUrl => _scene?.CampaignId is { } c ? $"campaigns/{c}" : "campaigns";
+
     protected override async Task OnParametersSetAsync()
     {
         _scene = await Api.GetSceneAsync(Id);
         _notFound = _scene is null;
-        _roster = await Api.ListCharactersAsync(new CharacterQuery());
+        // Only the scene's own campaign's NPCs can join it.
+        if (_scene is not null) _roster = await Api.ListCharactersAsync(new CharacterQuery(CampaignId: _scene.CampaignId));
     }
 
     private void Replace(PlayCharacter updated)
@@ -149,9 +152,10 @@ else
     {
         if (_scene is null) return;
         var confirmed = await Dialogs.ShowMessageBoxAsync("Delete scene?",
-            $"{_scene.Name} will be removed. The NPCs themselves stay on the roster.", yesText: "Delete", cancelText: "Cancel");
+            $"{_scene.Name} will be removed. The NPCs themselves stay in the campaign.", yesText: "Delete", cancelText: "Cancel");
         if (confirmed != true) return;
+        var back = CampaignUrl;
         await Api.DeleteSceneAsync(Id);
-        Navigation.NavigateTo("scenes");
+        Navigation.NavigateTo(back);
     }
 }

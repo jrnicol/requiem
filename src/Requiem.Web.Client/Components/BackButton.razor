@@ -4,8 +4,8 @@
 <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" aria-label="@Label" OnClick="() => History.Back(Fallback)" Class="@Class" />
 
 @code {
-    /// <summary>Where to go when there's no earlier page in this tab ("" is the roster).</summary>
-    [Parameter] public string Fallback { get; set; } = "";
+    /// <summary>Where to go when there's no earlier page in this tab.</summary>
+    [Parameter] public string Fallback { get; set; } = "campaigns";
     [Parameter] public string Label { get; set; } = "Back";
     [Parameter] public string? Class { get; set; }
 }

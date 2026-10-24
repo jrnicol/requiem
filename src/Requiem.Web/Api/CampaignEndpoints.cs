@@ -13,9 +13,9 @@ using Requiem.Web.Auth;
 namespace Requiem.Web.Api;
 
 /// <summary>
-/// Campaigns, their members and invite links (PHASE2.md milestone 2.1). Site GMs create campaigns and
-/// become their Storyteller; players join through invite links. A campaign you don't belong to reads as
-/// "not found".
+/// Campaigns, their members and invite links (PHASE2.md milestone 2.1). Anyone signed in can start a
+/// campaign and becomes its Storyteller; players join through invite links. A campaign you don't belong
+/// to reads as "not found".
 /// </summary>
 public static class CampaignEndpoints
 {
@@ -23,7 +23,7 @@ public static class CampaignEndpoints
     {
         var campaigns = api.MapGroup("/campaigns").WithTags("Campaigns");
         campaigns.MapGet("/", ListAsync);
-        campaigns.MapPost("/", CreateAsync).RequireAuthorization(Policies.GameMaster);
+        campaigns.MapPost("/", CreateAsync);
         campaigns.MapGet("/{id:guid}", GetAsync);
         campaigns.MapPut("/{id:guid}", UpdateAsync);
         campaigns.MapPut("/{id:guid}/coterie-script", UpdateCoterieScriptAsync);
@@ -40,7 +40,7 @@ public static class CampaignEndpoints
         var invites = api.MapGroup("/invites").WithTags("Invites");
         invites.MapGet("/{token}", PreviewInviteAsync).AllowAnonymous();
         invites.MapPost("/{token}/accept", AcceptInviteAsync);
-        invites.MapPost("/{token}/join", JoinAsync).AllowAnonymous();
+        invites.MapPost("/{token}/join", JoinAsync).AllowAnonymous().RequireRateLimiting(AccountEndpoints.SignUpLimit);
 
         return api;
     }
@@ -189,7 +189,7 @@ public static class CampaignEndpoints
             Id = Guid.CreateVersion7(now),
             CampaignId = id,
             TokenHash = Hash(token),
-            // Player invites only for now: a Storyteller must also be a site GM (PHASE2.md 2.0 progress).
+            // Player invites only for now; co-Storyteller invites aren't offered yet.
             Role = CampaignRole.Player,
             ExpiresAt = now.AddDays(form.ExpiresInDays),
             UsesLeft = form.MaxUses,
@@ -256,9 +256,9 @@ public static class CampaignEndpoints
         return TypedResults.Ok(new JoinedCampaign(campaign.Id, await ToCurrentUserAsync(user, users)));
     }
 
-    /// <summary>Creates a player account through an invite link, joins the campaign and signs in.</summary>
+    /// <summary>Creates an account through an invite link, joins the campaign and signs in.</summary>
     private static async Task<Results<Ok<JoinedCampaign>, ValidationProblem, ProblemHttpResult>> JoinAsync(
-        string token, JoinRequest request, RequiemDbContext db, UserManager<RequiemUser> users,
+        string token, RegisterRequest request, RequiemDbContext db, UserManager<RequiemUser> users,
         SignInManager<RequiemUser> signIn, TimeProvider time, CancellationToken ct)
     {
         if (Validate(request) is { } errors) return TypedResults.ValidationProblem(errors);
@@ -279,13 +279,7 @@ public static class CampaignEndpoints
 
             await using var transaction = await db.Database.BeginTransactionAsync(ct);
             var created = await users.CreateAsync(user, request.Password);
-            if (!created.Succeeded)
-                return (IResult)TypedResults.ValidationProblem(new Dictionary<string, string[]>
-                {
-                    [created.Errors.Any(e => e.Code.StartsWith("Password", StringComparison.Ordinal))
-                        ? nameof(JoinRequest.Password)
-                        : nameof(JoinRequest.Email)] = created.Errors.Select(e => e.Description).ToArray(),
-                });
+            if (!created.Succeeded) return (IResult)TypedResults.ValidationProblem(AccountEndpoints.CreationErrors(created));
 
             if (await SpendUseAsync(db, invite, time.GetUtcNow(), ct) is { } problem) return Gone(problem);
             db.CampaignMembers.Add(new CampaignMember { CampaignId = campaign.Id, UserId = user.Id, Role = invite.Role, JoinedAt = time.GetUtcNow() });

@@ -1,0 +1,9 @@
+@page "/"
+@attribute [Authorize(Policy = Policies.Member)]
+@inject NavigationManager Navigation
+
+@* Everyone's home is their campaigns: what they can do depends on their role in each. *@
+
+@code {
+    protected override void OnInitialized() => Navigation.NavigateTo("campaigns", replace: true);
+}

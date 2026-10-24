@@ -15,7 +15,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents();
 builder.Services.AddRequiemData(builder.Configuration, builder.Environment.ContentRootPath);
-builder.Services.AddRequiemAuth(builder.Environment);
+builder.Services.AddRequiemAuth(builder.Configuration, builder.Environment);
 builder.Services.AddProblemDetails();
 // The UI runs in the browser (no prerender), but registering MudBlazor keeps server rendering safe if that changes.
 builder.Services.AddMudServices();
@@ -39,6 +39,9 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Databas
     var seeded = await CatalogSeeder.SeedAsync(db);
     if (seeded.Total > 0)
         app.Logger.LogInformation("Seeded catalog: {Result}", seeded);
+    var upgraded = await AccountsUpgrade.RunAsync(db);
+    if (upgraded.Changed)
+        app.Logger.LogInformation("Upgraded accounts and loose characters: {Result}", upgraded);
 }
 
 // Configure the HTTP request pipeline.
@@ -60,11 +63,12 @@ app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseRateLimiter();
 app.UseAntiforgery();
 
 // Everything under /api needs a signed-in user, except the account endpoints (which opt out).
-// GM-only groups add the GameMaster policy, and CampaignAccess narrows each request to what the
-// user may see (PHASE2.md §4).
+// CampaignAccess narrows each request to the campaigns the user belongs to and their role in each
+// (PHASE2.md §4); only catalog edits need the site Admin role.
 app.MapGroup("/api")
     .RequireAuthorization(Policies.Member)
     .MapAccountEndpoints()

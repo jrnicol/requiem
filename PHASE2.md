@@ -2,7 +2,9 @@
 
 Status: **agreed plan** (2026-10-24). All open decisions are settled; see §10.
 
-Phase 1 is a single-GM tool: every API needs the `GameMaster` role and every character belongs to that GM. Phase 2 lets the GM run **campaigns** (chronicles) with **players**, who build their own characters in the app and play them at the table alongside the GM's NPCs.
+Phase 1 is a single-GM tool: every API needs the `GameMaster` role and every character belongs to that GM. Phase 2 lets anyone run **campaigns** (chronicles) with **players**, who build their own characters in the app and play them at the table alongside the Storyteller's NPCs.
+
+**No account types** (decided 2026-10-24, decision 12): every account is alike. Anyone can sign up, start a campaign and tell it, and play in someone else's. Storyteller tools belong to each campaign. The only site-wide role is **Admin**, which edits the shared rules catalog and nothing else.
 
 ---
 
@@ -53,7 +55,7 @@ Changes to existing tables:
   - for NPCs: `Visibility` (`Hidden` / `Known`);
   - for ghouls: `DomitorId` (a campaign vampire, NPC or PC) or `DomitorName` (free text).
 - **`Scene`:** gains `CampaignId`, so a campaign's scenes are shared with its Storyteller(s), and PCs can be added to scenes.
-- **Existing data:** current NPCs and scenes stay in the GM's personal space (`CampaignId` null). They can be moved into a campaign later. The existing GM becomes their owner.
+- **Existing data:** every character and scene belongs to a campaign (decision 12). At startup, `AccountsUpgrade` moves any outside one (the old personal roster) into a new campaign per owner, "Imported NPCs", which the owner tells. Unowned ones, made before Phase 2, go to the site admin.
 
 ---
 
@@ -63,14 +65,15 @@ Authorization moves from one global role to **campaign membership**. It is check
 
 | Who | Can |
 | --- | --- |
-| **Site GM** (today's `GameMaster` role) | Create campaigns; keep a personal NPC roster outside any campaign; manage the powers catalog. |
-| **Storyteller** of a campaign | Everything in that campaign: all characters, scenes, invites, approvals and XP awards. |
+| **Site admin** (the `Admin` role, the first account) | Edit the powers catalog. No say in anyone's campaign. |
+| **Storyteller** of a campaign | Everything in that campaign: all characters, scenes, invites, approvals and XP awards. Nothing in other campaigns, including ones they play in. |
 | **Player** in a campaign | Their own characters (create, edit drafts, track play, spend XP); the campaign's known NPCs as public cards; the other PCs as public cards only (name, concept, bloodline, portrait, the public description their player wrote), never their full sheets (decided 2026-10-24). Any member can edit the shared Coterie Script. |
-| **Anyone signed in** | Their account and the campaigns they belong to. |
+| **Anyone signed in** | Their account and the campaigns they belong to. Start a new campaign, becoming its Storyteller. |
+| **Anyone** | Sign up (capped at 30 new accounts an hour across the site, `Auth:SignUpsPerHour`). |
 
 Server-side shaping: the API returns different shapes per audience. A player's view of an NPC is a `PublicCharacterCard` (name, concept, bloodline, portrait, public description). It never contains the full sheet or GM notes, so nothing can leak through the browser's developer tools.
 
-The **powers catalog** stays readable by every signed-in member, because players need it to build characters. Only the site GM can edit it.
+The **powers catalog** stays readable by every signed-in member, because players need it to build characters. Only the site admin can edit it.
 
 ---
 
@@ -120,10 +123,10 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
 ## 7. Storyteller tools
 
 - **Campaign dashboard:** members, outstanding invites, PCs (with the approval queue for new characters and recent XP spends), the campaign's NPCs and scenes.
-- **Invites:** create a link (single or multi-use, with an expiry), copy or email it, revoke it. Players joining through a link create an account or sign in. Invite links are the only way in; the Storyteller doesn't create player accounts (decided 2026-10-24).
+- **Invites:** create a link (single or multi-use, with an expiry), copy or email it, revoke it. Players joining through a link create an account or sign in. Invite links are the only way into a campaign; the Storyteller doesn't create player accounts (decided 2026-10-24).
 - **NPC visibility:** each NPC has a "Known to players" switch and a public description. Players see known NPCs as cards. Revealing an NPC never reveals the sheet.
 - **Scenes with PCs:** scenes can include PCs; the Storyteller sees PCs' trackers next to NPCs'.
-- **Moving characters:** move personal NPCs into a campaign, or out again.
+- **Moving characters:** move an NPC from one campaign you tell into another. Sire and domitor links don't cross campaigns, so the move cuts them.
 
 ---
 
@@ -148,8 +151,8 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
 
 **Progress on 2.0 (2026-10-24):**
 - **Data model and migrations: done.** `AddCampaigns` adds campaigns, members, invites, the audit log and Links, plus the new character, scene and XP-ledger fields. Existing characters upgrade as Active, Hidden and unowned (tested).
-- **Per-campaign authorization: done for the existing API.** `CampaignAccess` limits every character and scene request to the user's personal roster (characters made before Phase 2 belong to every site GM) and their campaigns as Storyteller. Anything else reads as "not found". Signed-in players can read the catalog and get 403 elsewhere. For now a Storyteller must also be a site GM; player-facing endpoints arrive with 2.1–2.3. Covered by `AccessTests`.
-- **Azure hosting: live (2026-10-24)** in resource group `rg-requiem`, West US 3, as container app `ca-requiem-octvib`. Pushes to `main` test and deploy. The first GM account is created.
+- **Per-campaign authorization: done for the existing API.** `CampaignAccess` limits every character and scene request to the campaigns the user tells. Anything else reads as "not found". Characters, scenes and sires must all be in the same campaign. Covered by `AccessTests`.
+- **Azure hosting: live (2026-10-24)** in resource group `rg-requiem`, West US 3, as container app `ca-requiem-octvib`. Pushes to `main` test and deploy. The first account (now the site admin) is created.
   - `infra/main.bicep`: West US 3, free tier. **Azure Container Apps**, since the subscription allows no App Service VMs. Passwordless SQL, Key Vault and Application Insights.
   - The GitHub Actions workflow publishes the container to ghcr.io and rolls it out.
   - The app migrates and seeds on start when `Database:MigrateOnStartup` is set, keeps its sign-in keys in the database, and has a `/healthz` endpoint.
@@ -157,7 +160,7 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
 - **Email: not started.** Azure Communication Services goes into the template with the password-reset work.
 
 **Progress on 2.1 (2026-10-24): done.**
-- **Campaigns.** Site GMs create campaigns and become their Storyteller. Each campaign has a page with tabs:
+- **Campaigns.** Anyone signed in starts a campaign and becomes its Storyteller. Each campaign has a page with tabs:
   - Overview: the shared Coterie Script, which any member can edit (audited). Storytellers also get settings (name, description, Chronicle Tenet, allowed templates), archive and delete. Only an empty campaign can be deleted.
   - Members: Storytellers remove players; anyone can leave, except the last Storyteller.
   - Invites, NPCs and Scenes (Storytellers only).
@@ -165,9 +168,12 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
   - Storytellers make Player links. Each lasts 1–90 days and allows 1–50 uses, or any number.
   - The full link is shown once, with a copy button. Only a hash is stored. Links can be revoked.
   - `/join/{token}` previews the campaign. New players make an account and join in one step; signed-in users accept. Expired, used-up and revoked links explain themselves.
-- **Scoping.** The NPC and Scene tabs list only that campaign's. New Supporting Cast, full sheets and scenes can be created straight into a campaign. NPCs move between the GM's personal roster and a campaign (audited); player characters can't be moved.
-- **Players** land on their campaigns instead of the GM roster. The drawer shows Campaigns to every member and the GM tools only to GMs.
-- Covered by `CampaignApiTests`. Checked in the browser at tablet and phone sizes.
+- **Scoping.** The NPC tab is the campaign's roster (search, kind filter, archived). New Supporting Cast, full sheets and scenes are created inside a campaign. NPCs move between campaigns the user tells (audited, cutting sire and domitor links); player characters can't be moved.
+- **No account types** (decision 12). The GameMaster role, the personal roster and the global NPC and Scene pages are gone:
+  - Open sign-up at `/register`, rate-limited. The first account still comes from `/setup` and becomes the site admin.
+  - Everyone lands on Campaigns. The drawer shows Campaigns and Powers (read-only unless admin).
+  - At startup, `AccountsUpgrade` renames the GameMaster role to Admin and moves loose characters and scenes into an "Imported NPCs" campaign per owner (tested).
+- Covered by `CampaignApiTests`, `AccessTests`, `SignUpTests` and `AccountsUpgradeTests`. Checked in the browser at tablet and phone sizes.
 
 Each step ships on its own, with tests, and is checked at tablet and phone sizes. **Security tests** (a player can't read another campaign, GM notes or a hidden NPC) are written in 2.0 and extended at every step.
 
@@ -176,7 +182,7 @@ Each step ships on its own, with tests, and is checked at tablet and phone sizes
 ## 10. Decisions
 
 **Decided (2026-10-24):**
-1. **Joining:** invite links only.
+1. **Joining:** invite links are the only way into a campaign. (Accounts themselves are open sign-up since decision 12.)
 2. **Templates:** each campaign sets which templates players may build.
 3. **Starting Caitiff Discipline for PCs:** the player picks it; the Storyteller can change it on approval.
 4. **XP spends:** no approval. Spends apply at once within the rules, and the audit log lets the Storyteller review and undo them.
@@ -188,5 +194,6 @@ Each step ships on its own, with tests, and is checked at tablet and phone sizes
 9. **Links:** players log their own Links (WoD Core p.75); they count at once and are audited.
 10. **Email:** Azure Communication Services Email.
 11. **Scripts:** players mark their own Scripts and get the XP; audited, and the Storyteller can undo.
+12. **No account types:** anyone can sign up and start a campaign; Storyteller or player is a role per campaign, so one person can tell one campaign and play in another. Every character and scene lives in a campaign (the old personal roster moved into one). Only the site admin edits the shared catalog.
 
 A pattern runs through these: **players act, the Storyteller oversees.** Player actions take effect at once within the rules, and the audit log with undo is the check. That makes the audit log part of 2.3, not an extra.

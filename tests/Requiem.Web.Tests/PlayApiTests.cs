@@ -9,8 +9,9 @@ namespace Requiem.Web.Tests;
 public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFactory>, IAsyncLifetime
 {
     private HttpClient _http = null!;
+    private Guid _campaign;
 
-    public async Task InitializeAsync() => _http = await factory.CreateGmClientAsync("table@example.test");
+    public async Task InitializeAsync() => (_http, _campaign) = await factory.CreateStorytellerAsync("table@example.test");
 
     public Task DisposeAsync() => Task.CompletedTask;
 
@@ -38,7 +39,7 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
     {
         var response = await _http.PostAsJsonAsync("/api/characters/supporting-cast", new SupportingCastForm
         {
-            Name = "Bouncer Vic", Physical = 4, Mental = 2, Social = 3, Edges = NpcEdge.QuickWitted | NpcEdge.Tough,
+            Name = "Bouncer Vic", CampaignId = _campaign, Physical = 4, Mental = 2, Social = 3, Edges = NpcEdge.QuickWitted | NpcEdge.Tough,
         }, RequiemJson.Options);
         var npc = (await response.Content.ReadFromJsonAsync<SupportingCastForm>(RequiemJson.Options))!;
 
@@ -177,7 +178,7 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
     public async Task Mortals_hold_no_vitae()
     {
         var response = await _http.PostAsJsonAsync("/api/characters/full-sheet",
-            new FullSheetForm { Name = "Plain Tom", Kind = CharacterKind.Mortal, VitaeCurrent = 4 }, RequiemJson.Options);
+            new FullSheetForm { Name = "Plain Tom", CampaignId = _campaign, Kind = CharacterKind.Mortal, VitaeCurrent = 4 }, RequiemJson.Options);
         var tom = (await response.Content.ReadFromJsonAsync<FullSheetForm>(RequiemJson.Options))!;
         Assert.Null(tom.VitaeCurrent);
         Assert.Null((await PlayAsync(tom.Id!.Value)).VitaeCurrent);
@@ -189,7 +190,7 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
     public async Task Ghoul_sheets_keep_at_most_eight_vitae()
     {
         var response = await _http.PostAsJsonAsync("/api/characters/full-sheet",
-            new FullSheetForm { Name = "Greedy", Kind = CharacterKind.Ghoul, VitaeCurrent = 12 }, RequiemJson.Options);
+            new FullSheetForm { Name = "Greedy", CampaignId = _campaign, Kind = CharacterKind.Ghoul, VitaeCurrent = 12 }, RequiemJson.Options);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         Assert.Equal(8, (await response.Content.ReadFromJsonAsync<FullSheetForm>(RequiemJson.Options))!.VitaeCurrent);
     }
@@ -198,7 +199,7 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
     public async Task Supporting_cast_ghouls_track_vitae_at_the_table()
     {
         var response = await _http.PostAsJsonAsync("/api/characters/supporting-cast",
-            new SupportingCastForm { Name = "Ghoul Driver", Kind = CharacterKind.Ghoul, Physical = 2, Mental = 2, Social = 2 }, RequiemJson.Options);
+            new SupportingCastForm { Name = "Ghoul Driver", CampaignId = _campaign, Kind = CharacterKind.Ghoul, Physical = 2, Mental = 2, Social = 2 }, RequiemJson.Options);
         var npc = (await response.Content.ReadFromJsonAsync<SupportingCastForm>(RequiemJson.Options))!;
         Assert.Equal(8, npc.VitaeCurrent);
 
@@ -208,7 +209,7 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
 
     private async Task<FullSheetForm> CreateGhoulAsync(int vitae)
     {
-        var form = new FullSheetForm { Name = "Ghoul Ada", Kind = CharacterKind.Ghoul, VitaeCurrent = vitae, WillpowerDots = 4, WillpowerCurrent = 4 };
+        var form = new FullSheetForm { Name = "Ghoul Ada", CampaignId = _campaign, Kind = CharacterKind.Ghoul, VitaeCurrent = vitae, WillpowerDots = 4, WillpowerCurrent = 4 };
         form.Attributes[CharacterAttribute.Strength] = 3;
         form.Attributes[CharacterAttribute.Dexterity] = 2;
         form.Attributes[CharacterAttribute.Stamina] = 2;
@@ -225,7 +226,7 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
         var a = (await CreateVampireAsync("Ventrue", name: "Alpha")).Id!.Value;
         var b = (await CreateVampireAsync("Ventrue", name: "Beta")).Id!.Value;
 
-        var response = await _http.PostAsJsonAsync("/api/scenes", new SceneForm { Name = "Elysium", CharacterIds = [b, a] }, RequiemJson.Options);
+        var response = await _http.PostAsJsonAsync("/api/scenes", new SceneForm { Name = "Elysium", CampaignId = _campaign, CharacterIds = [b, a] }, RequiemJson.Options);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var scene = (await response.Content.ReadFromJsonAsync<SceneView>(RequiemJson.Options))!;
         Assert.Equal(["Beta", "Alpha"], scene.Members.Select(m => m.Name));
@@ -245,7 +246,7 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
     public async Task Deleting_a_character_takes_it_out_of_its_scenes()
     {
         var id = (await CreateVampireAsync("Ventrue")).Id!.Value;
-        var response = await _http.PostAsJsonAsync("/api/scenes", new SceneForm { Name = "Ambush", CharacterIds = [id] }, RequiemJson.Options);
+        var response = await _http.PostAsJsonAsync("/api/scenes", new SceneForm { Name = "Ambush", CampaignId = _campaign, CharacterIds = [id] }, RequiemJson.Options);
         var scene = (await response.Content.ReadFromJsonAsync<SceneView>(RequiemJson.Options))!;
 
         Assert.True((await _http.DeleteAsync($"/api/characters/{id}")).IsSuccessStatusCode);
@@ -255,7 +256,23 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
     [Fact]
     public async Task Scenes_reject_unknown_characters() =>
         Assert.Equal(HttpStatusCode.BadRequest, (await _http.PostAsJsonAsync("/api/scenes",
-            new SceneForm { Name = "Ghosts", CharacterIds = [Guid.NewGuid()] }, RequiemJson.Options)).StatusCode);
+            new SceneForm { Name = "Ghosts", CampaignId = _campaign, CharacterIds = [Guid.NewGuid()] }, RequiemJson.Options)).StatusCode);
+
+    [Fact]
+    public async Task Scenes_take_only_their_own_campaigns_npcs()
+    {
+        // The same Storyteller tells both campaigns, but a scene stays within its own.
+        var other = await CreateCampaignAsync("Elsewhere");
+        var stranger = (await CreateVampireAsync("Ventrue", name: "Stranger")).Id!.Value;
+        var response = await _http.PostAsJsonAsync("/api/scenes",
+            new SceneForm { Name = "Crossover", CampaignId = other, CharacterIds = [stranger] }, RequiemJson.Options);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Scenes_need_a_campaign() =>
+        Assert.Equal(HttpStatusCode.BadRequest, (await _http.PostAsJsonAsync("/api/scenes",
+            new SceneForm { Name = "Nowhere" }, RequiemJson.Options)).StatusCode);
 
     // ---------- Helpers ----------
 
@@ -265,7 +282,7 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
         var groups = (await _http.GetFromJsonAsync<List<DisciplineOption>>("/api/catalog/disciplines", RequiemJson.Options))!;
         var form = new FullSheetForm
         {
-            Name = name, Kind = CharacterKind.Vampire, BloodlineId = bloodlines.Single(b => b.Name == bloodline).Id,
+            Name = name, CampaignId = _campaign, Kind = CharacterKind.Vampire, BloodlineId = bloodlines.Single(b => b.Name == bloodline).Id,
             BloodPotency = 2, VitaeCurrent = 10, WillpowerDots = 5, WillpowerCurrent = 5,
             Disciplines = dominate > 0 ? [new() { PowerGroupId = groups.Single(g => g.Name == "Dominate").Id, Dots = dominate }] : [],
         };
@@ -279,6 +296,12 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
         var response = await _http.PostAsJsonAsync("/api/characters/full-sheet", form, RequiemJson.Options);
         Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<FullSheetForm>(RequiemJson.Options))!;
+    }
+
+    private async Task<Guid> CreateCampaignAsync(string name)
+    {
+        var response = await _http.PostAsJsonAsync("/api/campaigns", new CampaignForm { Name = name }, RequiemJson.Options);
+        return (await response.Content.ReadFromJsonAsync<CampaignView>(RequiemJson.Options))!.Id;
     }
 
     private async Task<PlayCharacter> PlayAsync(Guid id) =>

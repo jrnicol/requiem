@@ -63,7 +63,7 @@ public static class CatalogEndpoints
         });
 
         // Players read the catalog to build characters; only site GMs correct it.
-        catalog.MapPut("/powers/{id:int}", UpdatePowerAsync).RequireAuthorization(Policies.GameMaster);
+        catalog.MapPut("/powers/{id:int}", UpdatePowerAsync).RequireAuthorization(Policies.Admin);
 
         catalog.MapGet("/merits", async (RequiemDbContext db, CancellationToken ct) =>
         {

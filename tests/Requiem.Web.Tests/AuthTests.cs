@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Requiem.Shared.Accounts;
 using Requiem.Shared.Contracts;
@@ -43,30 +44,29 @@ public class AuthTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFact
     }
 
     [Fact]
-    public async Task Signed_in_user_without_the_gm_role_is_forbidden()
+    public async Task A_signed_in_user_in_no_campaign_sees_no_characters()
     {
-        await factory.CreateUserAsync("player@example.test");
-        var client = await factory.SignInAsync("player@example.test", RequiemWebFactory.DefaultPassword);
-        Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("/api/characters")).StatusCode);
+        var client = await factory.CreateMemberClientAsync("newcomer@example.test");
+        Assert.Empty((await client.GetFromJsonAsync<List<CharacterSummary>>("/api/characters", RequiemJson.Options))!);
     }
 
     [Fact]
-    public async Task Me_reports_anonymous_then_the_signed_in_gm()
+    public async Task Me_reports_anonymous_then_the_signed_in_user()
     {
         var anonymous = await factory.CreateClient().GetFromJsonAsync<CurrentUser>("/api/account/me", RequiemJson.Options);
         Assert.False(anonymous!.IsAuthenticated);
 
-        var gm = await factory.CreateGmClientAsync("me@example.test");
-        var me = await gm.GetFromJsonAsync<CurrentUser>("/api/account/me", RequiemJson.Options);
+        var admin = await factory.CreateMemberClientAsync("me@example.test", Roles.Admin);
+        var me = await admin.GetFromJsonAsync<CurrentUser>("/api/account/me", RequiemJson.Options);
         Assert.True(me!.IsAuthenticated);
         Assert.Equal("me@example.test", me.Email);
-        Assert.Contains(Roles.GameMaster, me.Roles);
+        Assert.Contains(Roles.Admin, me.Roles);
     }
 
     [Fact]
     public async Task Auth_cookie_is_http_only_and_same_site_strict()
     {
-        await factory.CreateUserAsync("cookie@example.test", roles: Roles.GameMaster);
+        await factory.CreateUserAsync("cookie@example.test");
         var response = await factory.CreateClient(new() { HandleCookies = false }).PostAsJsonAsync("/api/account/login",
             new LoginRequest { Email = "cookie@example.test", Password = RequiemWebFactory.DefaultPassword }, RequiemJson.Options);
 
@@ -78,7 +78,7 @@ public class AuthTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFact
     [Fact]
     public async Task Wrong_password_and_unknown_email_look_the_same()
     {
-        await factory.CreateUserAsync("known@example.test", roles: Roles.GameMaster);
+        await factory.CreateUserAsync("known@example.test");
         var client = factory.CreateClient();
 
         var wrongPassword = await client.PostAsJsonAsync("/api/account/login",
@@ -93,7 +93,7 @@ public class AuthTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFact
     [Fact]
     public async Task Five_failed_attempts_lock_the_account()
     {
-        await factory.CreateUserAsync("locked@example.test", roles: Roles.GameMaster);
+        await factory.CreateUserAsync("locked@example.test");
         var client = factory.CreateClient();
         var bad = new LoginRequest { Email = "locked@example.test", Password = "wrong wrong wrong" };
 
@@ -108,11 +108,11 @@ public class AuthTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFact
     [Fact]
     public async Task Logout_ends_the_session()
     {
-        var gm = await factory.CreateGmClientAsync("leaving@example.test");
-        Assert.Equal(HttpStatusCode.OK, (await gm.GetAsync("/api/characters")).StatusCode);
+        var user = await factory.CreateMemberClientAsync("leaving@example.test");
+        Assert.Equal(HttpStatusCode.OK, (await user.GetAsync("/api/characters")).StatusCode);
 
-        Assert.Equal(HttpStatusCode.NoContent, (await gm.PostAsync("/api/account/logout", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.Unauthorized, (await gm.GetAsync("/api/characters")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await user.PostAsync("/api/account/logout", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await user.GetAsync("/api/characters")).StatusCode);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public class AuthTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFact
 public class FirstRunSetupTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFactory>
 {
     [Fact]
-    public async Task Setup_creates_the_first_gm_once_and_needs_the_code()
+    public async Task Setup_creates_the_first_account_as_admin_once_and_needs_the_code()
     {
         var client = factory.CreateClient();
 
@@ -152,13 +152,20 @@ public class FirstRunSetupTests(RequiemWebFactory factory) : IClassFixture<Requi
         Assert.Contains(nameof(SetupRequest.SetupCode), problem!.Errors.Keys);
         Assert.True((await client.GetFromJsonAsync<SetupStatus>("/api/account/setup", RequiemJson.Options))!.NeedsSetup);
 
-        // The right code creates the GM and signs them in.
+        // Open sign-up waits until the site has its admin.
+        var early = await client.PostAsJsonAsync("/api/account/register", new RegisterRequest
+        {
+            DisplayName = "Early", Email = "early@example.test", Password = "a long enough passphrase", ConfirmPassword = "a long enough passphrase",
+        }, RequiemJson.Options);
+        Assert.Equal(HttpStatusCode.Conflict, early.StatusCode);
+
+        // The right code creates the admin and signs them in.
         request.SetupCode = RequiemWebFactory.SetupCode;
         var created = await client.PostAsJsonAsync("/api/account/setup", request, RequiemJson.Options);
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
         var me = await created.Content.ReadFromJsonAsync<CurrentUser>(RequiemJson.Options);
         Assert.Equal("The Storyteller", me!.DisplayName);
-        Assert.Contains(Roles.GameMaster, me.Roles);
+        Assert.Equal([Roles.Admin], me.Roles);
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/api/characters")).StatusCode);
 
         // Setup is closed from now on, even with the code.
@@ -185,4 +192,61 @@ public class FirstRunSetupTests(RequiemWebFactory factory) : IClassFixture<Requi
         Assert.Contains(nameof(SetupRequest.Password), problem!.Errors.Keys);
         Assert.Contains(nameof(SetupRequest.ConfirmPassword), problem.Errors.Keys);
     }
+}
+
+/// <summary>Open sign-up: anyone can make an account, and every account is alike.</summary>
+public class SignUpTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFactory>
+{
+    [Fact]
+    public async Task Anyone_can_sign_up_and_start_a_campaign()
+    {
+        await factory.CreateUserAsync("admin@example.test", roles: Roles.Admin);
+        var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/account/register", NewUser("Nell", "nell@example.test"), RequiemJson.Options);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var me = (await response.Content.ReadFromJsonAsync<CurrentUser>(RequiemJson.Options))!;
+        Assert.Equal(("Nell", true), (me.DisplayName, me.IsAuthenticated));
+        Assert.Empty(me.Roles); // no account types: what Nell can do depends on her campaigns
+
+        // Signed in, Nell can start a campaign and tells it.
+        var created = await client.PostAsJsonAsync("/api/campaigns", new CampaignForm { Name = "Nell's Chronicle" }, RequiemJson.Options);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.True((await created.Content.ReadFromJsonAsync<CampaignView>(RequiemJson.Options))!.IsStoryteller);
+
+        // But not edit the shared catalog.
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await client.PutAsJsonAsync("/api/catalog/powers/1", new PowerEditForm { Name = "Mine" }, RequiemJson.Options)).StatusCode);
+    }
+
+    [Fact]
+    public async Task An_email_can_only_sign_up_once()
+    {
+        await factory.CreateUserAsync("admin2@example.test", roles: Roles.Admin);
+        var first = await factory.CreateClient().PostAsJsonAsync("/api/account/register", NewUser("Oz", "oz@example.test"), RequiemJson.Options);
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+
+        var again = await factory.CreateClient().PostAsJsonAsync("/api/account/register", NewUser("Oz again", "OZ@example.test"), RequiemJson.Options);
+        Assert.Equal(HttpStatusCode.BadRequest, again.StatusCode);
+        var problem = await again.Content.ReadFromJsonAsync<ValidationProblemDetails>(RequiemJson.Options);
+        Assert.Contains(nameof(RegisterRequest.Email), problem!.Errors.Keys);
+    }
+
+    [Fact]
+    public async Task Sign_ups_are_capped_per_hour()
+    {
+        await factory.CreateUserAsync("admin3@example.test", roles: Roles.Admin);
+        using var capped = factory.WithWebHostBuilder(b => b.UseSetting("Auth:SignUpsPerHour", "2"));
+
+        for (var i = 0; i < 2; i++)
+            Assert.Equal(HttpStatusCode.OK, (await capped.CreateClient().PostAsJsonAsync("/api/account/register",
+                NewUser($"Quick {i}", $"quick{i}@example.test"), RequiemJson.Options)).StatusCode);
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await capped.CreateClient().PostAsJsonAsync("/api/account/register",
+            NewUser("One too many", "late@example.test"), RequiemJson.Options)).StatusCode);
+    }
+
+    private static RegisterRequest NewUser(string name, string email) => new()
+    {
+        DisplayName = name, Email = email, Password = "a long enough passphrase", ConfirmPassword = "a long enough passphrase",
+    };
 }
