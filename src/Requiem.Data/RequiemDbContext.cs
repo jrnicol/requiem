@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -9,7 +10,7 @@ using Requiem.Shared.Rules;
 namespace Requiem.Data;
 
 public class RequiemDbContext(DbContextOptions<RequiemDbContext> options, TimeProvider? timeProvider = null)
-    : IdentityDbContext<RequiemUser>(options)
+    : IdentityDbContext<RequiemUser>(options), IDataProtectionKeyContext
 {
     private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
 
@@ -37,6 +38,12 @@ public class RequiemDbContext(DbContextOptions<RequiemDbContext> options, TimePr
     public DbSet<CampaignMember> CampaignMembers => Set<CampaignMember>();
     public DbSet<CampaignInvite> CampaignInvites => Set<CampaignInvite>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+
+    /// <summary>
+    /// ASP.NET Core's key ring (it signs the sign-in cookie). Kept in the database because the hosted app
+    /// scales to zero and its disk doesn't survive, which would otherwise sign everyone out.
+    /// </summary>
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

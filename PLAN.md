@@ -212,7 +212,7 @@ The catalog is homebrew book content: the hosted app requires login and doesn't 
 
 | Piece | Service |
 |---|---|
-| App (API + Blazor client in one) | Azure App Service (Linux), Basic tier to start |
+| App (API + Blazor client in one) | Azure Container Apps (consumption, scales to zero); App Service was the plan, but the subscription has no App Service VM quota |
 | Database | Azure SQL Database, serverless (auto-pause when idle) |
 | Portraits / handouts | Azure Blob Storage |
 | Secrets | Key Vault + managed identity (no connection strings in config) |
@@ -221,7 +221,10 @@ The catalog is homebrew book content: the hosted app requires login and doesn't 
 
 Built Azure-ready from day one: managed-identity SQL auth, health checks, Application Insights.
 
-**As built (2026-10-24):** [`infra/main.bicep`](infra/main.bicep) and [DEPLOY.md](DEPLOY.md). West US 2, free tier (App Service F1, Azure SQL free offer). The app applies migrations on start. Deploys run from GitHub Actions with OpenID Connect.
+**As built (2026-10-24):** [`infra/main.bicep`](infra/main.bicep) and [DEPLOY.md](DEPLOY.md). West US 3 (West US 2 refused new SQL servers for this subscription), free tier: **Azure Container Apps** (the subscription allows no App Service VMs) and the Azure SQL free offer.
+- The app applies migrations on start.
+- Its sign-in keys live in the database, so scaling to zero doesn't sign anyone out.
+- GitHub Actions publishes the container image to ghcr.io and rolls it out, signing in to Azure with OpenID Connect.
 
 ---
 

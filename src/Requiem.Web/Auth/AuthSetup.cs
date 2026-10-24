@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Requiem.Data;
 using Requiem.Data.Entities;
@@ -35,6 +36,12 @@ public static class AuthSetup
             .AddEntityFrameworkStores<RequiemDbContext>()
             .AddSignInManager()
             .AddDefaultTokenProviders();
+
+        // The key ring that signs the cookie lives in the database: the hosted container scales to zero
+        // and loses its disk, and keys kept there would sign everyone out on every cold start.
+        services.AddDataProtection()
+            .SetApplicationName("Requiem")
+            .PersistKeysToDbContext<RequiemDbContext>();
 
         services.AddAuthentication(IdentityConstants.ApplicationScheme).AddIdentityCookies();
         services.ConfigureApplicationCookie(options =>

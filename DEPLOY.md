@@ -1,38 +1,62 @@
 # Deploying Requiem to Azure
 
-The infrastructure is in [`infra/main.bicep`](infra/main.bicep); GitHub Actions ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)) builds, tests and deploys every push to `main`.
+The infrastructure is in [`infra/main.bicep`](infra/main.bicep). GitHub Actions ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)) builds and tests every push. On `main` it also publishes the app as a container image to `ghcr.io/jrnicol/requiem` and rolls that image out to Azure.
 
-**What it creates** (region West US 2, free tier; decided 2026-10-24):
+**What it creates** (free tier, decided 2026-10-24). The default region is West US 3, because West US 2 refused new SQL servers for this subscription. Override it with `REQUIEM_LOCATION` and `REQUIEM_SQL_LOCATION`.
 
 | Resource | Notes | Cost |
 | --- | --- | --- |
-| App Service plan **F1** (Linux) + web app | .NET 10. Free tier sleeps when idle and allows 60 CPU-minutes a day, so the first load after a quiet spell is slow. | Free |
+| **Azure Container Apps** environment + app | Runs the app's container, one copy at most. Scales to zero when idle, so the first request after a quiet spell takes roughly 10–20 seconds. Needs no App Service quota, which Free Trial subscriptions don't have. | Free within the monthly allowance (hundreds of active hours) |
 | Azure SQL database (serverless, **free offer**) | Pauses when the monthly free allowance runs out rather than billing. Auto-pauses after an hour idle; waking takes up to a minute. One free database offer per subscription. | Free |
 | Two managed identities | The app's (signs in to SQL and Key Vault, no passwords) and the deploy identity (GitHub Actions signs in with OpenID Connect, no stored secrets). | Free |
 | Key Vault | Holds the first-run setup code. | Pennies |
-| Log Analytics + Application Insights | Errors and performance. Ingestion is capped to stay in the free allowance. | Free |
+| Log Analytics + Application Insights | Logs, errors and performance. Ingestion is capped to stay in the free allowance. | Free |
 
-To leave the free tier later, set `appServiceSku` in [`infra/main.bicepparam`](infra/main.bicepparam) to `B1` (about US$13/month, always on) and redeploy.
+To keep the app warm instead of scaling to zero (a few dollars a month), deploy with `minReplicas=1` in the template's parameters.
 
 ---
 
 ## First-time setup
 
-You need an Azure subscription where you're **Owner** (the template grants roles to the two identities).
+You need an Azure subscription where you're **Owner** (the template grants roles to the two identities). Free Trial is fine.
+
+### 0. Clean up a failed attempt
+
+Skip this if you haven't deployed before.
+
+A failed run leaves resources behind, and their regions can't be changed. In Cloud Shell, delete the old resource group:
+
+```bash
+az group delete --name rg-requiem --yes
+```
+
+The deleted Key Vault keeps its name reserved for 7 days. List deleted vaults; if this prints a name, purge it with the next command:
+
+```bash
+az keyvault list-deleted --query "[].name" -o tsv
+```
+
+```bash
+az keyvault purge --name <name it printed>
+```
 
 ### 1. Create the resources (Azure Cloud Shell)
 
-Open **https://shell.azure.com** and choose **Bash**. Cloud Shell already has the Azure CLI and Bicep. Then run:
+Open **https://shell.azure.com** and choose **Bash**. Cloud Shell already has the Azure CLI and Bicep. Get the code, or update it if you cloned it before:
 
 ```bash
-git clone https://github.com/jrnicol/requiem.git && cd requiem
+git clone https://github.com/jrnicol/requiem.git || git -C requiem pull
 ```
 
 ```bash
-az group create --name rg-requiem --location westus2
+cd ~/requiem
 ```
 
-You become the database's administrator, and a random setup code is generated. **Copy the setup code it prints:** you need it in step 5.
+```bash
+az group create --name rg-requiem --location westus3
+```
+
+You become the database's administrator, and a random setup code is generated. **Copy the setup code it prints:** you need it in step 6.
 
 ```bash
 export REQUIEM_SQL_ADMIN_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv)
@@ -45,9 +69,7 @@ echo "Setup code: $REQUIEM_SETUP_CODE"
 az deployment group create --resource-group rg-requiem --template-file infra/main.bicep --parameters infra/main.bicepparam --query properties.outputs
 ```
 
-Keep the outputs. `webAppName`, `deployClientId`, `tenantId` and `subscriptionId` are used in step 3.
-
-If the deployment fails on the database with a message about the free offer, your subscription has already used it. Ask and the template can switch to a small paid database instead.
+Keep the outputs. `appUrl`, `containerAppName`, `resourceGroupName`, `deployClientId`, `tenantId` and `subscriptionId` are used below. If it fails, see **If something fails** below.
 
 ### 2. Let the app into its database (once)
 
@@ -73,30 +95,45 @@ In the GitHub repository, open **Settings > Secrets and variables > Actions > Va
 | `AZURE_CLIENT_ID` | `deployClientId` |
 | `AZURE_TENANT_ID` | `tenantId` |
 | `AZURE_SUBSCRIPTION_ID` | `subscriptionId` |
-| `AZURE_WEBAPP_NAME` | `webAppName` |
+| `AZURE_RESOURCE_GROUP` | `resourceGroupName` |
+| `AZURE_CONTAINERAPP_NAME` | `containerAppName` |
 
-### 4. Deploy
+### 4. First run of the workflow
 
-Open **Actions > Build and deploy > Run workflow**, or push to `main`. The workflow:
-1. runs the tests;
-2. publishes the app;
-3. deploys it to the **production** environment.
+Open **Actions > Build and deploy > Run workflow**. The **build** job tests the app and publishes the container image to `ghcr.io/jrnicol/requiem`.
 
-GitHub creates that environment the first time. On start, the app migrates the database and seeds the catalog.
+The **deploy** job will most likely **fail this first time**. GitHub makes a new package private, so Azure can't pull the image yet. That's expected.
 
-### 5. Create the first GM
+### 5. Make the image public, then deploy
 
-Open the `webAppUrl` from step 1. You'll be sent to `/setup`. Enter the **setup code** from step 1 and create your GM account.
+1. On GitHub, open your profile's **Packages** tab, then **requiem > Package settings**.
+2. Under **Danger Zone**, choose **Change visibility > Public**. The image only holds what's already in this public repository.
+3. Back in **Actions**, open that workflow run and choose **Re-run failed jobs**.
+
+The deploy job points the container app at the new image. On start, the app migrates the database and seeds the catalog.
+
+### 6. Create the first GM
+
+Open the `appUrl` from step 1. The first load can take a minute while the app and database wake up. You'll be sent to `/setup`. Enter the **setup code** from step 1 and create your GM account.
 
 Afterwards, delete the code so setup can't be reached again:
 1. Open **Key vaults > kv-requiem-… > Secrets > Auth--SetupCode** and delete it.
-2. Restart the web app.
+2. Restart the container app's revision.
 
 ---
+
+## If something fails
+
+| Error | Meaning | Fix |
+| --- | --- | --- |
+| `RegionDoesNotAllowProvisioning` on the SQL server | That region isn't accepting new SQL servers for your subscription. | Pick another region for the database, e.g. `export REQUIEM_SQL_LOCATION=centralus`, then redo step 0 and step 1. |
+| A message about the SQL **free offer** | The subscription has already used its one free database. | Ask, and the template can switch to a small paid database. |
+| Deploy job: image pull **unauthorized** / revision failed | The `ghcr.io` package is still private. | Step 5. |
+| The site shows a .NET sample page | The workflow hasn't deployed yet, or the template was rerun (which resets the image). | Run the workflow. |
+| First sign-in fails after a quiet spell | The database was paused and is waking up. | Wait a minute and try again. |
 
 ## Day to day
 
 - **Deploying:** push to `main`, or run the workflow by hand.
-- **Changing infrastructure:** edit `infra/main.bicep`, then rerun the `az deployment group create` command from step 1 in Cloud Shell. Set the three `export` lines again first, reusing your setup code if you still need it.
-- **Watching it:** open the web app's **Log stream** for live logs, and **Application Insights > Failures** for errors.
-- **The first request is slow, or a sign-in fails after a quiet spell:** the free tier woke the app, or the database was paused. Wait a minute and retry.
+- **Changing infrastructure:** edit `infra/main.bicep`, then rerun the `az deployment group create` command from step 1 in Cloud Shell. Set the three `export` lines again first. Rerunning resets the container image to a placeholder, so run the workflow afterwards.
+- **Watching it:** open the container app's **Log stream** for live logs, and **Application Insights > Failures** for errors.

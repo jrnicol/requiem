@@ -1,8 +1,9 @@
-# Builds and tests every push and pull request; deploys main to Azure App Service.
+# Builds and tests every push and pull request. On main it also publishes the app as a container image to
+# GitHub's container registry (ghcr.io/jrnicol/requiem) and rolls it out to Azure Container Apps.
 # Azure sign-in uses OpenID Connect with the deploy identity from infra/main.bicep, so no secrets are
 # stored here. Set these repository variables (Settings > Secrets and variables > Actions > Variables):
-#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_WEBAPP_NAME
-# Deploys are skipped until AZURE_WEBAPP_NAME is set. See DEPLOY.md.
+#   AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, AZURE_RESOURCE_GROUP, AZURE_CONTAINERAPP_NAME
+# Deploys are skipped until AZURE_CONTAINERAPP_NAME is set. See DEPLOY.md.
 
 name: Build and deploy
 
@@ -19,9 +20,15 @@ concurrency:
   group: deploy-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push the image to ghcr.io
     steps:
       - uses: actions/checkout@v4
 
@@ -35,39 +42,41 @@ jobs:
       - name: Test
         run: dotnet test Requiem.slnx --configuration Release
 
-      - name: Publish
-        run: dotnet publish src/Requiem.Web/Requiem.Web.csproj --configuration Release --output publish
+      - name: Sign in to GitHub's container registry
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io --username "${{ github.actor }}" --password-stdin
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: web
-          path: publish
-          retention-days: 7
+      # The .NET SDK builds the image itself (no Dockerfile) on the official ASP.NET runtime image.
+      - name: Publish container image
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: >
+          dotnet publish src/Requiem.Web/Requiem.Web.csproj --configuration Release
+          /t:PublishContainer
+          -p:ContainerRegistry=ghcr.io
+          -p:ContainerRepository=${{ github.repository }}
+          '-p:ContainerImageTags="${{ github.sha }};latest"'
 
   deploy:
     needs: build
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.AZURE_WEBAPP_NAME != ''
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.AZURE_CONTAINERAPP_NAME != ''
     runs-on: ubuntu-latest
     environment:
       name: production
-      url: ${{ steps.deploy.outputs.webapp-url }}
     permissions:
       contents: read
       id-token: write # lets the job request the OpenID Connect token Azure accepts
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: web
-          path: publish
-
       - uses: azure/login@v2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      - id: deploy
-        uses: azure/webapps-deploy@v3
-        with:
-          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
-          package: publish
+      - name: Roll out the new image
+        run: |
+          az config set extension.use_dynamic_install=yes_without_prompt
+          az containerapp update \
+            --name "${{ vars.AZURE_CONTAINERAPP_NAME }}" \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+            --image "${{ env.IMAGE }}:${{ github.sha }}" \
+            --query properties.configuration.ingress.fqdn --output tsv

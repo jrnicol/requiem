@@ -24,7 +24,7 @@ These have to exist before players can use the app:
 
 | Item | Why | Notes |
 | --- | --- | --- |
-| **Hosting on Azure** (Phase 1 step 8) | Players need to reach the app | App Service + Azure SQL + Key Vault, per PLAN.md §6. GitHub Actions deploy with migrations. |
+| **Hosting on Azure** (Phase 1 step 8) | Players need to reach the app | Azure Container Apps + Azure SQL + Key Vault (PLAN.md §6, DEPLOY.md). GitHub Actions deploys; the app migrates on start. |
 | **Email sending** | Password reset, and optionally emailing invite links | **Azure Communication Services Email** (decided 2026-10-24), using the app's managed identity. Needs a verified sending domain, or Azure's free subdomain to start. |
 | **Per-campaign authorization** | Today one role gates everything | See §4. This is the riskiest change, so it goes first. |
 
@@ -144,7 +144,11 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
 **Progress on 2.0 (2026-10-24):**
 - **Data model and migrations: done.** `AddCampaigns` adds campaigns, members, invites, the audit log and Links, plus the new character, scene and XP-ledger fields. Existing characters upgrade as Active, Hidden and unowned (tested).
 - **Per-campaign authorization: done for the existing API.** `CampaignAccess` limits every character and scene request to the user's personal roster (characters made before Phase 2 belong to every site GM) and their campaigns as Storyteller. Anything else reads as "not found". Signed-in players can read the catalog and get 403 elsewhere. For now a Storyteller must also be a site GM; player-facing endpoints arrive with 2.1–2.3. Covered by `AccessTests`.
-- **Azure hosting: written, not yet deployed.** `infra/main.bicep` (West US 2, free tier, passwordless SQL, Key Vault, Application Insights), the GitHub Actions workflow and the first-time steps in DEPLOY.md. The app migrates and seeds on start when `Database:MigrateOnStartup` is set, and has a `/healthz` endpoint. Deploying needs your Azure subscription (DEPLOY.md).
+- **Azure hosting: written, being deployed.**
+  - `infra/main.bicep`: West US 3, free tier. **Azure Container Apps**, since the subscription allows no App Service VMs. Passwordless SQL, Key Vault and Application Insights.
+  - The GitHub Actions workflow publishes the container to ghcr.io and rolls it out.
+  - The app migrates and seeds on start when `Database:MigrateOnStartup` is set, keeps its sign-in keys in the database, and has a `/healthz` endpoint.
+  - DEPLOY.md has the steps.
 - **Email: not started.** Azure Communication Services goes into the template with the password-reset work.
 | **2.1** | Campaigns, invites and joining; roster and scenes scoped to a campaign; moving NPCs in | 2.0 |
 | **2.2** | `CreationRules` engine and tests; seed Concepts; player creation wizard; approval queue | 2.1 |

@@ -4,8 +4,11 @@
 
 targetScope = 'resourceGroup'
 
-@description('Azure region for every resource.')
+@description('Azure region for every resource except the database.')
 param location string = resourceGroup().location
+
+@description('Azure region for the SQL server and database. Busy regions sometimes refuse new SQL servers for a subscription (RegionDoesNotAllowProvisioning); a neighbouring region works fine.')
+param sqlLocation string = location
 
 @description('Short name used to build resource names.')
 @minLength(3)
@@ -29,13 +32,17 @@ param githubRepository string = 'jrnicol/requiem'
 @description('GitHub environment the deploy job runs in. GitHub names it in the sign-in token, so it must match .github/workflows/deploy.yml.')
 param githubEnvironment string = 'production'
 
-@description('App Service plan size. F1 is free (sleeps when idle, 60 CPU-minutes a day); B1 is the cheapest always-on tier.')
-@allowed(['F1', 'B1', 'P0v3'])
-param appServiceSku string = 'F1'
+@description('Container image to run. GitHub Actions deploys the real one (ghcr.io/jrnicol/requiem); until then a Microsoft sample image holds the place. Rerunning this template resets it to this value, so run the workflow afterwards.')
+param containerImage string = 'mcr.microsoft.com/dotnet/samples:aspnetapp'
+
+@description('Smallest replicas when idle. 0 scales to zero (free allowance lasts longer; ~10-20 s cold start); 1 keeps it warm (costs a few dollars a month).')
+@minValue(0)
+@maxValue(1)
+param minReplicas int = 0
 
 // Globally unique names derived from the resource group, so redeploys reuse the same resources.
 var suffix = take(uniqueString(resourceGroup().id), 6)
-var webAppName = 'app-${appName}-${suffix}'
+var containerAppName = 'ca-${appName}-${suffix}'
 var sqlServerName = 'sql-${appName}-${suffix}'
 var keyVaultName = 'kv-${appName}-${suffix}'
 var databaseName = appName
@@ -120,7 +127,7 @@ resource appReadsSecrets 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
 
 resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
   name: sqlServerName
-  location: location
+  location: sqlLocation
   properties: {
     minimalTlsVersion: '1.2'
     publicNetworkAccess: 'Enabled'
@@ -135,7 +142,7 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
     }
   }
 
-  // Lets App Service reach the server (the free tier has no private networking).
+  // Lets Container Apps reach the server (no private networking, to stay on the free allowance).
   resource allowAzure 'firewallRules' = {
     name: 'AllowAllWindowsAzureIps'
     properties: {
@@ -146,7 +153,7 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
 
   resource database 'databases' = {
     name: databaseName
-    location: location
+    location: sqlLocation
     sku: {
       name: 'GP_S_Gen5'
       tier: 'GeneralPurpose'
@@ -165,60 +172,103 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
   }
 }
 
-// ---------- App ----------
+// ---------- App (Azure Container Apps) ----------
+// Container Apps needs no App Service VM quota (Free Trial subscriptions have none) and has a monthly free
+// allowance. One replica at most, because the app applies migrations on start (decided 2026-10-24).
 
-resource plan 'Microsoft.Web/serverfarms@2023-12-01' = {
-  name: 'plan-${appName}-${suffix}'
+resource environment 'Microsoft.App/managedEnvironments@2024-03-01' = {
+  name: 'cae-${appName}-${suffix}'
   location: location
-  kind: 'linux'
-  sku: { name: appServiceSku }
-  properties: { reserved: true }
+  properties: {
+    appLogsConfiguration: {
+      destination: 'log-analytics'
+      logAnalyticsConfiguration: {
+        customerId: logs.properties.customerId
+        sharedKey: logs.listKeys().primarySharedKey
+      }
+    }
+    workloadProfiles: [{ name: 'Consumption', workloadProfileType: 'Consumption' }]
+  }
 }
 
-resource web 'Microsoft.Web/sites@2023-12-01' = {
-  name: webAppName
+resource app 'Microsoft.App/containerApps@2024-03-01' = {
+  name: containerAppName
   location: location
-  kind: 'app,linux'
   identity: {
     type: 'UserAssigned'
     userAssignedIdentities: { '${appIdentity.id}': {} }
   }
   properties: {
-    serverFarmId: plan.id
-    httpsOnly: true
-    keyVaultReferenceIdentity: appIdentity.id
-    siteConfig: {
-      linuxFxVersion: 'DOTNETCORE|10.0'
-      alwaysOn: appServiceSku != 'F1' // not available on the free tier
-      ftpsState: 'Disabled'
-      minTlsVersion: '1.2'
-      http20Enabled: true
-      healthCheckPath: '/healthz'
-      appSettings: [
-        { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
-        // App Service ends TLS in front of the app; this makes the app see the original https request.
-        { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
-        { name: 'AZURE_CLIENT_ID', value: appIdentity.properties.clientId }
-        { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: insights.properties.ConnectionString }
-        { name: 'Database__Provider', value: 'SqlServer' }
-        { name: 'Database__MigrateOnStartup', value: 'true' }
+    managedEnvironmentId: environment.id
+    workloadProfileName: 'Consumption'
+    configuration: {
+      activeRevisionsMode: 'Single'
+      ingress: {
+        external: true
+        targetPort: 8080 // the .NET container images listen here
+        transport: 'auto'
+        allowInsecure: false
+      }
+      secrets: [
         {
-          name: 'ConnectionStrings__Requiem'
-          value: 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Database=${databaseName};Authentication=Active Directory Managed Identity;User Id=${appIdentity.properties.clientId};Encrypt=True;Connect Timeout=60'
+          name: 'setup-code'
+          keyVaultUrl: vault::setupCodeSecret.properties.secretUri
+          identity: appIdentity.id
         }
-        { name: 'Auth__SetupCode', value: '@Microsoft.KeyVault(SecretUri=${vault::setupCodeSecret.properties.secretUri})' }
       ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'web'
+          image: containerImage
+          resources: { cpu: json('0.25'), memory: '0.5Gi' }
+          env: [
+            { name: 'ASPNETCORE_ENVIRONMENT', value: 'Production' }
+            // Container Apps ends TLS in front of the app; this makes the app see the original https request.
+            { name: 'ASPNETCORE_FORWARDEDHEADERS_ENABLED', value: 'true' }
+            { name: 'AZURE_CLIENT_ID', value: appIdentity.properties.clientId }
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: insights.properties.ConnectionString }
+            { name: 'Database__Provider', value: 'SqlServer' }
+            { name: 'Database__MigrateOnStartup', value: 'true' }
+            {
+              name: 'ConnectionStrings__Requiem'
+              value: 'Server=tcp:${sqlServer.properties.fullyQualifiedDomainName},1433;Database=${databaseName};Authentication=Active Directory Managed Identity;User Id=${appIdentity.properties.clientId};Encrypt=True;Connect Timeout=60'
+            }
+            { name: 'Auth__SetupCode', secretRef: 'setup-code' }
+          ]
+          probes: [
+            {
+              // Generous: a paused database can take a minute to wake while the app migrates on start.
+              type: 'Startup'
+              httpGet: { path: '/healthz', port: 8080 }
+              initialDelaySeconds: 5
+              periodSeconds: 10
+              failureThreshold: 18
+            }
+            {
+              type: 'Liveness'
+              httpGet: { path: '/healthz', port: 8080 }
+              periodSeconds: 30
+            }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: minReplicas
+        maxReplicas: 1
+      }
     }
   }
   dependsOn: [appReadsSecrets]
 }
 
-// Website Contributor on the app only: GitHub Actions can deploy code but touch nothing else.
+// Contributor on the container app only: GitHub Actions can roll out new images but touch nothing else.
 resource deployerCanDeploy 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(web.id, deployIdentity.id, 'de139f84-1756-47ae-9be6-808fbbe84772')
-  scope: web
+  name: guid(app.id, deployIdentity.id, 'b24988ac-6180-42a0-ab88-20f7382dd24c')
+  scope: app
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'de139f84-1756-47ae-9be6-808fbbe84772')
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c')
     principalId: deployIdentity.properties.principalId
     principalType: 'ServicePrincipal'
   }
@@ -226,12 +276,15 @@ resource deployerCanDeploy 'Microsoft.Authorization/roleAssignments@2022-04-01' 
 
 // ---------- Outputs (DEPLOY.md uses these) ----------
 
-output webAppName string = web.name
-output webAppUrl string = 'https://${web.properties.defaultHostName}'
+output appUrl string = 'https://${app.properties.configuration.ingress.fqdn}'
 output sqlServerName string = sqlServer.name
 output databaseName string = databaseName
 output appIdentityName string = appIdentity.name
 output keyVaultName string = vault.name
+@description('GitHub repository variable AZURE_CONTAINERAPP_NAME.')
+output containerAppName string = app.name
+@description('GitHub repository variable AZURE_RESOURCE_GROUP.')
+output resourceGroupName string = resourceGroup().name
 @description('GitHub repository variable AZURE_CLIENT_ID.')
 output deployClientId string = deployIdentity.properties.clientId
 @description('GitHub repository variable AZURE_TENANT_ID.')
