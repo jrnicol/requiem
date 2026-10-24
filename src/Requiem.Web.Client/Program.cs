@@ -24,6 +24,7 @@ builder.Services.AddSingleton(_ => new HttpClient(new UnauthorizedHandler(auth) 
     BaseAddress = baseAddress,
 });
 builder.Services.AddScoped<RequiemApi>();
+builder.Services.AddScoped<NavigationHistory>();
 
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthorizationCore(options =>

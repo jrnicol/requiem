@@ -1,0 +1,11 @@
+@* Back arrow: returns to the previous in-app page, or to Fallback when the page was opened directly. *@
+@inject NavigationHistory History
+
+<MudIconButton Icon="@Icons.Material.Filled.ArrowBack" aria-label="@Label" OnClick="() => History.Back(Fallback)" Class="@Class" />
+
+@code {
+    /// <summary>Where to go when there's no earlier page in this tab ("" is the roster).</summary>
+    [Parameter] public string Fallback { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "Back";
+    [Parameter] public string? Class { get; set; }
+}

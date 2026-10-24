@@ -29,7 +29,7 @@ else if (_form is null || _editContext is null)
 else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
-        <MudIconButton Href="" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to the roster" />
+        <BackButton Label="Back" />
         <MudText Typo="Typo.h5" Class="brand-font" Style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
             @(IsNew ? "New character" : string.IsNullOrWhiteSpace(_form.Name) ? "Unnamed character" : _form.Name)
         </MudText>

@@ -1,6 +1,8 @@
 ﻿@inherits LayoutComponentBase
 @inject CookieAuthenticationStateProvider Auth
 @inject NavigationManager Navigation
+@* Created here so it records every page from the first one on. *@
+@inject NavigationHistory History
 
 <MudThemeProvider Theme="RequiemTheme.Theme" IsDarkMode="true" />
 <MudPopoverProvider />

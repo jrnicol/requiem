@@ -18,7 +18,7 @@ else if (_scene is null)
 else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-3">
-        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="scenes" aria-label="All scenes" />
+        <BackButton Fallback="scenes" Label="Back" />
         @if (_renaming)
         {
             <MudTextField T="string" @bind-Value="_name" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200"

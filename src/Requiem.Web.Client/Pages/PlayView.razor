@@ -16,7 +16,7 @@ else if (_npc is null)
 else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap" Class="mb-3">
-        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="@BackUrl" aria-label="@(Scene is null ? "Back to the roster" : "Back to the scene")" />
+        <BackButton Fallback="@BackUrl" Label="Back" />
         <div style="flex:1; min-width:10rem">
             <MudText Typo="Typo.h4" Class="brand-font">@_npc.Name</MudText>
             <MudText Typo="Typo.caption" Color="Color.Secondary">@Subtitle</MudText>
