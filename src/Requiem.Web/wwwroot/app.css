@@ -460,3 +460,100 @@ body:has(.mud-layout) .boot-splash {
 .wound-entry .mud-button-root {
     margin-top: 4px;
 }
+/* ---------- Roll builder ---------- */
+
+.roll-builder {
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 8px;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-areas:
+        "head head"
+        "fields result"
+        "extras result";
+    grid-template-columns: minmax(0, 1fr) auto;
+    margin-top: 0.75rem;
+    padding: 0.75rem;
+}
+
+.roll-builder-head { grid-area: head; }
+
+.roll-builder-fields {
+    display: grid;
+    gap: 0.5rem;
+    grid-area: fields;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.roll-builder-extras {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.5rem;
+    grid-area: extras;
+}
+
+.roll-builder-result {
+    align-items: flex-end;
+    align-self: center;
+    border-left: 1px solid var(--mud-palette-lines-default);
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    grid-area: result;
+    max-width: 11rem;
+    min-width: 7rem;
+    padding-left: 0.75rem;
+    text-align: right;
+}
+
+.roll-builder-result .pool-dice-total {
+    font-size: 2rem;
+}
+
+.roll-option {
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    width: 100%;
+}
+
+.roll-option-dots {
+    color: var(--mud-palette-text-secondary);
+    font-variant-numeric: tabular-nums;
+}
+
+.roll-modifier {
+    align-items: center;
+    display: inline-flex;
+    gap: 0.125rem;
+}
+
+.roll-modifier-value {
+    font-variant-numeric: tabular-nums;
+    min-width: 2rem;
+    text-align: center;
+}
+
+/* Phones: the result moves under the controls, full width. */
+@media (max-width: 599.98px) {
+    .roll-builder {
+        grid-template-areas:
+            "head"
+            "fields"
+            "extras"
+            "result";
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .roll-builder-result {
+        align-items: center;
+        border-left: 0;
+        border-top: 1px solid var(--mud-palette-lines-default);
+        flex-direction: row-reverse;
+        justify-content: space-between;
+        max-width: none;
+        padding: 0.5rem 0 0 0;
+        text-align: left;
+    }
+}

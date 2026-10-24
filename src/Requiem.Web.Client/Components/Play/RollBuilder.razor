@@ -1,0 +1,108 @@
+@* Build any roll from the sheet: Attribute + Skill, plus a Specialty, Willpower and a situational
+   modifier. The total shows the wound penalty taken off and Hunger dice split out, like the pools above. *@
+
+<div class="roll-builder">
+    <div class="roll-builder-head">
+        <MudText Typo="Typo.subtitle2">Build a roll</MudText>
+    </div>
+
+    <div class="roll-builder-fields">
+        <MudSelect T="CharacterAttribute" @bind-Value="_attribute" Label="Attribute" Variant="Variant.Outlined" Margin="Margin.Dense"
+                   ToStringFunc="@(a => $"{a} {Npc.Attributes.GetValueOrDefault(a)}")">
+            @* Enum order is Mental, Physical, Social, as on the sheet. *@
+            @foreach (var trait in Enum.GetValues<CharacterAttribute>())
+            {
+                <MudSelectItem T="CharacterAttribute" Value="trait">
+                    <span class="roll-option"><span>@trait</span><span class="roll-option-dots">@Npc.Attributes.GetValueOrDefault(trait)</span></span>
+                </MudSelectItem>
+            }
+        </MudSelect>
+
+        <MudSelect T="Skill?" Value="_skill" ValueChanged="SetSkill" Label="Skill" Variant="Variant.Outlined" Margin="Margin.Dense"
+                   ToStringFunc="@(s => s is { } skill ? $"{skill} {Npc.Skills.GetValueOrDefault(skill)}" : "None")">
+            <MudSelectItem T="Skill?" Value="null">None</MudSelectItem>
+            @foreach (var skill in Enum.GetValues<Skill>())
+            {
+                <MudSelectItem T="Skill?" Value="skill">
+                    <span class="roll-option"><span>@skill</span><span class="roll-option-dots">@Npc.Skills.GetValueOrDefault(skill)</span></span>
+                </MudSelectItem>
+            }
+        </MudSelect>
+    </div>
+
+    <div class="roll-builder-extras">
+        @foreach (var specialty in SkillSpecialties)
+        {
+            var name = specialty.Name;
+            <MudChip T="string" Size="Size.Small" Variant="@(_specialty == name ? Variant.Filled : Variant.Outlined)" Color="Color.Tertiary"
+                     OnClick="() => _specialty = _specialty == name ? null : name" aria-pressed="@Pressed(_specialty == name)">
+                @name +1
+            </MudChip>
+        }
+        @if (Npc.CanSpendWillpower)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="@(_willpower ? Variant.Filled : Variant.Outlined)" Color="Color.Secondary"
+                     OnClick="() => _willpower = !_willpower" aria-pressed="@Pressed(_willpower)">
+                Willpower +@DerivedStats.DicePerWillpowerPoint
+            </MudChip>
+        }
+        <div class="roll-modifier" role="group" aria-label="Situational modifier">
+            <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small" aria-label="One die fewer"
+                           Disabled="_modifier <= -MaxModifier" OnClick="() => _modifier--" />
+            <span class="roll-modifier-value">@(_modifier > 0 ? $"+{_modifier}" : _modifier.ToString())</span>
+            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="One die more"
+                           Disabled="_modifier >= MaxModifier" OnClick="() => _modifier++" />
+            <MudText Typo="Typo.caption" Color="Color.Secondary">modifier</MudText>
+        </div>
+    </div>
+
+    <div class="roll-builder-result">
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="roll-builder-breakdown">@Breakdown</MudText>
+        <PoolDice Npc="Npc" Dice="Math.Max(0, Dice)" />
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PlayCharacter Npc { get; set; } = null!;
+
+    private const int MaxModifier = 10;
+
+    private CharacterAttribute _attribute = CharacterAttribute.Dexterity;
+    private Skill? _skill = Skill.Brawl;
+    private string? _specialty;
+    private bool _willpower;
+    private int _modifier;
+
+    private IEnumerable<PlaySpecialty> SkillSpecialties =>
+        _skill is { } skill ? Npc.Specialties.Where(s => s.Skill == skill) : [];
+
+    private int AttributeDots => Npc.Attributes.GetValueOrDefault(_attribute);
+    private int SkillDots => _skill is { } skill ? Npc.Skills.GetValueOrDefault(skill) : 0;
+
+    /// <summary>Dice before the wound penalty (PoolDice takes that off).</summary>
+    private int Dice => AttributeDots + SkillDots + (_specialty is null ? 0 : 1)
+                        + (_willpower ? DerivedStats.DicePerWillpowerPoint : 0) + _modifier;
+
+    private string Breakdown
+    {
+        get
+        {
+            var parts = new List<string> { $"{_attribute} {AttributeDots}" };
+            if (_skill is { } skill) parts.Add($"+ {skill} {SkillDots}");
+            if (_specialty is { } specialty) parts.Add($"+ {specialty} 1");
+            if (_willpower) parts.Add($"+ Willpower {DerivedStats.DicePerWillpowerPoint}");
+            if (_modifier != 0) parts.Add(_modifier > 0 ? $"+ {_modifier}" : $"− {-_modifier}");
+            if (Npc.Status.DicePenalty > 0) parts.Add($"− wounds {Npc.Status.DicePenalty}");
+            return string.Join(" ", parts);
+        }
+    }
+
+    // aria-pressed needs the words; Blazor would write a bare attribute for true and drop it for false.
+    private static string Pressed(bool on) => on ? "true" : "false";
+
+    private void SetSkill(Skill? skill)
+    {
+        _skill = skill;
+        _specialty = null; // a specialty only applies to its own skill
+    }
+}

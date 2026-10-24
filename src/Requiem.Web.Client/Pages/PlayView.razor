@@ -142,29 +142,10 @@ else
 
                 @if (_npc.IsFullSheet)
                 {
-                    <MudDivider Class="my-2" />
-                    <MudText Typo="Typo.subtitle2" Class="mb-1">Any roll</MudText>
-                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
-                        <MudSelect T="CharacterAttribute" @bind-Value="_attribute" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:10rem" aria-label="Attribute">
-                            @foreach (var attribute in Enum.GetValues<CharacterAttribute>())
-                            {
-                                <MudSelectItem T="CharacterAttribute" Value="attribute">@($"{attribute} {_npc.Attributes.GetValueOrDefault(attribute)}")</MudSelectItem>
-                            }
-                        </MudSelect>
-                        <span>+</span>
-                        <MudSelect T="Skill?" @bind-Value="_skill" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:10rem" aria-label="Skill"
-                                   Clearable="true" Placeholder="No skill">
-                            @foreach (var skill in Enum.GetValues<Skill>())
-                            {
-                                <MudSelectItem T="Skill?" Value="skill">@($"{skill} {_npc.Skills.GetValueOrDefault(skill)}")</MudSelectItem>
-                            }
-                        </MudSelect>
-                        <MudSpacer />
-                        <PoolDice Npc="_npc" Dice="BuiltPool" />
-                    </MudStack>
+                    <RollBuilder Npc="_npc" />
                 }
 
-                @if (_npc.Specialties.Count > 0 || _npc.Assets.Count > 0)
+                @if (!_npc.IsFullSheet && (_npc.Specialties.Count > 0 || _npc.Assets.Count > 0))
                 {
                     <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">
                         @if (_npc.Specialties.Count > 0)
@@ -229,8 +210,6 @@ else
     private int _compelRating = 1;
     private string? _compelEnds;
     private string? _condition;
-    private CharacterAttribute _attribute = CharacterAttribute.Dexterity;
-    private Skill? _skill = Skill.Brawl;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -262,13 +241,9 @@ else
         {
             var parts = new List<string> { "Before modifiers from the scene." };
             if (_npc!.Status.DicePenalty > 0) parts.Add($"Wound penalty −{_npc.Status.DicePenalty} applied.");
-            if (_npc.HungerDice > 0) parts.Add(_npc.HungerDice == 1 ? "One die is a Hunger die." : $"{_npc.HungerDice} dice are Hunger dice.");
-            if (_npc.CanSpendWillpower) parts.Add($"Willpower adds {DerivedStats.DicePerWillpowerPoint} dice per point.");
-            return string.Join(" ", parts);
+            if (_npc.HungerDice > 0) parts.Add(_npc.HungerDice == 1 ? "One die is a Hunger die." : $"{_npc.HungerDice} dice are Hunger dice.");            return string.Join(" ", parts);
         }
     }
-
-    private int BuiltPool => _npc!.Attributes.GetValueOrDefault(_attribute) + (_skill is { } s ? _npc.Skills.GetValueOrDefault(s) : 0);
 
     private List<PowerOption> Powers => _npc!.PowerIds
         .Select(id => _catalog.FirstOrDefault(p => p.Id == id))

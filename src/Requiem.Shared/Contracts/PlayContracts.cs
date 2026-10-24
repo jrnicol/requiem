@@ -11,6 +11,12 @@ public sealed record PlayCompel(int Id, string Name, int Rating, string? EndsWhe
 
 public sealed record PlayCondition(int Id, string Name);
 
+/// <summary>A Specialty: tied to a skill on full sheets, free-standing for Supporting Cast.</summary>
+public sealed record PlaySpecialty(Skill? Skill, string Name)
+{
+    public override string ToString() => Skill is { } skill ? $"{skill}: {Name}" : Name;
+}
+
 /// <summary>
 /// A ready-made dice pool before the wound penalty and Hunger split, which the client applies live.
 /// </summary>
@@ -49,7 +55,7 @@ public sealed record PlayCharacter(
     IReadOnlyList<int> PowerIds,
     IReadOnlyDictionary<CharacterAttribute, int> Attributes,
     IReadOnlyDictionary<Skill, int> Skills,
-    IReadOnlyList<string> Specialties,
+    IReadOnlyList<PlaySpecialty> Specialties,
     IReadOnlyList<string> Assets,
     string? Notes,
     string? GmNotes)

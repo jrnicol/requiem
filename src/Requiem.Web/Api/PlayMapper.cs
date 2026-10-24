@@ -57,7 +57,7 @@ internal static class PlayMapper
             powerIds,
             attributes,
             skills,
-            c.Specialties.OrderBy(s => s.Id).Select(s => s.Skill is { } skill ? $"{skill}: {s.Name}" : s.Name).ToList(),
+            c.Specialties.OrderBy(s => s.Id).Select(s => new PlaySpecialty(s.Skill, s.Name)).ToList(),
             c.Items.Where(i => i.Kind == ItemKind.Asset).OrderBy(i => i.SortOrder).Select(i => i.Name).ToList(),
             c.Notes,
             c.GmNotes);
