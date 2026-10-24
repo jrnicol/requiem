@@ -7,7 +7,8 @@ using 'main.bicep'
 param location = readEnvironmentVariable('REQUIEM_LOCATION', 'westus3')
 param sqlLocation = readEnvironmentVariable('REQUIEM_SQL_LOCATION', 'westus3')
 param appName = 'requiem'
-param githubRepository = 'jrnicol/requiem'
+// As GitHub writes it in the deploy token's subject, with numeric owner and repository IDs (seen 2026-10-24).
+param githubRepository = 'jrnicol@9485852/requiem@1431808700'
 param githubEnvironment = 'production'
 
 // Supplied from Cloud Shell at deploy time (DEPLOY.md), never committed.

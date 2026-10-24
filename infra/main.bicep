@@ -26,8 +26,8 @@ param sqlAdminLogin string
 @minLength(12)
 param setupCode string
 
-@description('GitHub repository allowed to deploy, as owner/name.')
-param githubRepository string = 'jrnicol/requiem'
+@description('GitHub repository allowed to deploy, exactly as GitHub writes it in the sign-in token\'s subject. GitHub now includes numeric IDs (owner@id/name@id); the deploy log\'s "subject claim" line shows the exact form.')
+param githubRepository string = 'jrnicol@9485852/requiem@1431808700'
 
 @description('GitHub environment the deploy job runs in. GitHub names it in the sign-in token, so it must match .github/workflows/deploy.yml.')
 param githubEnvironment string = 'production'
@@ -122,6 +122,9 @@ resource appReadsSecrets 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
     principalType: 'ServicePrincipal'
   }
 }
+
+// You manage secrets with a role you grant yourself once (DEPLOY.md step 6). It isn't created here,
+// because Azure refuses a second, identical role assignment and a redeploy would fail.
 
 // ---------- Database ----------
 

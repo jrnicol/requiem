@@ -102,9 +102,9 @@ In the GitHub repository, open **Settings > Secrets and variables > Actions > Va
 
 Open **Actions > Build and deploy > Run workflow**. The **build** job tests the app and publishes the container image to `ghcr.io/jrnicol/requiem`.
 
-The **deploy** job will most likely **fail this first time**. GitHub makes a new package private, so Azure can't pull the image yet. That's expected.
+The **deploy** job may fail the first time if GitHub made the new package private, because then Azure can't pull the image. On this repository the package took the public repo's visibility automatically (2026-10-24), and deploy worked first time. If it fails with a pull or authorization error, do step 5.
 
-### 5. Make the image public, then deploy
+### 5. If needed: make the image public, then deploy
 
 1. On GitHub, open your profile's **Packages** tab, then **requiem > Package settings**.
 2. Under **Danger Zone**, choose **Change visibility > Public**. The image only holds what's already in this public repository.
@@ -116,9 +116,19 @@ The deploy job points the container app at the new image. On start, the app migr
 
 Open the `appUrl` from step 1. The first load can take a minute while the app and database wake up. You'll be sent to `/setup`. Enter the **setup code** from step 1 and create your GM account.
 
-Afterwards, delete the code so setup can't be reached again:
-1. Open **Key vaults > kv-requiem-… > Secrets > Auth--SetupCode** and delete it.
-2. Restart the container app's revision.
+Setup locks itself as soon as an account exists, so the code is useless from then on. Deleting it is tidying, not security.
+
+Subscription Owner can manage the vault but not its secrets, so give yourself the secrets role once in Cloud Shell:
+
+```bash
+az role assignment create --role "Key Vault Secrets Officer" --assignee $(az ad signed-in-user show --query id -o tsv) --scope $(az keyvault show --name <keyVaultName from step 1> --query id -o tsv)
+```
+
+After a minute or two, delete the code:
+
+```bash
+az keyvault secret delete --vault-name <keyVaultName from step 1> --name Auth--SetupCode
+```
 
 ---
 
@@ -129,6 +139,7 @@ Afterwards, delete the code so setup can't be reached again:
 | `RegionDoesNotAllowProvisioning` on the SQL server | That region isn't accepting new SQL servers for your subscription. | Pick another region for the database, e.g. `export REQUIEM_SQL_LOCATION=centralus`, then redo step 0 and step 1. |
 | A message about the SQL **free offer** | The subscription has already used its one free database. | Ask, and the template can switch to a small paid database. |
 | Deploy job: image pull **unauthorized** / revision failed | The `ghcr.io` package is still private. | Step 5. |
+| Deploy job: `AADSTS700213: No matching federated identity record found` | Azure doesn't trust the subject in GitHub's sign-in token. GitHub now writes numeric IDs into it (`repo:jrnicol@9485852/requiem@1431808700:environment:production`). | The template uses that form. If the log's "subject claim" line shows something different, set `githubRepository` in `infra/main.bicepparam` to match and redeploy, or run `az identity federated-credential update --name github-production --identity-name id-requiem-deploy --resource-group rg-requiem --issuer https://token.actions.githubusercontent.com --subject "<subject claim>" --audiences api://AzureADTokenExchange`. |
 | The site shows a .NET sample page | The workflow hasn't deployed yet, or the template was rerun (which resets the image). | Run the workflow. |
 | First sign-in fails after a quiet spell | The database was paused and is waking up. | Wait a minute and try again. |
 

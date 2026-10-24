@@ -493,3 +493,6 @@ App_Data/
 # Full-book OCR dumps and layout cache (regenerate with rules-text/pdfocr.ps1 and tools/CatalogImport)
 rules-text/*
 !rules-text/pdfocr.ps1
+
+# Personal deploy notes (setup code, outputs) - never commit
+src/Requiem.Web.Client/Pages/azure.js

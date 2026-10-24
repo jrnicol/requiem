@@ -144,7 +144,7 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
 **Progress on 2.0 (2026-10-24):**
 - **Data model and migrations: done.** `AddCampaigns` adds campaigns, members, invites, the audit log and Links, plus the new character, scene and XP-ledger fields. Existing characters upgrade as Active, Hidden and unowned (tested).
 - **Per-campaign authorization: done for the existing API.** `CampaignAccess` limits every character and scene request to the user's personal roster (characters made before Phase 2 belong to every site GM) and their campaigns as Storyteller. Anything else reads as "not found". Signed-in players can read the catalog and get 403 elsewhere. For now a Storyteller must also be a site GM; player-facing endpoints arrive with 2.1–2.3. Covered by `AccessTests`.
-- **Azure hosting: written, being deployed.**
+- **Azure hosting: live (2026-10-24)** in resource group `rg-requiem`, West US 3, as container app `ca-requiem-octvib`. Pushes to `main` test and deploy. The first GM account is created.
   - `infra/main.bicep`: West US 3, free tier. **Azure Container Apps**, since the subscription allows no App Service VMs. Passwordless SQL, Key Vault and Application Insights.
   - The GitHub Actions workflow publishes the container to ghcr.io and rolls it out.
   - The app migrates and seeds on start when `Database:MigrateOnStartup` is set, keeps its sign-in keys in the database, and has a `/healthz` endpoint.
