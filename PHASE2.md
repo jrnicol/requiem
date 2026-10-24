@@ -144,7 +144,8 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
 **Progress on 2.0 (2026-10-24):**
 - **Data model and migrations: done.** `AddCampaigns` adds campaigns, members, invites, the audit log and Links, plus the new character, scene and XP-ledger fields. Existing characters upgrade as Active, Hidden and unowned (tested).
 - **Per-campaign authorization: done for the existing API.** `CampaignAccess` limits every character and scene request to the user's personal roster (characters made before Phase 2 belong to every site GM) and their campaigns as Storyteller. Anything else reads as "not found". Signed-in players can read the catalog and get 403 elsewhere. For now a Storyteller must also be a site GM; player-facing endpoints arrive with 2.1–2.3. Covered by `AccessTests`.
-- **Azure hosting and email: not started.** They need your Azure subscription.
+- **Azure hosting: written, not yet deployed.** `infra/main.bicep` (West US 2, free tier, passwordless SQL, Key Vault, Application Insights), the GitHub Actions workflow and the first-time steps in DEPLOY.md. The app migrates and seeds on start when `Database:MigrateOnStartup` is set, and has a `/healthz` endpoint. Deploying needs your Azure subscription (DEPLOY.md).
+- **Email: not started.** Azure Communication Services goes into the template with the password-reset work.
 | **2.1** | Campaigns, invites and joining; roster and scenes scoped to a campaign; moving NPCs in | 2.0 |
 | **2.2** | `CreationRules` engine and tests; seed Concepts; player creation wizard; approval queue | 2.1 |
 | **2.3** | Player play view; XP awards; priced XP spends applied at once; Corruption and Links locks; Scripts and Milestones flows; audit log with undo for spends | 2.2 |

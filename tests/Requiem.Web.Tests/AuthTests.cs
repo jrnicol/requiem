@@ -35,6 +35,14 @@ public class AuthTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFact
     }
 
     [Fact]
+    public async Task Health_check_answers_without_sign_in()
+    {
+        var response = await factory.CreateClient(new() { AllowAutoRedirect = false }).GetAsync("/healthz");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("Healthy", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
     public async Task Signed_in_user_without_the_gm_role_is_forbidden()
     {
         await factory.CreateUserAsync("player@example.test");

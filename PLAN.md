@@ -221,6 +221,8 @@ The catalog is homebrew book content: the hosted app requires login and doesn't 
 
 Built Azure-ready from day one: managed-identity SQL auth, health checks, Application Insights.
 
+**As built (2026-10-24):** [`infra/main.bicep`](infra/main.bicep) and [DEPLOY.md](DEPLOY.md). West US 2, free tier (App Service F1, Azure SQL free offer). The app applies migrations on start. Deploys run from GitHub Actions with OpenID Connect.
+
 ---
 
 ## 7. Phases

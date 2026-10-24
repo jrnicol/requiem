@@ -108,6 +108,10 @@ dotnet run --project tools/CatalogImport -- parse rules-text/vtr-layout.jsonl sr
 
 Imported powers start unreviewed; check them on the Powers review screen. The OCR text and layout cache in `rules-text/` aren't committed.
 
+## Deploying
+
+The Azure infrastructure is in [`infra/`](infra/), and GitHub Actions deploys `main`. [DEPLOY.md](DEPLOY.md) has the first-time setup.
+
 ## Status
 
-Phase 1 covers the GM tools listed above. Phase 2 adds campaigns and player access. Hosting on Azure (App Service and Azure SQL) is planned but not set up yet. See [PLAN.md](PLAN.md) for the full plan and the house-rules decisions.
+Phase 1 covers the GM tools listed above. Phase 2 adds campaigns and player access ([PHASE2.md](PHASE2.md)); its data model, permissions and Azure templates are in place. See [PLAN.md](PLAN.md) for the full plan and the house-rules decisions.

@@ -1,3 +1,4 @@
+using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using Requiem.Data;
@@ -19,22 +20,31 @@ builder.Services.AddProblemDetails();
 // The UI runs in the browser (no prerender), but registering MudBlazor keeps server rendering safe if that changes.
 builder.Services.AddMudServices();
 builder.Services.ConfigureHttpJsonOptions(o => RequiemJson.Configure(o.SerializerOptions));
+builder.Services.AddHealthChecks();
+
+// Azure Monitor (Application Insights) when hosted; the connection string comes from App Service settings.
+if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
+    builder.Services.AddOpenTelemetry().UseAzureMonitor();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+// Bring the database up to date and fill in any missing catalog entries (seeding is insert-only).
+// Always in Development; hosted, when Database:MigrateOnStartup is set (one App Service instance,
+// decided 2026-10-24). A failed migration shows up as a failed start.
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
-    app.UseWebAssemblyDebugging();
-
-    // Local development only: bring the database up to date and fill in any missing catalog entries.
-    // Hosted environments apply migrations from the deployment pipeline instead.
     await using var scope = app.Services.CreateAsyncScope();
     var db = scope.ServiceProvider.GetRequiredService<RequiemDbContext>();
     await db.Database.MigrateAsync();
     var seeded = await CatalogSeeder.SeedAsync(db);
     if (seeded.Total > 0)
         app.Logger.LogInformation("Seeded catalog: {Result}", seeded);
+}
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseWebAssemblyDebugging();
 }
 else
 {
@@ -62,6 +72,9 @@ app.MapGroup("/api")
     .MapCharacterEndpoints()
     .MapFullSheetEndpoints()
     .MapPlayEndpoints();
+
+// For App Service's health check: answers 200 while the app is up. Holds no data, so it's open.
+app.MapHealthChecks("/healthz").AllowAnonymous();
 
 app.MapStaticAssets();
 // The page shell holds no data, so it is served to anyone: the browser app decides what to show
