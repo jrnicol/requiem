@@ -56,11 +56,16 @@ public sealed class RequiemApi(HttpClient http)
         _concepts ??= await GetAsync<List<ConceptOption>>("api/catalog/concepts");
 
     /// <summary>The catalog entries <see cref="CreationRules"/> needs, from the cached lists.</summary>
-    public async Task<CreationCatalog> GetCreationCatalogAsync() => new(
-        await GetBloodlinesAsync(),
-        await GetDisciplinesAsync(),
-        (await GetPowersAsync()).ToDictionary(p => p.Id, p => p.PowerGroupId),
-        await GetMeritsAsync());
+    public async Task<CreationCatalog> GetCreationCatalogAsync()
+    {
+        var powers = await GetPowersAsync();
+        return new(
+            await GetBloodlinesAsync(),
+            await GetDisciplinesAsync(),
+            powers.ToDictionary(p => p.Id, p => p.PowerGroupId),
+            await GetMeritsAsync(),
+            powers.ToDictionary(p => p.Id, p => p.Level));
+    }
 
     /// <summary>Saves the site admin's review of an imported power and refreshes the cached catalog entry.</summary>
     public async Task<SaveResult<PowerOption>> SavePowerAsync(int id, PowerEditForm form)
@@ -313,6 +318,37 @@ public sealed class RequiemApi(HttpClient http)
         using var response = await http.PostAsync($"api/player-characters/{id}/{action}",
             body is null ? null : JsonContent.Create(body, body.GetType(), options: RequiemJson.Options));
         return await ReadSaveResultAsync<PlayerCharacterView>(response);
+    }
+
+    // ---------- Advancement ----------
+
+    public Task<AdvancementView> GetAdvancementAsync(Guid id) => GetAsync<AdvancementView>($"api/player-characters/{id}/advancement");
+
+    /// <summary>
+    /// corruption (<see cref="CorruptionRequest"/>), links (<see cref="LinkRequest"/>), spend (<see cref="XpPurchase"/>),
+    /// done-spending, or scripts/{slot}/mark (<see cref="ScriptMarkRequest"/>).
+    /// </summary>
+    public async Task<SaveResult<AdvancementView>> AdvancementActionAsync(Guid id, string action, object? body = null)
+    {
+        using var response = await http.PostAsync($"api/player-characters/{id}/{action}",
+            body is null ? null : JsonContent.Create(body, body.GetType(), options: RequiemJson.Options));
+        return await ReadSaveResultAsync<AdvancementView>(response);
+    }
+
+    /// <returns>Null when awarded; otherwise why not.</returns>
+    public async Task<string?> AwardXpAsync(Guid campaignId, XpAwardRequest request)
+    {
+        using var response = await http.PostAsJsonAsync($"api/campaigns/{campaignId}/xp-awards", request, RequiemJson.Options);
+        if (response.IsSuccessStatusCode) return null;
+        var errors = response.StatusCode == HttpStatusCode.BadRequest ? await ReadValidationErrorsAsync(response) : null;
+        return errors is { Count: > 0 } ? string.Join(" ", errors.Values.SelectMany(v => v)) : $"Couldn't award it ({(int)response.StatusCode}).";
+    }
+
+    /// <returns>Null when undone; otherwise why not.</returns>
+    public async Task<string?> UndoAsync(long auditId)
+    {
+        using var response = await http.PostAsync($"api/audit/{auditId}/undo", content: null);
+        return response.IsSuccessStatusCode ? null : await ReadDetailAsync(response) ?? $"Couldn't undo it ({(int)response.StatusCode}).";
     }
 
     /// <returns>Null when deleted; otherwise why not.</returns>

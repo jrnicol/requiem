@@ -114,11 +114,18 @@ else
                 {
                     <MudText Color="Color.Secondary">No player characters yet. Players make theirs from this tab once they've joined.</MudText>
                 }
+                @if (_campaign.IsStoryteller && _characters.Any(c => c.Status == CharacterStatus.Active))
+                {
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Star" Class="mb-3"
+                               Disabled="_busy" OnClick="AwardXpAsync">Award XP</MudButton>
+                }
                 <MudGrid Spacing="2">
                     @foreach (var pc in _characters)
                     {
+                        @* Players see the others in play by name only, not their sheets. *@
+                        var opens = _campaign.IsStoryteller || pc.IsMine;
                         <MudItem xs="12" sm="6" lg="4" @key="pc.Id">
-                            <a href="@($"characters/{pc.Id}")" class="npc-card-link">
+                            <a href="@(opens ? $"characters/{pc.Id}" : null)" class="npc-card-link">
                                 <MudPaper Outlined="true" Class="pa-3 npc-card">
                                     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="1">
                                         <MudText Typo="Typo.h6">@(string.IsNullOrWhiteSpace(pc.Name) ? "Unnamed" : pc.Name)</MudText>
@@ -438,6 +445,21 @@ else
         await LoadStorytellerDataAsync();
         if (_roster is not null) await _roster.LoadAsync();
     });
+
+    private async Task AwardXpAsync()
+    {
+        var parameters = new DialogParameters<AwardXpDialog>
+        {
+            { d => d.Characters, _characters!.Where(c => c.Status == CharacterStatus.Active).ToList() },
+        };
+        var dialog = await Dialogs.ShowAsync<AwardXpDialog>("Award XP", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: XpAwardRequest request }) return;
+        await RunAsync(async () =>
+        {
+            if (await Api.AwardXpAsync(Id, request) is { } problem) Snackbar.Add(problem, Severity.Warning);
+            else Snackbar.Add($"+{request.Amount} XP to {request.CharacterIds.Count} character{(request.CharacterIds.Count == 1 ? "" : "s")}.", Severity.Success);
+        });
+    }
 
     private Task CreateSceneAsync() => RunAsync(async () =>
     {

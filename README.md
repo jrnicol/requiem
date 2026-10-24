@@ -8,6 +8,7 @@ Built tablet-first and usable on a phone. It's meant to be hosted on Azure event
 
 - **Campaigns** (`/campaigns`). Start one and you're its Storyteller; invite players with a link. One person can tell one campaign and play in another. Each campaign's page holds its overview, members, invites, NPCs and scenes.
 - **Player characters.** Players build theirs with a step-by-step creation wizard that follows the book (Concept, Virtue and Vice, relationships, Scripts, Milestones, then the dots), with a live budget of every creation pool. The Storyteller approves or returns them; approved characters are tracked at the table by their players.
+- **Advancement.** Players log Corruption (vampires) or Links (mortals and ghouls), mark their Scripts, and spend XP at the book's prices once unlocked. Storytellers award XP and can undo any spend, award or logged act from the character's history.
 - **NPC roster,** per campaign. Two tiers of NPC:
   - **Supporting Cast:** quick stat blocks (Physical / Mental / Social, Edges, Specialties, Assets).
   - **Full sheets:** the whole paper sheet, covering attributes, skills, Disciplines, merits and flaws, health and wounds, compels, Scripts, Milestones and XP.

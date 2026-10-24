@@ -52,13 +52,15 @@ public sealed record CreationReport(
     public IEnumerable<CreationIssue> For(CreationStep step) => Issues.Where(i => i.Step == step);
 }
 
-/// <summary>The catalog entries the creation rules need to know about.</summary>
+/// <summary>The catalog entries the creation and advancement rules need to know about.</summary>
 /// <param name="PowerGroupOfPower">Catalog power id to its power group id (for rituals).</param>
+/// <param name="PowerLevels">Catalog power id to its dot level (null for rituals), for pick-per-dot Disciplines.</param>
 public sealed record CreationCatalog(
     IReadOnlyList<BloodlineOption> Bloodlines,
     IReadOnlyList<DisciplineOption> PowerGroups,
     IReadOnlyDictionary<int, int> PowerGroupOfPower,
-    IReadOnlyList<MeritOption> Merits);
+    IReadOnlyList<MeritOption> Merits,
+    IReadOnlyDictionary<int, int?>? PowerLevels = null);
 
 /// <summary>
 /// Starting dots for a player character (WoD Core p.74, VtR p.136). Pure: a draft sheet in, a budget report out.

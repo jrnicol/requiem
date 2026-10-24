@@ -1,0 +1,14 @@
+@* How much XP and why (WoD Core p.75), for awarding one character or the whole table. *@
+
+<MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap">
+    <MudNumericField T="int" @bind-Value="Request.Amount" Label="XP" Min="1" Max="50" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:6rem" />
+    <MudAutocomplete T="string" @bind-Value="Request.Reason" Label="For" SearchFunc="SearchAsync" CoerceValue="true" MaxItems="null"
+                     Variant="Variant.Outlined" Margin="Margin.Dense" Style="flex:1; min-width:12rem" />
+</MudStack>
+
+@code {
+    [Parameter, EditorRequired] public XpAwardRequest Request { get; set; } = null!;
+
+    private static Task<IEnumerable<string>> SearchAsync(string? text, CancellationToken cancellationToken) =>
+        Task.FromResult(XpAwardReasons.Common.Where(r => string.IsNullOrWhiteSpace(text) || r.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase)));
+}

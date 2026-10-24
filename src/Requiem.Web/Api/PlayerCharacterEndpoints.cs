@@ -44,14 +44,18 @@ public static class PlayerCharacterEndpoints
 
     // ---------- Listing and creating ----------
 
-    /// <summary>A Storyteller sees every PC in the campaign; a player sees their own.</summary>
+    /// <summary>
+    /// A Storyteller sees every PC in the campaign. A player sees their own, plus the others in play by name
+    /// (for Links, and to know who's at the table); never their sheets.
+    /// </summary>
     private static async Task<Results<Ok<List<PlayerCharacterSummary>>, NotFound>> ListAsync(
         Guid campaignId, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
-        if (await access.RoleInAsync(campaignId, ct) is null) return TypedResults.NotFound();
+        if (await access.RoleInAsync(campaignId, ct) is not { } role) return TypedResults.NotFound();
         var me = access.UserId;
-        var rows = await access.VisiblePlayerCharacters(db.Characters.AsNoTracking())
-            .Where(c => c.CampaignId == campaignId)
+        var rows = await db.Characters.AsNoTracking()
+            .Where(c => c.CampaignId == campaignId && c.IsPlayerCharacter
+                && (role == CampaignRole.Storyteller || c.OwnerUserId == me || c.Status == CharacterStatus.Active))
             .Select(c => new
             {
                 c.Id, c.Name, c.Kind, c.Concept, c.Status, c.OwnerUserId, c.UpdatedAt,

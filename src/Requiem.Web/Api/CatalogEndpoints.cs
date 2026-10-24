@@ -105,11 +105,16 @@ public static class CatalogEndpoints
     }
 
     /// <summary>What <see cref="CreationRules"/> needs from the catalog.</summary>
-    internal static async Task<CreationCatalog> CreationCatalogAsync(RequiemDbContext db, CancellationToken ct) => new(
-        await BloodlinesAsync(db, ct),
-        await DisciplinesAsync(db, ct),
-        await db.Powers.AsNoTracking().ToDictionaryAsync(p => p.Id, p => p.PowerGroupId, ct),
-        await MeritsAsync(db, ct));
+    internal static async Task<CreationCatalog> CreationCatalogAsync(RequiemDbContext db, CancellationToken ct)
+    {
+        var powers = await db.Powers.AsNoTracking().Select(p => new { p.Id, p.PowerGroupId, p.Level }).ToListAsync(ct);
+        return new(
+            await BloodlinesAsync(db, ct),
+            await DisciplinesAsync(db, ct),
+            powers.ToDictionary(p => p.Id, p => p.PowerGroupId),
+            await MeritsAsync(db, ct),
+            powers.ToDictionary(p => p.Id, p => p.Level));
+    }
 
     private static async Task<Results<Ok<PowerOption>, NotFound, ValidationProblem>> UpdatePowerAsync(
         int id, PowerEditForm form, RequiemDbContext db, CancellationToken ct)

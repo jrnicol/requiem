@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
 using Requiem.Shared.Campaigns;
@@ -196,84 +196,22 @@ public class PlayerCharacterApiTests(RequiemWebFactory factory) : IClassFixture<
         Assert.Equal("Win a competition.", concepts.Single(c => c.Name == "Competitor").WillpowerTrigger);
     }
 
-    // ---------- Helpers ----------
+    // ---------- Helpers (shared with the advancement tests in PlayerTable) ----------
 
-    private sealed record Table(HttpClient Storyteller, HttpClient Player, Guid CampaignId);
+    private Task<Table> TableAsync(CharacterTemplates templates = CharacterTemplates.All) => PlayerTable.CreateAsync(factory, templates);
 
-    /// <summary>A Storyteller's campaign with one player in it.</summary>
-    private async Task<Table> TableAsync(CharacterTemplates templates = CharacterTemplates.All)
-    {
-        var (storyteller, campaignId) = await factory.CreateStorytellerAsync($"st-{Guid.NewGuid():N}@example.test");
-        var settings = await storyteller.PutAsJsonAsync($"/api/campaigns/{campaignId}",
-            new CampaignForm { Name = "Test Chronicle", AllowedTemplates = templates, CoterieScript = "No one left behind", ChronicleTenet = "Blood ties" }, RequiemJson.Options);
-        Assert.True(settings.IsSuccessStatusCode, await settings.Content.ReadAsStringAsync());
-        var table = new Table(storyteller, null!, campaignId);
-        return table with { Player = await JoinAsync(table, "player") };
-    }
+    private Task<HttpClient> JoinAsync(Table table, string name) => PlayerTable.JoinAsync(factory, table, name);
 
-    private async Task<HttpClient> JoinAsync(Table table, string name)
-    {
-        var invite = await table.Storyteller.PostAsJsonAsync($"/api/campaigns/{table.CampaignId}/invites", new InviteForm(), RequiemJson.Options);
-        var token = (await invite.Content.ReadFromJsonAsync<CreatedInvite>(RequiemJson.Options))!.Token;
-        var player = await factory.CreateMemberClientAsync($"{name}-{Guid.NewGuid():N}@example.test");
-        Assert.True((await player.PostAsync($"/api/invites/{token}/accept", null)).IsSuccessStatusCode);
-        return player;
-    }
+    private static Task<Guid> ActiveCharacterAsync(Table table) => PlayerTable.ActiveCharacterAsync(table, CompleteMortal());
 
-    private async Task<Guid> ActiveCharacterAsync(Table table)
-    {
-        var draft = await CreateAsync(table.Player, table.CampaignId, CompleteMortal());
-        await PostAsync(table.Player, $"/api/player-characters/{draft.Sheet.Id}/submit");
-        await PostAsync(table.Storyteller, $"/api/player-characters/{draft.Sheet.Id}/approve");
-        return draft.Sheet.Id!.Value;
-    }
+    private static Task<PlayerCharacterView> CreateAsync(HttpClient player, Guid campaignId, FullSheetForm form) =>
+        PlayerTable.CreateCharacterAsync(player, campaignId, form);
 
-    private static async Task<PlayerCharacterView> CreateAsync(HttpClient player, Guid campaignId, FullSheetForm form)
-    {
-        var response = await player.PostAsJsonAsync($"/api/campaigns/{campaignId}/player-characters", form, RequiemJson.Options);
-        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
-        return (await response.Content.ReadFromJsonAsync<PlayerCharacterView>(RequiemJson.Options))!;
-    }
-
-    private static async Task<PlayerCharacterView> PostAsync(HttpClient client, string url, object? body = null)
-    {
-        var response = await client.PostAsync(url, body is null ? null : JsonContent.Create(body, body.GetType(), options: RequiemJson.Options));
-        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
-        return (await response.Content.ReadFromJsonAsync<PlayerCharacterView>(RequiemJson.Options))!;
-    }
+    private static Task<PlayerCharacterView> PostAsync(HttpClient client, string url, object? body = null) =>
+        PlayerTable.PostAsync<PlayerCharacterView>(client, url, body);
 
     private static async Task<List<PlayerCharacterSummary>> ListAsync(HttpClient client, Guid campaignId) =>
         (await client.GetFromJsonAsync<List<PlayerCharacterSummary>>($"/api/campaigns/{campaignId}/player-characters", RequiemJson.Options))!;
 
-    /// <summary>A mortal built to the book: everything the creation rules ask for.</summary>
-    private static FullSheetForm CompleteMortal()
-    {
-        var sheet = new FullSheetForm
-        {
-            Name = "Dana Reyes", Kind = CharacterKind.Mortal, Concept = "Survivor", Virtue = "Fortitude", Vice = "Wrath", Morality = 7,
-            Relationships =
-            [
-                new() { Role = RelationshipRole.Anchor, Name = "Marco" },
-                new() { Role = RelationshipRole.Complication, Name = "Officer Hale" },
-                new() { Role = RelationshipRole.Connection, Name = "The Night Market" },
-            ],
-            Scripts = FullSheetForm.DefaultScripts(CharacterKind.Mortal),
-            Milestones = [new() { Title = "Find who burned the shop" }],
-        };
-        sheet.Scripts[0].Text = "Chain smoker";
-        sheet.Scripts[1].Text = "Never leaves a debt unpaid";
-        foreach (var (attribute, dots) in new[]
-                 {
-                     (CharacterAttribute.Strength, 3), (CharacterAttribute.Dexterity, 3), (CharacterAttribute.Stamina, 2),
-                     (CharacterAttribute.Charisma, 2), (CharacterAttribute.Manipulation, 2), (CharacterAttribute.Resolve, 3),
-                     (CharacterAttribute.Intelligence, 2), (CharacterAttribute.Wits, 2), (CharacterAttribute.Perception, 2),
-                 })
-            sheet.Attributes[attribute] = dots;
-        sheet.WillpowerDots = sheet.WillpowerCurrent = 5;
-        foreach (var (skill, dots) in new[] { (Skill.Academics, 3), (Skill.Investigation, 3), (Skill.Crafts, 3), (Skill.Intrigue, 2), (Skill.Brawl, 3), (Skill.Athletics, 2), (Skill.Stealth, 2), (Skill.Streetwise, 3), (Skill.Empathy, 2) })
-            sheet.Skills[skill] = dots;
-        sheet.Specialties = [new() { Skill = Skill.Brawl, Name = "Boxing" }];
-        sheet.Merits = [new() { Name = "Contacts", Kind = MeritKind.Merit, Dots = 3 }];
-        return sheet;
-    }
+    private static FullSheetForm CompleteMortal() => PlayerTable.CompleteMortal();
 }

@@ -1,0 +1,41 @@
+@* The Storyteller awards XP to the characters at the table: everyone in play by default. *@
+
+<MudDialog>
+    <DialogContent>
+        <XpAwardFields Request="_request" />
+        <MudText Typo="Typo.subtitle2" Class="mt-3">To</MudText>
+        @foreach (var character in Characters)
+        {
+            <MudCheckBox T="bool" Value="_chosen.Contains(character.Id)" ValueChanged="on => Toggle(character.Id, on)" Color="Color.Primary" Dense="true"
+                         Label="@($"{character.Name} ({character.OwnerName})")" />
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_chosen.Count == 0 || string.IsNullOrWhiteSpace(_request.Reason)"
+                   OnClick="Award">Award @_request.Amount XP</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+    /// <summary>The player characters in play.</summary>
+    [Parameter] public IReadOnlyList<PlayerCharacterSummary> Characters { get; set; } = [];
+
+    private readonly XpAwardRequest _request = new() { Amount = 1 };
+    private HashSet<Guid> _chosen = [];
+
+    protected override void OnInitialized() => _chosen = Characters.Select(c => c.Id).ToHashSet();
+
+    private void Toggle(Guid id, bool on)
+    {
+        if (on) _chosen.Add(id);
+        else _chosen.Remove(id);
+    }
+
+    private void Award()
+    {
+        _request.CharacterIds = _chosen.ToList();
+        Dialog.Close(DialogResult.Ok(_request));
+    }
+}

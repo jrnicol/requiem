@@ -77,7 +77,8 @@ app.MapGroup("/api")
     .MapFullSheetEndpoints()
     .MapPlayEndpoints()
     .MapCampaignEndpoints()
-    .MapPlayerCharacterEndpoints();
+    .MapPlayerCharacterEndpoints()
+    .MapAdvancementEndpoints();
 
 // For App Service's health check: answers 200 while the app is up. Holds no data, so it's open.
 app.MapHealthChecks("/healthz").AllowAnonymous();

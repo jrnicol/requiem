@@ -1,0 +1,198 @@
+@* Buying with XP: choose what, see the price and any rule it breaks, then buy (WoD Core p.75, VtR p.137).
+   The server prices it again and applies it. *@
+
+<MudGrid Spacing="2">
+    <MudItem xs="12" sm="5">
+        <MudSelect T="PurchaseKind" Value="_purchase.Kind" ValueChanged="SetKind" Label="Buy" Variant="Variant.Outlined" Margin="Margin.Dense">
+            @foreach (var (kind, label) in Kinds)
+            {
+                <MudSelectItem T="PurchaseKind" Value="kind">@label</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="7">
+        @switch (_purchase.Kind)
+        {
+            case PurchaseKind.Attribute:
+                <MudSelect T="CharacterAttribute?" @bind-Value="_purchase.Attribute" Label="Attribute" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var attribute in Enum.GetValues<CharacterAttribute>())
+                    {
+                        <MudSelectItem T="CharacterAttribute?" Value="attribute">@(attribute) (@Sheet.Attribute(attribute))</MudSelectItem>
+                    }
+                </MudSelect>
+                break;
+            case PurchaseKind.Skill:
+            case PurchaseKind.Specialty:
+                <MudSelect T="Skill?" @bind-Value="_purchase.Skill" Label="Skill" Variant="Variant.Outlined" Margin="Margin.Dense">
+                    @foreach (var skill in Enum.GetValues<Skill>().Where(s => _purchase.Kind == PurchaseKind.Skill || Sheet.SkillDots(s) > 0))
+                    {
+                        <MudSelectItem T="Skill?" Value="skill">@skill (@Sheet.SkillDots(skill))</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (_purchase.Kind == PurchaseKind.Specialty)
+                {
+                    <MudTextField T="string" @bind-Value="_purchase.SpecialtyName" Label="Specialty" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  MaxLength="200" Immediate="true" Class="mt-2" />
+                }
+                break;
+            case PurchaseKind.Merit:
+                <MudAutocomplete T="MeritChoice" Value="_merit" ValueChanged="SetMerit" Label="Merit" SearchFunc="SearchMeritsAsync"
+                                 ToStringFunc="@(m => m?.Label ?? string.Empty)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                 Clearable="true" ResetValueOnEmptyText="true" MaxItems="null" />
+                @if (_merit is { Existing: false } choice)
+                {
+                    <MudStack Row="true" Spacing="2" Class="mt-2" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+                        <MudTextField T="string" @bind-Value="_purchase.MeritQualifier" Placeholder="Detail, e.g. who (optional)"
+                                      Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" Immediate="true" Style="flex:1; min-width:10rem" />
+                        <DotRating Value="_purchase.MeritDots ?? choice.Option?.MinDots ?? 1" Min="choice.Option?.MinDots ?? 1"
+                                   Max="choice.Option?.MaxDots ?? AdvancementRules.MaxMeritDots" Size="Size.Medium"
+                                   ValueChanged="v => _purchase.MeritDots = v" />
+                    </MudStack>
+                }
+                break;
+            case PurchaseKind.CaitiffDiscipline:
+                <MudSelect T="int?" Value="_purchase.PowerGroupId" ValueChanged="SetDiscipline" Label="Discipline" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           ToStringFunc="@(id => Disciplines.FirstOrDefault(d => d.Id == id)?.Name)">
+                    @foreach (var entry in Sheet.Disciplines.Where(d => d.Dots > 0))
+                    {
+                        <MudSelectItem T="int?" Value="entry.PowerGroupId">@(Disciplines.FirstOrDefault(d => d.Id == entry.PowerGroupId)?.Name) (@entry.Dots)</MudSelectItem>
+                    }
+                </MudSelect>
+                @if (Picks.Count > 0)
+                {
+                    <MudSelect T="int?" @bind-Value="_purchase.PowerId" Label="The power this dot buys" Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2"
+                               ToStringFunc="@(id => Powers.FirstOrDefault(p => p.Id == id)?.Name)">
+                        @foreach (var power in Picks.Where(p => !Sheet.LearnedPowerIds.Contains(p.Id)))
+                        {
+                            <MudSelectItem T="int?" Value="power.Id">@power.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                }
+                break;
+            case PurchaseKind.Ritual:
+                <MudSelect T="int?" @bind-Value="_purchase.PowerId" Label="Ritual" Variant="Variant.Outlined" Margin="Margin.Dense"
+                           ToStringFunc="@(id => Powers.FirstOrDefault(p => p.Id == id)?.Name)">
+                    @foreach (var ritual in OwnRituals)
+                    {
+                        <MudSelectItem T="int?" Value="ritual.Id">@ritual.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                break;
+        }
+    </MudItem>
+</MudGrid>
+
+@{ var quote = Quote; }
+@* Nothing to say until something is chosen. *@
+@if (!string.IsNullOrEmpty(quote.Trait))
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap" Class="mt-3">
+        <MudText Style="flex:1; min-width:12rem">
+            @if (!string.IsNullOrEmpty(quote.Trait))
+            {
+                <span><b>@quote.Trait</b> @quote.FromDots → @quote.ToDots for <b>@quote.Cost XP</b></span>
+            }
+        </MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ShoppingCart"
+                   Disabled="Busy || !quote.IsAllowed" OnClick="() => Buy.InvokeAsync(Clone())">Buy</MudButton>
+    </MudStack>
+    @foreach (var violation in quote.Violations.Where(v => v.Code != "xp.locked"))
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1">@violation.Message</MudAlert>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Sheet { get; set; } = null!;
+    [Parameter, EditorRequired] public CreationCatalog Catalog { get; set; } = null!;
+    [Parameter] public IReadOnlyList<DisciplineOption> Disciplines { get; set; } = [];
+    [Parameter] public IReadOnlyList<PowerOption> Powers { get; set; } = [];
+    [Parameter] public IReadOnlyList<MeritOption> Merits { get; set; } = [];
+    [Parameter] public int Progress { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback<XpPurchase> Buy { get; set; }
+
+    /// <summary>A Merit to buy or raise, for the picker.</summary>
+    private sealed record MeritChoice(string Label, MeritOption? Option, MeritEntry? Entry)
+    {
+        public bool Existing => Entry is not null;
+    }
+
+    private XpPurchase _purchase = new() { Kind = PurchaseKind.Skill };
+    private MeritChoice? _merit;
+
+    private IEnumerable<(PurchaseKind, string)> Kinds
+    {
+        get
+        {
+            yield return (PurchaseKind.Attribute, "An Attribute dot (new dots × 5)");
+            yield return (PurchaseKind.Skill, "A Skill dot (new dots × 3)");
+            yield return (PurchaseKind.Specialty, "A Specialty (5)");
+            yield return (PurchaseKind.Merit, "A Merit (new dots × 5)");
+            if (!Sheet.IsVampire) yield break;
+            yield return (PurchaseKind.BloodPotency, "Blood Potency (new dots × 5)");
+            yield return (PurchaseKind.CaitiffDiscipline, "A Discipline dot (× 5 own Bloodline, × 6 otherwise)");
+            if (OwnRituals.Any()) yield return (PurchaseKind.Ritual, "A Ritual of your house (10)");
+        }
+    }
+
+    // A Discipline dot is priced by whose Discipline it is, whichever Discipline kind the purchase names.
+    private XpPurchaseQuote Quote => AdvancementRules.Quote(Sheet, _purchase, Catalog, Progress);
+
+    private XpPurchase Clone() => new()
+    {
+        Kind = _purchase.Kind, Attribute = _purchase.Attribute, Skill = _purchase.Skill, SpecialtyName = _purchase.SpecialtyName,
+        MeritDefinitionId = _purchase.MeritDefinitionId, MeritName = _purchase.MeritName, MeritQualifier = _purchase.MeritQualifier,
+        MeritDots = _purchase.MeritDots, PowerGroupId = _purchase.PowerGroupId, PowerId = _purchase.PowerId,
+    };
+
+    private List<PowerOption> Picks => _purchase.PowerGroupId is { } groupId
+        ? Catalog.PickPerDotPowers(groupId).Select(id => Powers.FirstOrDefault(p => p.Id == id)).OfType<PowerOption>().ToList()
+        : [];
+
+    private IEnumerable<PowerOption> OwnRituals
+    {
+        get
+        {
+            var house = Disciplines.FirstOrDefault(d => d.Kind == PowerGroupKind.BloodSorcery && d.BloodlineId is not null && d.BloodlineId == Sheet.BloodlineId);
+            return house is null ? [] : Powers.Where(p => p.PowerGroupId == house.Id && !Sheet.LearnedPowerIds.Contains(p.Id)).OrderBy(p => p.Name);
+        }
+    }
+
+    private void SetKind(PurchaseKind kind)
+    {
+        _purchase = new XpPurchase { Kind = kind };
+        _merit = null;
+    }
+
+    private void SetDiscipline(int? id)
+    {
+        _purchase.PowerGroupId = id;
+        _purchase.PowerId = null;
+    }
+
+    private void SetMerit(MeritChoice? choice)
+    {
+        _merit = choice;
+        _purchase.MeritDefinitionId = choice?.Option?.Id ?? choice?.Entry?.MeritDefinitionId;
+        _purchase.MeritName = choice?.Entry?.Name ?? choice?.Option?.Name;
+        _purchase.MeritQualifier = choice?.Entry?.Qualifier;
+        _purchase.MeritDots = null;
+    }
+
+    /// <summary>The character's Merits (to raise) first, then the catalog's for their kind of character.</summary>
+    private Task<IEnumerable<MeritChoice>> SearchMeritsAsync(string? text, CancellationToken cancellationToken)
+    {
+        var owned = Sheet.Merits.Where(m => m.Kind == MeritKind.Merit)
+            .Select(m => new MeritChoice($"{m.Name}{(m.Qualifier is { Length: > 0 } q ? $" ({q})" : "")} · raise to {m.Dots + 1}",
+                Merits.FirstOrDefault(o => o.Id == m.MeritDefinitionId), m));
+        var vampireNames = Merits.Where(o => o.Source == RuleSource.Vampire).Select(o => o.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var catalog = Merits.Where(o => o.Kind == MeritKind.Merit
+                && (Sheet.IsVampire ? o.Source == RuleSource.Vampire || !vampireNames.Contains(o.Name) : o.Source == RuleSource.WodCore))
+            .Select(o => new MeritChoice($"{o.Name} · {o.Cost}", o, null));
+        var search = text?.Trim();
+        return Task.FromResult(owned.Concat(catalog)
+            .Where(c => string.IsNullOrEmpty(search) || c.Label.Contains(search, StringComparison.OrdinalIgnoreCase))
+            .ToList().AsEnumerable());
+    }
+}

@@ -191,6 +191,20 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
 - **At the table:** a player opens the play view for their own approved character (wounds, Willpower, Vitae and so on); Storytellers keep the full sheet editor for any PC, including linking a ghoul's domitor.
 - Covered by `CreationRulesTests` and `PlayerCharacterApiTests`. Checked in the browser at tablet and phone sizes.
 
+**Progress on 2.3 (2026-10-24): Corruption, Links, Scripts and XP done; Milestone flows still to come.**
+- **`AdvancementRules`** (Shared): prices a purchase and lists the rules it breaks, applies it, and reverts it for undo.
+  - Prices: Attribute new dots × 5, Skill × 3, Specialty 5, Merit × 5 (a new one at the rating chosen); Blood Potency × 5, own Bloodline Discipline × 5, Caitiff or diablerized × 6, Ritual 10.
+  - Refused: locked spending, not enough XP, maximums, Attributes at 1, a second Specialty on a Skill, Discipline dots above Blood Potency, new Disciplines, other houses' Rituals and Sabbat Ritae, Flaws and plot-only Merits. Investiture dots name the power they buy. Raising Blood Potency lowers Humanity when Generation demands it. 16 tests.
+- **Advancement tab** on a character in play, for its player and the Storyteller:
+  - XP available, earned and spent.
+  - Corruption (vampires): the player logs vampiric acts from the book's list or their own; 4 different ones unlock spending. Links (mortals and ghouls): a scene with other PCs in play (Camaraderie, Support, Cede Spotlight); the 4th earns 1 XP and unlocks spending. Players now see the other PCs in play by name for this.
+  - Scripts: tick each as it's played out; all four earn 4 XP (vampires) or 1 and clear.
+  - Spend XP: pick what to buy, see the price and any rule it breaks, buy. "Done spending" resets Corruption or Links to 0; so does the Storyteller's next award once the player has spent (decision 16).
+  - History from the audit log. The Storyteller can undo a spend (the trait and XP go back, unless it's changed since), an award, a Corruption act or a Link.
+- **Awards:** the Storyteller awards XP from a character's tab, or to everyone in play from the campaign's Characters tab, with a reason (Flaw, Social Compel, botched roll, Milestone, or their own).
+- **Not yet:** Milestone stages confirmed by the Storyteller, and buying Humanity with a completed 10-XP Milestone.
+- Covered by `AdvancementRulesTests` and `AdvancementApiTests`. Checked in the browser at tablet and phone sizes.
+
 Each step ships on its own, with tests, and is checked at tablet and phone sizes. **Security tests** (a player can't read another campaign, GM notes or a hidden NPC) are written in 2.0 and extended at every step.
 
 ---
@@ -214,5 +228,6 @@ Each step ships on its own, with tests, and is checked at tablet and phone sizes
 13. **Discipline limit:** Blood Potency limits the dots in one Discipline, not how many Disciplines a vampire has. A vampire always has their Caitiff Discipline and, in a Bloodline, its Discipline; others come only through diablerie.
 14. **Mortal and ghoul Scripts:** a Quirk, a Personal Script, the shared Coterie Script and the Chronicle Tenet.
 15. **One character in play:** a player has one Draft, Submitted or Active character per campaign at a time; retired and dead ones stay listed.
+16. **Corruption:** the player logs vampiric acts (audited; the Storyteller can undo). 4 different acts unlock spending XP and earn no XP themselves. Corruption, like Links, resets after a spending session: when the player says they're done, or at the Storyteller's next award once they've spent.
 
 A pattern runs through these: **players act, the Storyteller oversees.** Player actions take effect at once within the rules, and the audit log with undo is the check. That makes the audit log part of 2.3, not an extra.

@@ -1,0 +1,277 @@
+@* A character's advancement in play (PHASE2.md §6): XP, Corruption or Links, Scripts, spending, and the
+   history the Storyteller can undo. Everything counts at once and is audited. *@
+@inject RequiemApi Api
+@inject ISnackbar Snackbar
+
+@if (_view is null)
+{
+    <MudProgressLinear Indeterminate="true" />
+}
+else
+{
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="6">
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudText Typo="Typo.subtitle1">Experience</MudText>
+                <MudText Typo="Typo.h4">@_view.Available <MudText Inline="true" Typo="Typo.body2" Color="Color.Secondary">available</MudText></MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@_view.Earned earned · @_view.Spent spent</MudText>
+            </MudPaper>
+
+            @* ---------- Corruption or Links ---------- *@
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                    <MudText Typo="Typo.subtitle1">@_view.ProgressName @_view.Progress / 4</MudText>
+                    @if (_view.Unlocked)
+                    {
+                        <MudChip T="string" Size="Size.Small" Color="Color.Success">Spending unlocked</MudChip>
+                    }
+                </MudStack>
+                <MudProgressLinear Color="Color.Primary" Value="_view.Progress * 25" Class="mb-2" aria-label="@($"{_view.ProgressName} {_view.Progress} of 4")" />
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display:block" Class="mb-2">
+                    @(IsVampire
+                        ? "The dead don't grow; the Beast does. Four different vampiric acts unlock spending XP (VtR p.137)."
+                        : "A scene with other player characters: Camaraderie, Support or Cede Spotlight. Four unlock spending XP and earn 1 XP (WoD Core p.75).")
+                </MudText>
+                @foreach (var entry in _view.ProgressEntries)
+                {
+                    <MudText Typo="Typo.body2">• @entry.Text <MudText Inline="true" Typo="Typo.caption" Color="Color.Secondary">@entry.At.ToLocalTime().ToString("d MMM")</MudText></MudText>
+                }
+
+                @if (_view.CanAct && _view.Progress < 4)
+                {
+                    @if (IsVampire)
+                    {
+                        <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
+                            <MudAutocomplete T="string" @bind-Value="_act" Label="What they did" SearchFunc="SearchActsAsync" CoerceValue="true"
+                                             Variant="Variant.Outlined" Margin="Margin.Dense" MaxItems="null" Style="flex:1; min-width:14rem" />
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-1" Disabled="_busy || string.IsNullOrWhiteSpace(_act)"
+                                       OnClick="AddCorruptionAsync">Add</MudButton>
+                        </MudStack>
+                    }
+                    else if (Others.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-2">Links need other player characters in play.</MudText>
+                    }
+                    else
+                    {
+                        <MudGrid Spacing="1" Class="mt-1">
+                            <MudItem xs="12" sm="5">
+                                <MudSelect T="LinkKind" @bind-Value="_link.Kind" Label="Scene" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                    <MudSelectItem T="LinkKind" Value="LinkKind.Camaraderie">Camaraderie</MudSelectItem>
+                                    <MudSelectItem T="LinkKind" Value="LinkKind.Support">Support</MudSelectItem>
+                                    <MudSelectItem T="LinkKind" Value="LinkKind.CedeSpotlight">Cede Spotlight</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12" sm="7">
+                                <MudSelect T="Guid" @bind-SelectedValues="_with" MultiSelection="true" Label="With" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                           ToStringFunc="@(id => Others.FirstOrDefault(o => o.Id == id)?.Name)">
+                                    @foreach (var other in Others)
+                                    {
+                                        <MudSelectItem T="Guid" Value="other.Id">@other.Name (@other.OwnerName)</MudSelectItem>
+                                    }
+                                </MudSelect>
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudStack Row="true" Spacing="2" AlignItems="AlignItems.Start">
+                                    <MudTextField T="string" @bind-Value="_link.Note" Placeholder="What happened (optional)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                                  MaxLength="500" Style="flex:1" />
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-1" Disabled="_busy || !_with.Any()" OnClick="AddLinkAsync">Add</MudButton>
+                                </MudStack>
+                            </MudItem>
+                        </MudGrid>
+                    }
+                }
+            </MudPaper>
+
+            @* ---------- Scripts ---------- *@
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudText Typo="Typo.subtitle1">Scripts</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display:block" Class="mb-1">
+                    Mark each one when it's played out. All four earn @ExperienceRules.ScriptsCompletionXp(IsVampire) XP and clear.
+                </MudText>
+                @foreach (var script in _view.Scripts.OrderBy(s => s.Slot))
+                {
+                    @* Keyed by reply, so a box the server cleared (all four done) doesn't keep its clicked state. *@
+                    <MudCheckBox @key="(script.Slot, _replies)" T="bool" Value="script.IsMarked" ValueChanged="v => MarkAsync(script.Slot, v)" Color="Color.Primary"
+                                 Disabled="_busy || !_view.CanAct"
+                                 Label="@($"{CreationRules.ScriptName(script.Kind)}: {(string.IsNullOrWhiteSpace(script.Text) ? "not set" : script.Text)}")" />
+                }
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="6">
+            @* ---------- Spending ---------- *@
+            @if (_view.CanAct)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mb-3">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Spend XP</MudText>
+                    @if (!_view.Unlocked)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">
+                            Unlocks at 4 @_view.ProgressName. Until then you can see the prices.
+                        </MudText>
+                    }
+                    <SpendXp Sheet="Sheet" Catalog="Catalog" Disciplines="Disciplines" Powers="Powers" Merits="Merits"
+                             Progress="_view.Progress" Busy="_busy" Buy="SpendAsync" />
+                    @if (_view.Unlocked)
+                    {
+                        <MudDivider Class="my-3" />
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap">
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Style="flex:1; min-width:12rem">
+                                Finished? @_view.ProgressName starts again at 0, and you'll need 4 more to spend again.
+                            </MudText>
+                            <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="DoneAsync">Done spending</MudButton>
+                        </MudStack>
+                    }
+                </MudPaper>
+            }
+
+            @if (_view.IsStoryteller)
+            {
+                <MudPaper Outlined="true" Class="pa-3 mb-3">
+                    <MudText Typo="Typo.subtitle1" Class="mb-1">Award XP</MudText>
+                    <XpAwardFields Request="_award" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-2" Disabled="_busy || string.IsNullOrWhiteSpace(_award.Reason)"
+                               OnClick="AwardAsync">Award</MudButton>
+                </MudPaper>
+            }
+
+            @* ---------- History ---------- *@
+            <MudPaper Outlined="true" Class="pa-3">
+                <MudText Typo="Typo.subtitle1" Class="mb-1">History</MudText>
+                @if (_view.History.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Nothing yet.</MudText>
+                }
+                @foreach (var entry in _view.History)
+                {
+                    <div class="play-row">
+                        <div style="flex:1; min-width:0">
+                            <MudText Typo="Typo.body2" Style="@(entry.IsUndone ? "text-decoration:line-through" : null)">@entry.Summary</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@entry.Who · @entry.At.ToLocalTime().ToString("d MMM, HH:mm")@(entry.IsUndone ? " · undone" : "")</MudText>
+                        </div>
+                        @if (entry.CanUndo)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Warning" Disabled="_busy" OnClick="() => UndoAsync(entry)">Undo</MudButton>
+                        }
+                    </div>
+                }
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid CharacterId { get; set; }
+    [Parameter, EditorRequired] public Guid CampaignId { get; set; }
+    [Parameter, EditorRequired] public FullSheetForm Sheet { get; set; } = null!;
+    [Parameter, EditorRequired] public CreationCatalog Catalog { get; set; } = null!;
+    [Parameter] public IReadOnlyList<DisciplineOption> Disciplines { get; set; } = [];
+    [Parameter] public IReadOnlyList<PowerOption> Powers { get; set; } = [];
+    [Parameter] public IReadOnlyList<MeritOption> Merits { get; set; } = [];
+    /// <summary>The other player characters in play, for Links.</summary>
+    [Parameter] public IReadOnlyList<PlayerCharacterSummary> Others { get; set; } = [];
+    /// <summary>Raised after anything that changes the sheet, so the page can reload it.</summary>
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private AdvancementView? _view;
+    /// <summary>Counts replies from the server, to refresh controls whose state it may have changed.</summary>
+    private int _replies;
+    private bool _busy;
+    private string? _act;
+    private LinkRequest _link = new();
+    private IReadOnlyCollection<Guid> _with = [];
+    private XpAwardRequest _award = new() { Amount = 1 };
+
+    private bool IsVampire => Sheet.IsVampire;
+
+    protected override async Task OnParametersSetAsync() => _view ??= await Api.GetAdvancementAsync(CharacterId);
+
+    private Task<IEnumerable<string>> SearchActsAsync(string? text, CancellationToken cancellationToken)
+    {
+        var used = _view?.ProgressEntries.Select(e => e.Text).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? [];
+        return Task.FromResult(AdvancementRules.SuggestedCorruptionActs
+            .Where(a => !used.Contains(a) && (string.IsNullOrWhiteSpace(text) || a.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase))));
+    }
+
+    private Task AddCorruptionAsync() => ActAsync("corruption", new CorruptionRequest { Act = _act!.Trim() }, () => _act = null);
+
+    private Task AddLinkAsync()
+    {
+        _link.WithCharacterIds = _with.ToList();
+        return ActAsync("links", _link, () => { _link = new LinkRequest(); _with = []; });
+    }
+
+    private Task MarkAsync(int slot, bool marked) => ActAsync($"scripts/{slot}/mark", new ScriptMarkRequest(marked), sheetChanged: true);
+
+    private Task SpendAsync(XpPurchase purchase) => ActAsync("spend", purchase, sheetChanged: true, success: "Bought.");
+
+    private Task DoneAsync() => ActAsync("done-spending", null);
+
+    private async Task ActAsync(string action, object? body, Action? then = null, bool sheetChanged = false, string? success = null)
+    {
+        _busy = true;
+        try
+        {
+            var result = await Api.AdvancementActionAsync(CharacterId, action, body);
+            _replies++;
+            if (result.Saved is { } view)
+            {
+                _view = view;
+                then?.Invoke();
+                if (success is not null) Snackbar.Add(success, Severity.Success);
+                if (sheetChanged) await Changed.InvokeAsync();
+            }
+            else
+            {
+                var errors = result.Errors?.Values.SelectMany(v => v).ToList() ?? [];
+                Snackbar.Add(errors.Count > 0 ? string.Join(" ", errors) : result.Message ?? "That didn't work.", Severity.Warning);
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AwardAsync()
+    {
+        _busy = true;
+        try
+        {
+            _award.CharacterIds = [CharacterId];
+            if (await Api.AwardXpAsync(CampaignId, _award) is { } problem) Snackbar.Add(problem, Severity.Warning);
+            else
+            {
+                Snackbar.Add($"+{_award.Amount} XP.", Severity.Success);
+                _award = new XpAwardRequest { Amount = 1 };
+                await ReloadAsync();
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task UndoAsync(AdvancementHistoryEntry entry)
+    {
+        _busy = true;
+        try
+        {
+            if (await Api.UndoAsync(entry.Id) is { } problem) Snackbar.Add(problem, Severity.Warning);
+            else await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ReloadAsync()
+    {
+        _view = await Api.GetAdvancementAsync(CharacterId);
+        _replies++;
+        await Changed.InvokeAsync();
+    }
+}

@@ -272,6 +272,14 @@ else
                                        OnClick="() => SaveAsync()">Save</MudButton>
                         }
                     </MudTabPanel>
+                    @if (Status == CharacterStatus.Active && _form.Id is { } characterId && _form.CampaignId is { } campaignId)
+                    {
+                        <MudTabPanel Text="Advancement">
+                            <AdvancementPanel CharacterId="characterId" CampaignId="campaignId" Sheet="_form" Catalog="_catalog!"
+                                              Disciplines="_disciplines" Powers="_powers" Merits="_merits" Others="_others"
+                                              Changed="ReloadSheetAsync" />
+                        </MudTabPanel>
+                    }
                     @if (_view.IsStoryteller)
                     {
                         <MudTabPanel Text="Creation budget">
@@ -309,6 +317,8 @@ else
     private IReadOnlyList<DisciplineOption> _disciplines = [];
     private IReadOnlyList<PowerOption> _powers = [];
     private IReadOnlyList<MeritOption> _merits = [];
+    /// <summary>The campaign's other player characters in play, for Links.</summary>
+    private IReadOnlyList<PlayerCharacterSummary> _others = [];
 
     private CharacterStatus Status => _view?.Status ?? CharacterStatus.Draft;
     private bool IsWizard => _view is null || (_view.IsMine && Status == CharacterStatus.Draft);
@@ -352,6 +362,9 @@ else
                     return;
                 }
                 Show(_view.Sheet);
+                if (_view.Status == CharacterStatus.Active && _view.Sheet.CampaignId is { } campaignId)
+                    _others = (await Api.ListPlayerCharactersAsync(campaignId))
+                        .Where(c => c.Status == CharacterStatus.Active && c.Id != id).ToList();
                 // Pick up a draft where its gaps are.
                 if (IsWizard) _step = Steps.FirstOrDefault(s => _report!.For(s).Any(i => i.Level == CreationIssueLevel.Missing), CreationStep.Review);
             }
@@ -505,6 +518,14 @@ else
         var dialog = await Dialogs.ShowAsync<ReturnNoteDialog>("Return to the player", parameters);
         if (await dialog.Result is not { Canceled: false, Data: string note }) return;
         await ActAsync("return", new ReturnCharacterRequest(note), "Returned to the player.");
+    }
+
+    /// <summary>After a purchase, an undo or a Script completing: the sheet and XP have changed.</summary>
+    private async Task ReloadSheetAsync()
+    {
+        if ((Id ?? _view?.Sheet.Id) is not { } id || await Api.GetPlayerCharacterAsync(id) is not { } view) return;
+        _view = view;
+        Show(view.Sheet);
     }
 
     private Task SetStatusAsync(CharacterStatus status) =>
