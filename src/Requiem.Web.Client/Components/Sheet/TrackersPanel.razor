@@ -47,6 +47,25 @@
         </MudItem>
         <ValidationMessage For="() => Form.VitaeCurrent" class="mud-error-text mud-typography-caption" />
     }
+    else if (Form.IsGhoul)
+    {
+        <MudItem xs="12">
+            <MudDivider Class="my-2" />
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                <MudText Typo="Typo.body2" Style="min-width:6.5rem">Vitae</MudText>
+                <TrackerBoxes Label="Vitae" Max="GhoulRules.MaxVitae" Current="Form.VitaeCurrent ?? 0" Class="vitae"
+                              CurrentChanged="v => Update(() => Form.VitaeCurrent = Math.Clamp(v, 0, GhoulRules.MaxVitae))" />
+            </MudStack>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@GhoulRules.VitaeReminder</MudText>
+            @if ((Form.VitaeCurrent ?? 0) == 0)
+            {
+                <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1">
+                    No Vitae left: they age to their true age at once, unless they drink again.
+                </MudAlert>
+            }
+            <ValidationMessage For="() => Form.VitaeCurrent" class="mud-error-text mud-typography-caption" />
+        </MudItem>
+    }
 </MudGrid>
 <ValidationMessage For="() => Form.WillpowerCurrent" class="mud-error-text mud-typography-caption" />
 

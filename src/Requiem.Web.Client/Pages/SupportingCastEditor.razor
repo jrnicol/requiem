@@ -214,6 +214,23 @@ else
                             </MudGrid>
                         </MudPaper>
                     }
+                    else if (_form.IsGhoul)
+                    {
+                        <MudPaper Outlined="true" Class="pa-4">
+                            <MudText Typo="Typo.h6" Class="mb-2">The Blood</MudText>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                                <MudText Typo="Typo.body2" Style="min-width:5rem">Vitae</MudText>
+                                <TrackerBoxes Label="Vitae" Max="GhoulRules.MaxVitae" Current="_form.VitaeCurrent ?? 0" Class="vitae"
+                                              CurrentChanged="v => _form.VitaeCurrent = Math.Clamp(v, 0, GhoulRules.MaxVitae)" />
+                            </MudStack>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-1">@GhoulRules.VitaeReminder</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+                                They heal with Vitae as a vampire does, and may spend 1 Vitae for a temporary dot of Potence,
+                                Celerity or Fortitude (at most 1 in each).
+                            </MudText>
+                            <ValidationMessage For="() => _form.VitaeCurrent" class="mud-error-text mud-typography-caption" />
+                        </MudPaper>
+                    }
 
                     <MudPaper Outlined="true" Class="pa-4">
                         <MudText Typo="Typo.h6" Class="mb-2">Notes</MudText>
@@ -239,6 +256,10 @@ else
                             <tr><td>Health</td><td class="text-right"><b>@SupportingCastRules.Health(_form.Physical, _form.Edges)</b></td></tr>
                             <tr><td>Willpower</td><td class="text-right"><b>@SupportingCastRules.Willpower(_form.Mental, _form.Edges)</b></td></tr>
                             <tr><td>Social</td><td class="text-right"><b>@SupportingCastRules.EffectiveSocial(_form.Social, _form.Edges)</b></td></tr>
+                            @if (_form.IsGhoul)
+                            {
+                                <tr><td>Vitae</td><td class="text-right" style="white-space:nowrap"><b>@(_form.VitaeCurrent ?? 0) / @GhoulRules.MaxVitae</b></td></tr>
+                            }
                             @if (_form.IsVampire)
                             {
                                 <tr><td>Vitae</td><td class="text-right" style="white-space:nowrap"><b>@(_form.VitaeCurrent ?? 0) / @MaxVitae</b></td></tr>
@@ -347,6 +368,8 @@ else
     {
         _form!.Kind = kind;
         _form.ApplyVampireDefaults();
+        // A ghoul's Vitae track is 8 boxes; a vampire turned ghoul keeps what fits.
+        if (_form.IsGhoul) _form.VitaeCurrent = Math.Clamp(_form.VitaeCurrent ?? GhoulRules.MaxVitae, 0, GhoulRules.MaxVitae);
     }
 
     private void OnBloodPotencyChanged(int value)

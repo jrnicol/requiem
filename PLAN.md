@@ -269,3 +269,9 @@ Campaign (Chronicle) with GM/Player membership and invites · players own PCs ·
 5. **Powers:** Disciplines are cumulative by dots. Blood Sorcery rituals and Sabbat Ritae are learned individually. The GM picks the starting Caitiff Discipline.
 6. **Scripts:** +4 XP for vampires.
 7. **Masquerade cost** = 3 + (7 − Humanity), minimum 0. So Humanity 4 costs 6; the book's worked example of 8 is an arithmetic error.
+8. **Ghouls (VtR p.62, `GhoulRules`):**
+   - **Vitae:** a ghoul holds at most **8 Vitae**, reading "can drink up to 8 in one night" as the size of their track. The server trims anything over 8 when a sheet is saved.
+   - **Daily loss:** the 1 Vitae lost each day is **marked by hand**. The app shows the reminder, and an "Aging" warning at 0.
+   - **Healing:** with Vitae at a vampire's cost (`HealingRules`).
+   - **Fortify Form:** 1 Vitae for a temporary dot of Potence, Celerity or Fortitude, **at most 1 in each**, lasting as long as a vampire's.
+   - **No Hunger dice.**

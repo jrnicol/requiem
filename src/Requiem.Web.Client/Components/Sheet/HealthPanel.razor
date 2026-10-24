@@ -40,7 +40,8 @@
                 <MudSelectItem T="DamageType" Value="type">@type (−@WoundRules.PenaltyFor(type))</MudSelectItem>
             }
         </MudSelect>
-        @if (Form.IsVampire)
+        @* Ghouls heal with Vitae just as a vampire can (VtR p.62). *@
+        @if (Form.IsVampire || Form.IsGhoul)
         {
             var cost = HealingRules.Cost(wound.Type, wound.Amount);
             <MudTooltip Text="@($"Heal: {cost.Vitae} Vitae{(cost.Willpower > 0 ? $" + {cost.Willpower} Willpower" : "")}")">

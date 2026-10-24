@@ -35,7 +35,7 @@
         }
     </div>
 
-    @if (Npc.IsVampire && Npc.VitaeCurrent is { } vitae && Npc.MaxVitae is { } max)
+    @if (Npc.VitaeCurrent is { } vitae && Npc.MaxVitae is { } max)
     {
         <div class="play-row">
             <span class="play-label">Vitae</span>
@@ -45,7 +45,15 @@
             {
                 <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">Hunger @Npc.HungerDice</MudChip>
             }
+            @if (Npc.IsGhoul && vitae == 0)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Error" Variant="Variant.Outlined">Aging</MudChip>
+            }
         </div>
+        @if (Npc.IsGhoul)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@GhoulRules.VitaeReminder</MudText>
+        }
     }
 </div>
 

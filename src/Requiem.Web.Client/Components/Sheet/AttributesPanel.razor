@@ -9,10 +9,10 @@
             {
                 <DotRating Label="@(attribute.ToString())" Value="Form.Attribute(attribute)" Stacked="true" Size="Size.Medium"
                            ValueChanged="v => SetAsync(attribute, v)" />
-                @if (Form.IsVampire && FortifyFor(attribute) is { } fortify)
+                @if (FortifyFor(attribute) is { } fortify && Form.FortifyCap(fortify) > 0)
                 {
                     <DotRating Label="@(fortify.ToString())" Value="BoostOf(fortify)" Min="0"
-                               Max="Form.Attribute(attribute)" Size="Size.Small" Class="ml-4" Stacked="true"
+                               Max="Form.FortifyCap(fortify)" Size="Size.Small" Class="ml-4" Stacked="true"
                                ValueChanged="v => SetBoostAsync(fortify, v)" />
                 }
             }
@@ -23,6 +23,13 @@
 {
     <MudText Typo="Typo.caption" Color="Color.Secondary">
         Small dots are Fortify Form: Vitae spent for temporary Potence, Celerity or Fortitude, up to the attribute. Clear them when the scene ends.
+    </MudText>
+}
+else if (Form.IsGhoul)
+{
+    <MudText Typo="Typo.caption" Color="Color.Secondary">
+        Small dots are Vitae spent for a temporary dot of Potence, Celerity or Fortitude: at most 1 in each for a ghoul,
+        lasting as long as a vampire's Fortify Form.
     </MudText>
 }
 
@@ -56,8 +63,9 @@
     private async Task SetAsync(CharacterAttribute attribute, int value)
     {
         Form.Attributes[attribute] = value;
-        // A boost can never be higher than the attribute it rides on.
-        if (FortifyFor(attribute) is { } fortify && BoostOf(fortify) > value) await SetBoostAsync(fortify, value);
+        // A boost can never be higher than its cap (the attribute it rides on, or 1 for a ghoul).
+        if (FortifyFor(attribute) is { } fortify && BoostOf(fortify) > Form.FortifyCap(fortify))
+            await SetBoostAsync(fortify, Form.FortifyCap(fortify));
         await Changed.InvokeAsync();
     }
 

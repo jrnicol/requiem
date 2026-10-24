@@ -138,6 +138,85 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
     }
 
+    // ---------- Ghouls ----------
+
+    [Fact]
+    public async Task Ghouls_hold_up_to_eight_vitae_and_one_dot_of_fortify_form()
+    {
+        var id = (await CreateGhoulAsync(vitae: 3)).Id!.Value;
+
+        var play = await PlayAsync(id);
+        Assert.Equal((3, 8), (play.VitaeCurrent, play.MaxVitae));
+        Assert.Equal(0, play.HungerDice);
+        Assert.All(play.BoostCaps.Values, cap => Assert.Equal(1, cap));
+
+        Assert.Equal(8, (await ActAsync(id, new PlayAction { Kind = PlayActionKind.AdjustVitae, Amount = 20 })).VitaeCurrent);
+
+        var boosted = await ActAsync(id, new PlayAction { Kind = PlayActionKind.AdjustBoost, Boost = FortifyDiscipline.Potence, Amount = 1 });
+        Assert.Equal((1, 7), (boosted.Boosts[FortifyDiscipline.Potence], boosted.VitaeCurrent));
+        Assert.Equal("A ghoul gains at most 1 Potence from Vitae.",
+            await ActErrorAsync(id, new PlayAction { Kind = PlayActionKind.AdjustBoost, Boost = FortifyDiscipline.Potence, Amount = 1 }));
+    }
+
+    [Fact]
+    public async Task Vampires_and_ghouls_heal_wounds_with_vitae()
+    {
+        var id = (await CreateGhoulAsync(vitae: 8)).Id!.Value;
+        var hurt = await ActAsync(id, new PlayAction { Kind = PlayActionKind.AddWound, Amount = 3, DamageType = DamageType.Lethal, Text = "gunshot" });
+
+        var healed = await ActAsync(id, new PlayAction { Kind = PlayActionKind.HealWithVitae, TargetId = hurt.Wounds[0].Id });
+        Assert.Empty(healed.Wounds);
+        Assert.Equal(8 - 3, healed.VitaeCurrent); // Lethal: 1 Vitae per point
+
+        var agg = await ActAsync(id, new PlayAction { Kind = PlayActionKind.AddWound, Amount = 2, DamageType = DamageType.Aggravated, Text = "fire" });
+        Assert.StartsWith("Healing it takes 6 Vitae",
+            await ActErrorAsync(id, new PlayAction { Kind = PlayActionKind.HealWithVitae, TargetId = agg.Wounds[0].Id }));
+    }
+
+    [Fact]
+    public async Task Mortals_hold_no_vitae()
+    {
+        var response = await _http.PostAsJsonAsync("/api/characters/full-sheet",
+            new FullSheetForm { Name = "Plain Tom", Kind = CharacterKind.Mortal, VitaeCurrent = 4 }, RequiemJson.Options);
+        var tom = (await response.Content.ReadFromJsonAsync<FullSheetForm>(RequiemJson.Options))!;
+        Assert.Null(tom.VitaeCurrent);
+        Assert.Null((await PlayAsync(tom.Id!.Value)).VitaeCurrent);
+        Assert.Equal("Only vampires and ghouls hold Vitae.",
+            await ActErrorAsync(tom.Id!.Value, new PlayAction { Kind = PlayActionKind.AdjustVitae, Amount = 1 }));
+    }
+
+    [Fact]
+    public async Task Ghoul_sheets_keep_at_most_eight_vitae()
+    {
+        var response = await _http.PostAsJsonAsync("/api/characters/full-sheet",
+            new FullSheetForm { Name = "Greedy", Kind = CharacterKind.Ghoul, VitaeCurrent = 12 }, RequiemJson.Options);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal(8, (await response.Content.ReadFromJsonAsync<FullSheetForm>(RequiemJson.Options))!.VitaeCurrent);
+    }
+
+    [Fact]
+    public async Task Supporting_cast_ghouls_track_vitae_at_the_table()
+    {
+        var response = await _http.PostAsJsonAsync("/api/characters/supporting-cast",
+            new SupportingCastForm { Name = "Ghoul Driver", Kind = CharacterKind.Ghoul, Physical = 2, Mental = 2, Social = 2 }, RequiemJson.Options);
+        var npc = (await response.Content.ReadFromJsonAsync<SupportingCastForm>(RequiemJson.Options))!;
+        Assert.Equal(8, npc.VitaeCurrent);
+
+        var play = await ActAsync(npc.Id!.Value, new PlayAction { Kind = PlayActionKind.AdjustVitae, Amount = -1 });
+        Assert.Equal(7, play.VitaeCurrent);
+    }
+
+    private async Task<FullSheetForm> CreateGhoulAsync(int vitae)
+    {
+        var form = new FullSheetForm { Name = "Ghoul Ada", Kind = CharacterKind.Ghoul, VitaeCurrent = vitae, WillpowerDots = 4, WillpowerCurrent = 4 };
+        form.Attributes[CharacterAttribute.Strength] = 3;
+        form.Attributes[CharacterAttribute.Dexterity] = 2;
+        form.Attributes[CharacterAttribute.Stamina] = 2;
+        var response = await _http.PostAsJsonAsync("/api/characters/full-sheet", form, RequiemJson.Options);
+        Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<FullSheetForm>(RequiemJson.Options))!;
+    }
+
     // ---------- Scenes ----------
 
     [Fact]

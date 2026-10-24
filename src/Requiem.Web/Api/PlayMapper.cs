@@ -39,8 +39,8 @@ internal static class PlayMapper
             isFull ? Math.Clamp(c.WillpowerCurrent ?? willpowerDots, 0, willpowerDots) : willpowerDots,
             CanSpendWillpower: isFull,
             bloodPotency,
-            isVampire ? c.VitaeCurrent ?? 0 : null,
-            isVampire ? BloodRules.MaxVitae(bloodPotency!.Value, c.IsThinblood) : null,
+            GhoulRules.HoldsVitae(c.Kind) ? c.VitaeCurrent ?? 0 : null,
+            GhoulRules.VitaeCapacity(c.Kind, bloodPotency, c.IsThinblood),
             minimumHunger,
             c.Humanity, c.Morality,
             isFull ? DerivedStats.Defense(Attr(CharacterAttribute.Wits), Attr(CharacterAttribute.Dexterity)) : null,
@@ -63,11 +63,14 @@ internal static class PlayMapper
             c.GmNotes);
     }
 
-    /// <summary>Fortify Form is capped by Strength / Dexterity / Stamina, or Physical for Supporting Cast.</summary>
+    /// <summary>
+    /// Fortify Form is capped by Strength / Dexterity / Stamina (Physical for Supporting Cast);
+    /// ghouls gain at most 1 in each, and mortals none.
+    /// </summary>
     public static IReadOnlyDictionary<FortifyDiscipline, int> BoostCaps(Character c, IReadOnlyDictionary<CharacterAttribute, int> attributes) =>
-        Enum.GetValues<FortifyDiscipline>().ToDictionary(d => d, d => c.Tier == CharacterTier.FullSheet
+        Enum.GetValues<FortifyDiscipline>().ToDictionary(d => d, d => GhoulRules.FortifyCap(c.Kind, c.Tier == CharacterTier.FullSheet
             ? attributes.GetValueOrDefault(Traits.FortifyCap(d), Traits.MinAttribute)
-            : c.Physical ?? SupportingCastRules.MinRating);
+            : c.Physical ?? SupportingCastRules.MinRating));
 
     /// <summary>Discipline powers the dots grant (or the Investiture picks), plus rituals and ritae learned.</summary>
     private static List<int> GrantedPowerIds(Character c, IReadOnlyList<Power> catalog)

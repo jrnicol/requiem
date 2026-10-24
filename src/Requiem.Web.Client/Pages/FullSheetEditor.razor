@@ -308,6 +308,9 @@ else
         else
         {
             form.Morality ??= DerivedStats.StartingMorality;
+            // A ghoul's Vitae track is 8 boxes; a vampire turned ghoul keeps what fits.
+            if (kind == CharacterKind.Ghoul)
+                form.VitaeCurrent = Math.Clamp(form.VitaeCurrent ?? GhoulRules.MaxVitae, 0, GhoulRules.MaxVitae);
         }
     }
 

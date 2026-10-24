@@ -165,7 +165,18 @@ public sealed class FullSheetForm : IValidatableObject
         new() { Slot = 4, Kind = ScriptKind.ChronicleTenet },
     ];
 
-    /// <summary>Switches between Humanity (vampires) and Morality (everyone else) and clears vampire-only values.</summary>
+    public bool IsGhoul => Kind == CharacterKind.Ghoul;
+
+    /// <summary>Size of the Vitae track: by Blood Potency for vampires, 8 for ghouls, null for mortals.</summary>
+    public int? VitaeCapacity => GhoulRules.VitaeCapacity(Kind, BloodPotency, IsThinblood);
+
+    /// <summary>Most Fortify Form points in one physical Discipline (by its capping attribute).</summary>
+    public int FortifyCap(FortifyDiscipline discipline) => GhoulRules.FortifyCap(Kind, Attribute(Traits.FortifyCap(discipline)));
+
+    /// <summary>
+    /// Switches between Humanity (vampires) and Morality (everyone else) and clears values the kind
+    /// doesn't have. Ghouls keep Vitae and Fortify Form (VtR p.62).
+    /// </summary>
     public void NormalizeForKind()
     {
         if (IsVampire)
@@ -184,9 +195,19 @@ public sealed class FullSheetForm : IValidatableObject
         PredatorTypeId = null;
         Generation = null;
         BloodPotency = null;
-        VitaeCurrent = null;
         IsThinblood = false;
-        PotenceBoost = CelerityBoost = FortitudeBoost = 0;
+        if (IsGhoul)
+        {
+            VitaeCurrent = Math.Clamp(VitaeCurrent ?? GhoulRules.MaxVitae, 0, GhoulRules.MaxVitae);
+            PotenceBoost = Math.Min(PotenceBoost, FortifyCap(FortifyDiscipline.Potence));
+            CelerityBoost = Math.Min(CelerityBoost, FortifyCap(FortifyDiscipline.Celerity));
+            FortitudeBoost = Math.Min(FortitudeBoost, FortifyCap(FortifyDiscipline.Fortitude));
+        }
+        else
+        {
+            VitaeCurrent = null;
+            PotenceBoost = CelerityBoost = FortitudeBoost = 0;
+        }
         Disciplines.Clear();
         LearnedPowerIds.Clear();
         CorruptionMarks.Clear();
@@ -216,13 +237,22 @@ public sealed class FullSheetForm : IValidatableObject
 
         if (IsVampire && BloodPotency is { } bp && VitaeCurrent is { } vitae && vitae > BloodRules.MaxVitae(bp, IsThinblood))
             yield return Error($"Vitae can't exceed {BloodRules.MaxVitae(bp, IsThinblood)} at Blood Potency {bp}.", nameof(VitaeCurrent));
+        if (IsGhoul && VitaeCurrent > GhoulRules.MaxVitae)
+            yield return Error($"A ghoul holds at most {GhoulRules.MaxVitae} Vitae.", nameof(VitaeCurrent));
 
-        if (PotenceBoost > Attribute(CharacterAttribute.Strength))
-            yield return Error("Potence from Fortify Form can't exceed Strength.", nameof(PotenceBoost));
-        if (CelerityBoost > Attribute(CharacterAttribute.Dexterity))
-            yield return Error("Celerity from Fortify Form can't exceed Dexterity.", nameof(CelerityBoost));
-        if (FortitudeBoost > Attribute(CharacterAttribute.Stamina))
-            yield return Error("Fortitude from Fortify Form can't exceed Stamina.", nameof(FortitudeBoost));
+        foreach (var (discipline, boost, member) in new[]
+                 {
+                     (FortifyDiscipline.Potence, PotenceBoost, nameof(PotenceBoost)),
+                     (FortifyDiscipline.Celerity, CelerityBoost, nameof(CelerityBoost)),
+                     (FortifyDiscipline.Fortitude, FortitudeBoost, nameof(FortitudeBoost)),
+                 })
+        {
+            // Mortals' boosts are simply cleared on save.
+            if (boost <= FortifyCap(discipline) || !GhoulRules.HoldsVitae(Kind)) continue;
+            yield return Error(IsGhoul && boost > GhoulRules.MaxFortifyBoost
+                ? $"A ghoul gains at most {GhoulRules.MaxFortifyBoost} {discipline} from Vitae."
+                : $"{discipline} from Fortify Form can't exceed {Traits.FortifyCap(discipline)}.", member);
+        }
 
         if (Disciplines.Any(d => d.Dots is < 0 or > PowerRules.MaxDisciplineDots))
             yield return Error($"Discipline dots must be 0–{PowerRules.MaxDisciplineDots}.", nameof(Disciplines));

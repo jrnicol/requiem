@@ -62,6 +62,9 @@ public sealed record PlayCharacter(
 {
     [JsonIgnore] public bool IsVampire => Kind == CharacterKind.Vampire;
     [JsonIgnore] public bool IsFullSheet => Tier == CharacterTier.FullSheet;
+    [JsonIgnore] public bool IsGhoul => Kind == CharacterKind.Ghoul;
+    /// <summary>Vampires and ghouls: they spend Vitae on healing and Fortify Form.</summary>
+    [JsonIgnore] public bool HoldsVitae => VitaeCurrent is not null;
 
     [JsonIgnore]
     public HealthStatus Status => WoundRules.Evaluate(Wounds.Select(w => new Wound(w.Description, w.Amount, w.Type)), Health);
@@ -93,6 +96,10 @@ public enum PlayActionKind
     RemoveCompel,
     AddCondition,
     RemoveCondition,
+    /// <summary>
+    /// Vampires and ghouls heal a whole wound with Vitae (VtR p.19, p.62): see <see cref="HealingRules.Cost"/>.
+    /// </summary>
+    HealWithVitae,
 }
 
 /// <summary>One change made at the table. Only the fields its <see cref="Kind"/> needs are read.</summary>

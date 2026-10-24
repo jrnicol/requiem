@@ -147,6 +147,8 @@ public static class FullSheetEndpoints
     private static async Task<Dictionary<string, string[]>?> ValidateAsync(
         FullSheetForm form, Guid? id, RequiemDbContext db, CancellationToken ct)
     {
+        // Tidy the form for its kind first (e.g. a ghoul keeps at most 8 Vitae), as saving would.
+        form.NormalizeForKind();
         var results = new List<ValidationResult>();
         Validator.TryValidateObject(form, new ValidationContext(form), results, validateAllProperties: true);
 

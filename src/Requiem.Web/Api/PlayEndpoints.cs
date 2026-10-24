@@ -86,6 +86,24 @@ public static class PlayEndpoints
                 c.Wounds.RemoveAll(w => w.Id == action.TargetId);
                 return null;
 
+            case PlayActionKind.HealWithVitae:
+            {
+                if (!GhoulRules.HoldsVitae(c.Kind)) return "Only vampires and ghouls heal with Vitae.";
+                var wound = c.Wounds.FirstOrDefault(w => w.Id == action.TargetId);
+                if (wound is null) return "That wound is already gone.";
+                var cost = HealingRules.Cost(wound.Type, wound.Amount);
+                if (cost.Vitae > (c.VitaeCurrent ?? 0)) return $"Healing it takes {cost.Vitae} Vitae; only {c.VitaeCurrent ?? 0} left.";
+                if (cost.Willpower > 0)
+                {
+                    if (c.Tier != CharacterTier.FullSheet) return "Aggravated wounds also cost Willpower, which Supporting Cast never spend.";
+                    if (cost.Willpower > (c.WillpowerCurrent ?? 0)) return $"Healing it also takes {cost.Willpower} Willpower; only {c.WillpowerCurrent ?? 0} left.";
+                    c.WillpowerCurrent -= cost.Willpower;
+                }
+                c.VitaeCurrent -= cost.Vitae;
+                c.Wounds.Remove(wound);
+                return null;
+            }
+
             case PlayActionKind.AdjustWillpower:
                 if (c.Tier != CharacterTier.FullSheet) return "Supporting Cast never spend Willpower.";
                 var dots = c.WillpowerDots ?? 0;
@@ -96,21 +114,25 @@ public static class PlayEndpoints
 
             case PlayActionKind.AdjustVitae:
             {
-                if (c.Kind != CharacterKind.Vampire) return "Only vampires track Vitae.";
+                if (GhoulRules.VitaeCapacity(c.Kind, c.BloodPotency, c.IsThinblood) is not { } capacity)
+                    return "Only vampires and ghouls hold Vitae.";
                 var vitae = (c.VitaeCurrent ?? 0) + action.Amount;
                 if (vitae < 0) return $"Only {c.VitaeCurrent ?? 0} Vitae left.";
-                c.VitaeCurrent = Math.Min(vitae, MaxVitae(c));
+                c.VitaeCurrent = Math.Min(vitae, capacity);
                 return null;
             }
 
             case PlayActionKind.AdjustBoost:
             {
-                if (c.Kind != CharacterKind.Vampire) return "Only vampires use Fortify Form here.";
+                if (!GhoulRules.HoldsVitae(c.Kind)) return "Only vampires and ghouls can spend Vitae on Fortify Form.";
                 if (action.Boost is not { } discipline) return "Choose Potence, Celerity or Fortitude.";
                 var current = Boost(c, discipline);
                 var target = Math.Max(0, current + action.Amount);
                 var cap = Cap(c, discipline);
-                if (target > cap) return $"{discipline} from Fortify Form can't exceed {Traits.FortifyCap(discipline)} ({cap}).";
+                if (target > cap)
+                    return c.Kind == CharacterKind.Ghoul && target > GhoulRules.MaxFortifyBoost
+                        ? $"A ghoul gains at most {GhoulRules.MaxFortifyBoost} {discipline} from Vitae."
+                        : $"{discipline} from Fortify Form can't exceed {Traits.FortifyCap(discipline)} ({cap}).";
                 var cost = Math.Max(0, target - current); // 1 Vitae per point; letting it lapse refunds nothing
                 if (cost > (c.VitaeCurrent ?? 0)) return $"Only {c.VitaeCurrent ?? 0} Vitae left.";
                 c.VitaeCurrent = (c.VitaeCurrent ?? 0) - cost;
@@ -149,8 +171,6 @@ public static class PlayEndpoints
         }
     }
 
-    private static int MaxVitae(Character c) => BloodRules.MaxVitae(c.BloodPotency ?? BloodRules.MinBloodPotency, c.IsThinblood);
-
     private static int Boost(Character c, FortifyDiscipline d) => d switch
     {
         FortifyDiscipline.Potence => c.PotenceBoost,
@@ -168,9 +188,9 @@ public static class PlayEndpoints
         }
     }
 
-    private static int Cap(Character c, FortifyDiscipline d) => c.Tier == CharacterTier.FullSheet
+    private static int Cap(Character c, FortifyDiscipline d) => GhoulRules.FortifyCap(c.Kind, c.Tier == CharacterTier.FullSheet
         ? c.Attributes.FirstOrDefault(a => a.Attribute == Traits.FortifyCap(d))?.Dots ?? Traits.MinAttribute
-        : c.Physical ?? SupportingCastRules.MinRating;
+        : c.Physical ?? SupportingCastRules.MinRating);
 
     // ---------- Scenes ----------
 

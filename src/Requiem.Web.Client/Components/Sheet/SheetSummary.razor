@@ -16,6 +16,10 @@
             <tr><td>Defense</td><td class="text-right"><b>@Form.Defense</b></td></tr>
             <tr><td>Willpower</td><td class="text-right" style="white-space:nowrap"><b>@Form.WillpowerCurrent / @Form.WillpowerDots</b></td></tr>
             <tr><td>Max Willpower per roll</td><td class="text-right"><b>@DerivedStats.MaxWillpowerSpendPerRoll(Form.Attribute(CharacterAttribute.Resolve))</b></td></tr>
+            @if (Form.IsGhoul)
+            {
+                <tr><td>Vitae</td><td class="text-right" style="white-space:nowrap"><b>@(Form.VitaeCurrent ?? 0) / @GhoulRules.MaxVitae</b></td></tr>
+            }
             @if (Form.IsVampire)
             {
                 <tr><td>Humanity</td><td class="text-right"><b>@(Form.Humanity ?? 0)</b></td></tr>

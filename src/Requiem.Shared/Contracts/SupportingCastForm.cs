@@ -53,16 +53,25 @@ public sealed class SupportingCastForm : IValidatableObject
 
     public bool IsVampire => Kind == CharacterKind.Vampire;
 
-    /// <summary>Fills unset vampire values with the book's starting values (BP 1, Generation 12, full Vitae).</summary>
+    public bool IsGhoul => Kind == CharacterKind.Ghoul;
+
+    /// <summary>Size of the Vitae track: by Blood Potency for vampires, 8 for ghouls, null for mortals.</summary>
+    public int? VitaeCapacity => GhoulRules.VitaeCapacity(Kind, BloodPotency);
+
+    /// <summary>
+    /// Fills unset values with the book's starting values: BP 1, Generation 12 and full Vitae for vampires;
+    /// a full 8 Vitae for ghouls.
+    /// </summary>
     public void ApplyVampireDefaults()
     {
+        if (IsGhoul) VitaeCurrent ??= GhoulRules.MaxVitae;
         if (!IsVampire) return;
         BloodPotency ??= BloodRules.MinBloodPotency;
         Generation ??= GenerationRules.StartingGeneration;
         VitaeCurrent ??= BloodRules.MaxVitae(BloodPotency.Value);
     }
 
-    /// <summary>Drops vampire-only values when the NPC isn't a vampire.</summary>
+    /// <summary>Drops vampire-only values when the NPC isn't a vampire. Ghouls keep their Vitae.</summary>
     public void ClearNonVampireFields()
     {
         if (IsVampire) return;
@@ -70,7 +79,7 @@ public sealed class SupportingCastForm : IValidatableObject
         PredatorTypeId = null;
         BloodPotency = null;
         Generation = null;
-        VitaeCurrent = null;
+        if (!IsGhoul) VitaeCurrent = null;
     }
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -81,6 +90,8 @@ public sealed class SupportingCastForm : IValidatableObject
         if (IsVampire && BloodPotency is { } bp && VitaeCurrent is { } vitae && vitae > BloodRules.MaxVitae(bp))
             yield return new ValidationResult(
                 $"Vitae can't exceed {BloodRules.MaxVitae(bp)} at Blood Potency {bp}.", [nameof(VitaeCurrent)]);
+        if (IsGhoul && VitaeCurrent > GhoulRules.MaxVitae)
+            yield return new ValidationResult($"A ghoul holds at most {GhoulRules.MaxVitae} Vitae.", [nameof(VitaeCurrent)]);
     }
 
     private static IEnumerable<ValidationResult> ValidateList(List<string> items, string member, string label)

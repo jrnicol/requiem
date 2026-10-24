@@ -46,6 +46,16 @@ else
                         <span style="flex:1">@wound.Description</span>
                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
                                  Color="@(wound.Type == DamageType.Aggravated ? Color.Error : Color.Default)">@wound.Amount @wound.Type</MudChip>
+                        @if (_npc.HoldsVitae)
+                        {
+                            var cost = HealingRules.Cost(wound.Type, wound.Amount);
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="play-tap"
+                                       StartIcon="@Icons.Material.Outlined.Bloodtype"
+                                       Disabled="@(_busy || _npc.VitaeCurrent < cost.Vitae || (cost.Willpower > 0 && (!_npc.CanSpendWillpower || _npc.WillpowerCurrent < cost.Willpower)))"
+                                       OnClick="() => ActAsync(new PlayAction { Kind = PlayActionKind.HealWithVitae, TargetId = wound.Id })">
+                                @cost.Vitae Vitae@(cost.Willpower > 0 ? $" + {cost.Willpower} WP" : "")
+                            </MudButton>
+                        }
                         <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="play-tap" Disabled="_busy"
                                    OnClick="() => ActAsync(new PlayAction { Kind = PlayActionKind.HealWound, TargetId = wound.Id, Amount = 1 })">Heal 1</MudButton>
                         <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Disabled="_busy" aria-label="@($"Remove {wound.Description}")"
@@ -57,12 +67,14 @@ else
                 </div>
             </MudPaper>
 
-            @if (_npc.IsVampire)
+            @if (_npc.HoldsVitae)
             {
                 <MudPaper Class="pa-3 mb-3" Elevation="1">
                     <MudText Typo="Typo.subtitle1">Fortify Form</MudText>
                     <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">
-                        1 Vitae per point, up to the matching attribute; lasts the scene.
+                        @(_npc.IsGhoul
+                            ? "1 Vitae for a temporary dot; a ghoul gains at most 1 in each. Lasts as long as a vampire's."
+                            : "1 Vitae per point, up to the matching attribute; lasts the scene.")
                     </MudText>
                     @foreach (var discipline in Enum.GetValues<FortifyDiscipline>())
                     {
@@ -166,7 +178,7 @@ else
                     <MudText Typo="Typo.subtitle1" Class="mb-2">Powers</MudText>
                     <PowerList Powers="Powers">
                         <Actions Context="power">
-                            @if (_npc.IsVampire && power.VitaeCost is > 0 and var cost)
+                            @if (_npc.HoldsVitae && power.VitaeCost is > 0 and var cost)
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2"
                                            Disabled="_busy || _npc.VitaeCurrent < cost"
