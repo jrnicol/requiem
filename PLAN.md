@@ -258,6 +258,7 @@ Built Azure-ready from day one: managed-identity SQL auth, health checks, Applic
 
 **Phase 2 — Campaigns & players**
 Campaign (Chronicle) with GM/Player membership and invites · players own PCs · GM-only notes and per-NPC visibility · XP awards and GM-approved spends · Corruption/Scripts/Milestone flows for PCs · SignalR live sync · audit log.
+Detailed plan, with open decisions: [PHASE2.md](PHASE2.md).
 
 ---
 
