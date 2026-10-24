@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Requiem.Data.Sqlite/Requiem.Data.Sqlite.csproj" />
+    <Project Path="src/Requiem.Data.SqlServer/Requiem.Data.SqlServer.csproj" />
+    <Project Path="src/Requiem.Data/Requiem.Data.csproj" />
+    <Project Path="src/Requiem.Shared/Requiem.Shared.csproj" />
+    <Project Path="src/Requiem.Web.Client/Requiem.Web.Client.csproj" />
+    <Project Path="src/Requiem.Web/Requiem.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Requiem.Data.Tests/Requiem.Data.Tests.csproj" />
+    <Project Path="tests/Requiem.Shared.Tests/Requiem.Shared.Tests.csproj" />
+    <Project Path="tests/Requiem.Web.Tests/Requiem.Web.Tests.csproj" />
+  </Folder>
+</Solution>

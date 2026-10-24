@@ -1,0 +1,52 @@
+@* Powers as collapsed rows that open to the full text. Used on the sheet for granted and learned powers. *@
+
+<MudExpansionPanels MultiExpansion="true" Dense="true" Outlined="true" Elevation="0" Class="@Class">
+    @foreach (var power in Powers)
+    {
+        <MudExpansionPanel Dense="true">
+            <TitleContent>
+                <div class="d-flex align-center gap-2">
+                    @if (power.Level is { } level)
+                    {
+                        <span class="power-row-level" aria-label="@($"{level} dots")">@(new string('●', level))</span>
+                    }
+                    <MudText Typo="Typo.body2">@power.Name</MudText>
+                    @if (power.Category is { } category)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@category</MudText>
+                    }
+                    @if (Summary(power) is { } summary)
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-none d-sm-inline ml-auto mr-2">@summary</MudText>
+                    }
+                </div>
+            </TitleContent>
+            <ChildContent>
+                <PowerDetails Power="power" />
+                @Actions?.Invoke(power)
+                @if (OnRemove.HasDelegate)
+                {
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Outlined.Delete"
+                               Class="mt-2" OnClick="() => OnRemove.InvokeAsync(power)">@RemoveText</MudButton>
+                }
+            </ChildContent>
+        </MudExpansionPanel>
+    }
+</MudExpansionPanels>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<PowerOption> Powers { get; set; } = [];
+    /// <summary>Shows a remove button in each power's details when set.</summary>
+    [Parameter] public EventCallback<PowerOption> OnRemove { get; set; }
+    [Parameter] public string RemoveText { get; set; } = "Remove";
+    /// <summary>Extra buttons under each power's text, e.g. spending its Vitae at the table.</summary>
+    [Parameter] public RenderFragment<PowerOption>? Actions { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    // Cost and pool at a glance, so the GM rarely needs to open a row mid-scene.
+    private static string? Summary(PowerOption p)
+    {
+        var parts = new[] { p.CostText, p.DicePoolText }.Where(s => !string.IsNullOrWhiteSpace(s) && s.Length <= 40).ToList();
+        return parts.Count == 0 ? null : string.Join(" · ", parts);
+    }
+}

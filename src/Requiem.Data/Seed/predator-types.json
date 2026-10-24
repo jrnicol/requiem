@@ -1,0 +1,13 @@
+// Predator types (VtR p.128). Most hunts call for Wits + Streetwise, though another approach may fit.
+[
+  { "name": "Alleycat", "description": "A combative assault-feeder: you stalk, overpower and drink from whoever you can, when you can, perhaps threatening victims into silence or dressing it up as a robbery.", "sourcePage": 128 },
+  { "name": "Bagger", "description": "You steal, buy or otherwise procure cold blood instead of hunting: the black market, burglary, ambulance chasing, or a night shift at the hospital.", "restrictions": "Not available to Ventrue.", "sourcePage": 128 },
+  { "name": "Blood Leech", "description": "You drink from other vampires, by hunting, coercion or taking blood as payment. Risky as hell, or it requires an enviable position of power.", "sourcePage": 128 },
+  { "name": "Cleaver", "description": "You feed covertly from your (or someone's) mortal family and friends, perhaps keeping up a whole family life. The Camarilla sees cleavers as Masquerade breaches waiting to happen.", "sourcePage": 128 },
+  { "name": "Consensualist", "description": "You never feed against a victim's will: a charity blood drive, the 'real vampire' kink scene, or telling them what you are and asking (which the Camarilla calls a breach).", "sourcePage": 128 },
+  { "name": "Farmer", "description": "You feed only from animals. Your Hunger gnaws constantly, but you intend never to kill a human.", "restrictions": "Not available to Ventrue.", "sourcePage": 128 },
+  { "name": "Osiris", "description": "A celebrity or cult leader who feeds from fans or worshippers. Easy blood, but followers draw attention from authorities and organized religion.", "sourcePage": 128 },
+  { "name": "Sandman", "description": "You use stealth to feed from sleeping victims. If they never wake, they never know you exist.", "sourcePage": 128 },
+  { "name": "Scene Queen", "description": "You feed within an exclusive subculture that believes you're one of them, adored for your status in the scene, from the street to the upper class.", "sourcePage": 128 },
+  { "name": "Siren", "description": "You feed almost exclusively during, or while feigning, sex, relying on seduction or the appetites of others to hide what you are.", "sourcePage": 128 }
+]

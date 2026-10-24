@@ -1,0 +1,210 @@
+@* Who they are and where they're going: Virtue/Vice, Sire, Scripts, Milestones, Corruption and XP. *@
+
+<MudGrid Spacing="2">
+    <MudItem xs="12" sm="6">
+        <MudSelect T="string" Value="Form.Virtue" ValueChanged="v => Update(() => Form.Virtue = v)" Label="Virtue"
+                   Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense">
+            @foreach (var virtue in VirtuesAndVices.Virtues)
+            {
+                <MudSelectItem T="string" Value="virtue">@virtue</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField T="string" Value="Form.VirtueDetail" ValueChanged="v => Update(() => Form.VirtueDetail = v)"
+                      Placeholder="What it means to them, e.g. 'Faith: Mankind'" Variant="Variant.Text" Margin="Margin.Dense"
+                      MaxLength="FullSheetForm.MaxTextLength" />
+    </MudItem>
+    <MudItem xs="12" sm="6">
+        <MudSelect T="string" Value="Form.Vice" ValueChanged="v => Update(() => Form.Vice = v)" Label="Vice"
+                   Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense">
+            @foreach (var vice in VirtuesAndVices.Vices)
+            {
+                <MudSelectItem T="string" Value="vice">@vice</MudSelectItem>
+            }
+        </MudSelect>
+        <MudTextField T="string" Value="Form.ViceDetail" ValueChanged="v => Update(() => Form.ViceDetail = v)"
+                      Placeholder="e.g. 'Wrath: Father's abandonment'" Variant="Variant.Text" Margin="Margin.Dense"
+                      MaxLength="FullSheetForm.MaxTextLength" />
+    </MudItem>
+
+    @if (Form.IsVampire)
+    {
+        <MudItem xs="12" sm="6">
+            <MudSelect T="Guid?" Value="Form.SireId" ValueChanged="v => Update(() => Form.SireId = v)" Label="Sire"
+                       Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense"
+                       ToStringFunc="SireName" HelperText="Any vampire on the roster">
+                @foreach (var candidate in SireCandidates)
+                {
+                    <MudSelectItem T="Guid?" Value="candidate.Id">@candidate.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" Value="Form.BeastDescription" ValueChanged="v => Update(() => Form.BeastDescription = v)"
+                          Label="Their Beast" Placeholder="One word or phrase for what drives them as a vampire"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" />
+        </MudItem>
+    }
+</MudGrid>
+
+<MudDivider Class="my-3" />
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+    <MudText Typo="Typo.subtitle2">Scripts</MudText>
+    @if (Form.Scripts.Count > 0 && Form.Scripts.All(s => s.IsMarked))
+    {
+        <MudButton Variant="Variant.Filled" Color="Color.Tertiary" Size="Size.Small" OnClick="ClaimScriptsXpAsync">
+            All marked: log +@ScriptsXp XP and reset
+        </MudButton>
+    }
+</MudStack>
+<MudText Typo="Typo.caption" Color="Color.Secondary">Mark each when it's played out in a session.</MudText>
+@foreach (var script in Form.Scripts.OrderBy(s => s.Slot))
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mt-1">
+        <MudCheckBox T="bool" Value="script.IsMarked" ValueChanged="v => Update(() => script.IsMarked = v)" Color="Color.Primary"
+                     aria-label="@($"Mark {ScriptLabel(script.Kind)} script")" />
+        <MudTextField T="string" Value="script.Text" ValueChanged="v => Update(() => script.Text = v ?? string.Empty)"
+                      Label="@ScriptLabel(script.Kind)" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      MaxLength="500" Style="flex:1" />
+    </MudStack>
+}
+
+<MudDivider Class="my-3" />
+<MudText Typo="Typo.subtitle2">Milestones</MudText>
+<MudText Typo="Typo.caption" Color="Color.Secondary">Opportunity → Risk → Choice, then the Benefit.</MudText>
+@foreach (var milestone in Form.Milestones.ToList())
+{
+    <MudPaper Outlined="true" Class="pa-2 mt-2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
+            <MudTextField T="string" Value="milestone.Title" ValueChanged="v => Update(() => milestone.Title = v ?? string.Empty)"
+                          Label="Title" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="FullSheetForm.MaxTextLength"
+                          Style="flex:1; min-width:10rem" />
+            <MudSelect T="MilestoneStage" Value="milestone.Stage" ValueChanged="v => Update(() => milestone.Stage = v)"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:10rem" aria-label="Stage">
+                @foreach (var stage in Enum.GetValues<MilestoneStage>())
+                {
+                    <MudSelectItem T="MilestoneStage" Value="stage">@StageLabel(stage)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="Remove Milestone"
+                           OnClick="() => Update(() => Form.Milestones.Remove(milestone))" />
+        </MudStack>
+        <MudGrid Spacing="1">
+            <MudItem xs="12" sm="6">
+                <MudTextField T="string" Value="milestone.Opportunity" ValueChanged="v => Update(() => milestone.Opportunity = v)"
+                              Label="Opportunity" Variant="Variant.Text" Margin="Margin.Dense" Lines="2" Sizing="InputSizing.Auto" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField T="string" Value="milestone.Risk" ValueChanged="v => Update(() => milestone.Risk = v)"
+                              Label="Risk" Variant="Variant.Text" Margin="Margin.Dense" Lines="2" Sizing="InputSizing.Auto" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField T="string" Value="milestone.Choice" ValueChanged="v => Update(() => milestone.Choice = v)"
+                              Label="Choice" Variant="Variant.Text" Margin="Margin.Dense" Lines="2" Sizing="InputSizing.Auto" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField T="string" Value="milestone.Benefit" ValueChanged="v => Update(() => milestone.Benefit = v)"
+                              Label="Benefit" Variant="Variant.Text" Margin="Margin.Dense" />
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+}
+<MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="mt-2"
+           OnClick="() => Update(() => Form.Milestones.Add(new MilestoneEntry()))">Add Milestone</MudButton>
+<ValidationMessage For="() => Form.Milestones" class="mud-error-text mud-typography-caption" />
+
+<MudDivider Class="my-3" />
+<MudGrid Spacing="3">
+    @if (Form.IsVampire)
+    {
+        <MudItem xs="12" md="6">
+            <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                <MudText Typo="Typo.subtitle2">Corruption @Form.CorruptionMarks.Count / @FullSheetForm.MaxCorruption</MudText>
+                @if (ExperienceRules.IsXpUnlocked(Form.CorruptionMarks.Count))
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Tertiary">XP unlocked</MudChip>
+                }
+            </MudStack>
+            <MudProgressLinear Color="Color.Primary" Value="Form.CorruptionMarks.Count * 25" Class="mb-1" />
+            @if (Form.CorruptionMarks.Count < FullSheetForm.MaxCorruption)
+            {
+                <ListEditor Label="Vampiric acts" HelperText="Four different acts unlock spending XP (VtR p.137)"
+                            Placeholder="e.g. Took sunlight damage" Items="Form.CorruptionMarks"
+                            ItemsChanged="items => Update(() => Form.CorruptionMarks = items)" />
+            }
+            else
+            {
+                <MudChipSet T="string" AllClosable="true" OnClose="chip => Update(() => Form.CorruptionMarks.Remove(chip.Value!))">
+                    @foreach (var act in Form.CorruptionMarks)
+                    {
+                        <MudChip Value="act" Text="@act" Size="Size.Small" Variant="Variant.Outlined" />
+                    }
+                </MudChipSet>
+            }
+        </MudItem>
+    }
+
+    <MudItem xs="12" md="@(Form.IsVampire ? 6 : 12)">
+        <MudText Typo="Typo.subtitle2">Experience</MudText>
+        <MudText Typo="Typo.body2">
+            <b>@Form.ExperienceAvailable</b> available · @Form.ExperienceEarned earned · @Form.ExperienceSpent spent
+        </MudText>
+        @foreach (var entry in Form.Experience.ToList())
+        {
+            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mt-1">
+                <MudNumericField T="int" Value="entry.Amount" ValueChanged="v => Update(() => entry.Amount = v)"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:6rem" aria-label="XP (negative when spent)" />
+                <MudTextField T="string" Value="entry.Reason" ValueChanged="v => Update(() => entry.Reason = v ?? string.Empty)"
+                              Placeholder="Why" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" Style="flex:1" />
+                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="Remove XP entry"
+                               OnClick="() => Update(() => Form.Experience.Remove(entry))" />
+            </MudStack>
+        }
+        <MudStack Row="true" Spacing="1" Class="mt-1">
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Add"
+                       OnClick="() => Update(() => Form.Experience.Add(new XpLedgerEntry { Amount = 1 }))">Earned</MudButton>
+            <MudButton Variant="Variant.Outlined" Color="Color.Secondary" Size="Size.Small" StartIcon="@Icons.Material.Filled.Remove"
+                       OnClick="() => Update(() => Form.Experience.Add(new XpLedgerEntry { Amount = -1 }))">Spent</MudButton>
+        </MudStack>
+        <ValidationMessage For="() => Form.Experience" class="mud-error-text mud-typography-caption" />
+    </MudItem>
+</MudGrid>
+
+<MudDivider Class="my-3" />
+<ListEditor Label="Equipment" Placeholder="Add an item" Items="Form.Equipment" ItemsChanged="items => Update(() => Form.Equipment = items)" />
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public IReadOnlyList<CharacterSummary> Roster { get; set; } = [];
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private int ScriptsXp => ExperienceRules.ScriptsCompletionXp(Form.IsVampire);
+
+    private IEnumerable<CharacterSummary> SireCandidates =>
+        Roster.Where(c => c.Kind == CharacterKind.Vampire && c.Id != Form.Id).OrderBy(c => c.Name);
+
+    private string SireName(Guid? id) => Roster.FirstOrDefault(c => c.Id == id)?.Name ?? "";
+
+    private static string ScriptLabel(ScriptKind kind) => kind switch
+    {
+        ScriptKind.Humanity => "Humanity (mortal goals)",
+        ScriptKind.Beast => "The Beast's designs",
+        ScriptKind.Coterie => "Ties to the coterie",
+        ScriptKind.ChronicleTenet => "Chronicle Tenet",
+        ScriptKind.PlayerCharacter => "Player character tie",
+        _ => "Personal",
+    };
+
+    private static string StageLabel(MilestoneStage stage) => stage == MilestoneStage.NotStarted ? "Not started" : stage.ToString();
+
+    private async Task Update(Action change)
+    {
+        change();
+        await Changed.InvokeAsync();
+    }
+
+    private Task ClaimScriptsXpAsync() => Update(() =>
+    {
+        Form.Experience.Add(new XpLedgerEntry { Amount = ScriptsXp, Reason = "All four Scripts played out" });
+        foreach (var script in Form.Scripts) script.IsMarked = false;
+    });
+}

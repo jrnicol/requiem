@@ -1,0 +1,157 @@
+@page "/scenes/{Id:guid}"
+@attribute [Authorize(Policy = Policies.GameMaster)]
+@inject RequiemApi Api
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>@(_scene?.Name ?? "Scene") · Requiem</PageTitle>
+
+@if (_notFound)
+{
+    <MudAlert Severity="Severity.Warning">This scene no longer exists. <MudLink Href="scenes">Back to scenes</MudLink></MudAlert>
+}
+else if (_scene is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-3">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="scenes" aria-label="All scenes" />
+        @if (_renaming)
+        {
+            <MudTextField T="string" @bind-Value="_name" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200"
+                          Immediate="true" OnKeyDown="OnRenameKeyAsync" Style="min-width:14rem" aria-label="Scene name" />
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="RenameAsync" Disabled="string.IsNullOrWhiteSpace(_name)">Save</MudButton>
+        }
+        else
+        {
+            <MudText Typo="Typo.h4" Class="brand-font">@_scene.Name</MudText>
+            <MudIconButton Icon="@Icons.Material.Outlined.Edit" Size="Size.Small" aria-label="Rename scene" OnClick="StartRename" />
+        }
+        <MudSpacer />
+        <MudMenu Icon="@Icons.Material.Filled.MoreVert" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" aria-label="Scene actions">
+            <MudMenuItem Icon="@Icons.Material.Outlined.Bedtime" OnClick="EndSceneAsync">End scene (Fortify Form lapses)</MudMenuItem>
+            <MudMenuItem Icon="@Icons.Material.Outlined.Delete" OnClick="DeleteAsync">Delete scene</MudMenuItem>
+        </MudMenu>
+    </MudStack>
+
+    <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mb-4">
+        <MudAutocomplete T="CharacterSummary" @bind-Value="_pick" Label="Add an NPC" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         SearchFunc="SearchAsync" ToStringFunc="@(c => c?.Name ?? string.Empty)" Clearable="true"
+                         ResetValueOnEmptyText="true" Style="min-width:16rem">
+            <ItemTemplate Context="npc">
+                <MudText Typo="Typo.body2">@npc.Name</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@npc.Kind · @(npc.Tier == CharacterTier.FullSheet ? "Full sheet" : "Supporting Cast")</MudText>
+            </ItemTemplate>
+        </MudAutocomplete>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd" Class="mt-1"
+                   Disabled="_pick is null" OnClick="AddAsync">Add</MudButton>
+    </MudStack>
+
+    @if (_scene.Members.Count == 0)
+    {
+        <MudText Color="Color.Secondary">No NPCs in this scene yet.</MudText>
+    }
+    <MudGrid Spacing="2">
+        @foreach (var npc in _scene.Members)
+        {
+            <MudItem xs="12" sm="6" lg="4" @key="npc.Id">
+                <NpcPlayCard Npc="npc" NpcChanged="Replace" SceneId="Id" OnRemove="RemoveAsync" />
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private SceneView? _scene;
+    private bool _notFound;
+    private List<CharacterSummary> _roster = [];
+    private CharacterSummary? _pick;
+    private bool _renaming;
+    private string? _name;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _scene = await Api.GetSceneAsync(Id);
+        _notFound = _scene is null;
+        _roster = await Api.ListCharactersAsync(new CharacterQuery());
+    }
+
+    private void Replace(PlayCharacter updated)
+    {
+        if (_scene is null) return;
+        _scene = _scene with { Members = _scene.Members.Select(m => m.Id == updated.Id ? updated : m).ToList() };
+    }
+
+    private Task<IEnumerable<CharacterSummary>> SearchAsync(string? text, CancellationToken cancellationToken)
+    {
+        var inScene = _scene?.Members.Select(m => m.Id).ToHashSet() ?? [];
+        var search = text?.Trim();
+        return Task.FromResult<IEnumerable<CharacterSummary>>(_roster
+            .Where(c => !inScene.Contains(c.Id))
+            .Where(c => string.IsNullOrEmpty(search) || c.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(c => c.Name)
+            .ToList());
+    }
+
+    private Task AddAsync()
+    {
+        if (_pick is null || _scene is null) return Task.CompletedTask;
+        var ids = _scene.Members.Select(m => m.Id).Append(_pick.Id).ToList();
+        _pick = null;
+        return SaveAsync(_scene.Name, ids);
+    }
+
+    private Task RemoveAsync(PlayCharacter npc) =>
+        _scene is null ? Task.CompletedTask : SaveAsync(_scene.Name, _scene.Members.Where(m => m.Id != npc.Id).Select(m => m.Id).ToList());
+
+    private void StartRename()
+    {
+        _name = _scene?.Name;
+        _renaming = true;
+    }
+
+    private async Task OnRenameKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await RenameAsync();
+    }
+
+    private async Task RenameAsync()
+    {
+        if (_scene is null || string.IsNullOrWhiteSpace(_name)) return;
+        await SaveAsync(_name.Trim(), _scene.Members.Select(m => m.Id).ToList());
+        _renaming = false;
+    }
+
+    private async Task SaveAsync(string name, List<Guid> ids)
+    {
+        var result = await Api.SaveSceneAsync(Id, new SceneForm { Name = name, CharacterIds = ids });
+        if (result.Saved is { } saved) _scene = saved;
+        else Snackbar.Add(result.Message ?? "The scene wasn't saved.", Severity.Error);
+    }
+
+    private async Task EndSceneAsync()
+    {
+        if (_scene is null) return;
+        foreach (var npc in _scene.Members.Where(m => m.Boosts.Values.Any(v => v > 0)).ToList())
+        {
+            var result = await Api.PlayAsync(npc.Id, new PlayAction { Kind = PlayActionKind.ClearBoosts });
+            if (result.Saved is { } saved) Replace(saved);
+        }
+        Snackbar.Add("Scene ended: Fortify Form boosts have lapsed.", Severity.Info);
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_scene is null) return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync("Delete scene?",
+            $"{_scene.Name} will be removed. The NPCs themselves stay on the roster.", yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true) return;
+        await Api.DeleteSceneAsync(Id);
+        Navigation.NavigateTo("scenes");
+    }
+}

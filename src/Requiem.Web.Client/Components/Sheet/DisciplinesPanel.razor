@@ -1,0 +1,170 @@
+@* Disciplines rated in dots, each with the powers its dots grant. Rules-engine limits show as warnings, not hard stops. *@
+
+@if (!Form.IsVampire)
+{
+    <MudText Color="Color.Secondary">Only vampires have Disciplines.</MudText>
+}
+else
+{
+    @if (Form.Disciplines.Count == 0)
+    {
+        <MudText Color="Color.Secondary" Class="mb-2">No Disciplines yet.</MudText>
+    }
+
+    @foreach (var entry in Form.Disciplines.ToList())
+    {
+        var option = Options.FirstOrDefault(o => o.Id == entry.PowerGroupId);
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap" Class="mb-1">
+            <div style="flex:1; min-width:9rem">
+                <MudText Typo="Typo.body1">@(option?.Name ?? "Unknown Discipline")</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">
+                    @KindLabel(option)@(option?.SourcePage is { } page ? $" · VtR p.{page}" : "")
+                </MudText>
+            </div>
+            <DotRating Value="entry.Dots" ValueChanged="v => SetAsync(entry, v)" />
+            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="@($"Remove {option?.Name}")"
+                           OnClick="() => RemoveAsync(entry)" />
+        </MudStack>
+
+        var powers = Powers.Where(p => p.PowerGroupId == entry.PowerGroupId).OrderBy(p => p.Level).ThenBy(p => p.Name).ToList();
+        var pickPerDot = IsPickPerDot(option, powers);
+        var granted = pickPerDot
+            ? powers.Where(p => Form.LearnedPowerIds.Contains(p.Id)).ToList()
+            : powers.Where(p => p.Level <= entry.Dots).ToList();
+        var next = pickPerDot ? null : powers.FirstOrDefault(p => p.Level > entry.Dots);
+        @if (pickPerDot)
+        {
+            <MudText Typo="Typo.caption" Color="@(granted.Count > entry.Dots ? Color.Error : Color.Secondary)" Class="d-block mb-1">
+                Each dot buys one of these, in any order: @granted.Count of @entry.Dots chosen.
+            </MudText>
+        }
+        @if (granted.Count > 0)
+        {
+            @if (pickPerDot)
+            {
+                <PowerList Powers="granted" Class="mb-1" OnRemove="UnpickAsync" RemoveText="Unchoose" />
+            }
+            else
+            {
+                <PowerList Powers="granted" Class="mb-1" />
+            }
+        }
+        @if (pickPerDot && granted.Count < entry.Dots)
+        {
+            <MudSelect T="PowerOption" Value="null" ValueChanged="PickAsync" Label="@($"Choose a power for dot {granted.Count + 1}")"
+                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="mb-1" Style="max-width:20rem"
+                       ToStringFunc="@(p => p?.Name ?? string.Empty)">
+                @foreach (var power in powers.Except(granted))
+                {
+                    <MudSelectItem T="PowerOption" Value="power">@power.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+        @if (next is not null)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-3">
+                Next at @(new string('●', next.Level!.Value)): @next.Name
+            </MudText>
+        }
+        else
+        {
+            <div class="mb-3"></div>
+        }
+    }
+
+    @foreach (var warning in Warnings)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1">@warning</MudAlert>
+    }
+
+    <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mt-3">
+        <MudSelect T="int?" @bind-Value="_pick" Label="Add a Discipline" Variant="Variant.Outlined" Margin="Margin.Dense"
+                   Style="min-width:14rem" ToStringFunc="NameOf">
+            @foreach (var option in Available)
+            {
+                <MudSelectItem T="int?" Value="option.Id">
+                    @option.Name
+                    <MudText Inline="true" Typo="Typo.caption" Color="Color.Secondary">· @KindLabel(option)</MudText>
+                </MudSelectItem>
+            }
+        </MudSelect>
+        <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+                   OnClick="AddAsync" Disabled="_pick is null" Class="mt-1">Add</MudButton>
+    </MudStack>
+    <ValidationMessage For="() => Form.Disciplines" class="mud-error-text mud-typography-caption" />
+    <ValidationMessage For="() => Form.LearnedPowerIds" class="mud-error-text mud-typography-caption" />
+}
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<DisciplineOption> Options { get; set; } = [];
+    /// <summary>The powers catalog; dot N of a Discipline grants its powers of level 1..N.</summary>
+    [Parameter] public IReadOnlyList<PowerOption> Powers { get; set; } = [];
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private int? _pick;
+
+    private int BloodPotency => Form.BloodPotency ?? BloodRules.MinBloodPotency;
+
+    // Own Bloodline's Discipline first, then Caitiff Disciplines, then other Bloodlines' (via Diablerie).
+    private IEnumerable<DisciplineOption> Available => Options
+        .Where(o => o.HasDots && Form.Disciplines.All(d => d.PowerGroupId != o.Id))
+        .OrderBy(o => o.BloodlineId == Form.BloodlineId && o.BloodlineId is not null ? 0 : o.Kind == PowerGroupKind.CaitiffDiscipline ? 1 : 2)
+        .ThenBy(o => o.Name);
+
+    private IEnumerable<string> Warnings => PowerRules
+        .Validate(BloodPotency, Form.Disciplines.Select(d => new DisciplineRating(NameOf(d.PowerGroupId), d.Dots)))
+        .Select(v => v.Message);
+
+    private string KindLabel(DisciplineOption? option) => option switch
+    {
+        null => "",
+        { Kind: PowerGroupKind.CaitiffDiscipline } => "Caitiff Discipline",
+        { BloodlineId: { } id } when id == Form.BloodlineId => $"{option.BloodlineName} Discipline (own Bloodline)",
+        _ => $"{option.BloodlineName} Discipline",
+    };
+
+    private string NameOf(int? id) => Options.FirstOrDefault(o => o.Id == id)?.Name ?? "";
+
+    private async Task AddAsync()
+    {
+        if (_pick is not { } id) return;
+        Form.Disciplines.Add(new DisciplineEntry { PowerGroupId = id, Dots = 1 });
+        _pick = null;
+        await Changed.InvokeAsync();
+    }
+
+    private static bool IsPickPerDot(DisciplineOption? option, IReadOnlyCollection<PowerOption> powers) =>
+        option is not null && PowerRules.IsPickPerDot(option.Kind, powers.Select(p => p.Level).ToList());
+
+    private List<int> PickedIn(int groupId) => Form.LearnedPowerIds
+        .Where(id => Powers.FirstOrDefault(p => p.Id == id)?.PowerGroupId == groupId).ToList();
+
+    private async Task SetAsync(DisciplineEntry entry, int dots)
+    {
+        entry.Dots = dots;
+        // Losing dots drops the picks listed last.
+        foreach (var id in PickedIn(entry.PowerGroupId).Skip(dots)) Form.LearnedPowerIds.Remove(id);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(DisciplineEntry entry)
+    {
+        Form.Disciplines.Remove(entry);
+        foreach (var id in PickedIn(entry.PowerGroupId)) Form.LearnedPowerIds.Remove(id);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task PickAsync(PowerOption? power)
+    {
+        if (power is null || Form.LearnedPowerIds.Contains(power.Id)) return;
+        Form.LearnedPowerIds.Add(power.Id);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task UnpickAsync(PowerOption power)
+    {
+        Form.LearnedPowerIds.Remove(power.Id);
+        await Changed.InvokeAsync();
+    }
+}

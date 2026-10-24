@@ -1,0 +1,328 @@
+@page "/play/{Id:guid}"
+@attribute [Authorize(Policy = Policies.GameMaster)]
+@inject RequiemApi Api
+@inject ISnackbar Snackbar
+
+<PageTitle>@(_npc?.Name ?? "Play") · Requiem</PageTitle>
+
+@if (_notFound)
+{
+    <MudAlert Severity="Severity.Warning">This NPC no longer exists. <MudLink Href="@BackUrl">Go back</MudLink></MudAlert>
+}
+else if (_npc is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap" Class="mb-3">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Href="@BackUrl" aria-label="@(Scene is null ? "Back to the roster" : "Back to the scene")" />
+        <div style="flex:1; min-width:10rem">
+            <MudText Typo="Typo.h4" Class="brand-font">@_npc.Name</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">@Subtitle</MudText>
+        </div>
+        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.Edit" Href="@EditUrl">Edit sheet</MudButton>
+    </MudStack>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Class="pa-3 mb-3" Elevation="1">
+                <PlayTrackers Npc="_npc" OnAct="ActAsync" Busy="_busy" />
+                @if (_npc.Defense is { } defense)
+                {
+                    <MudText Typo="Typo.body2" Class="mt-2">Defense @defense@(Morality is { } m ? $" · {m}" : "")</MudText>
+                }
+            </MudPaper>
+
+            <MudPaper Class="pa-3 mb-3" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Class="mb-1">Wounds</MudText>
+                @if (_npc.Wounds.Count == 0)
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Unhurt.</MudText>
+                }
+                @foreach (var wound in _npc.Wounds)
+                {
+                    <div class="play-row">
+                        <span style="flex:1">@wound.Description</span>
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                 Color="@(wound.Type == DamageType.Aggravated ? Color.Error : Color.Default)">@wound.Amount @wound.Type</MudChip>
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="play-tap" Disabled="_busy"
+                                   OnClick="() => ActAsync(new PlayAction { Kind = PlayActionKind.HealWound, TargetId = wound.Id, Amount = 1 })">Heal 1</MudButton>
+                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Disabled="_busy" aria-label="@($"Remove {wound.Description}")"
+                                       OnClick="() => ActAsync(new PlayAction { Kind = PlayActionKind.RemoveWound, TargetId = wound.Id })" />
+                    </div>
+                }
+                <div class="mt-2">
+                    <WoundEntryForm OnAdd="a => ActAsync(a)" Disabled="_busy" />
+                </div>
+            </MudPaper>
+
+            @if (_npc.IsVampire)
+            {
+                <MudPaper Class="pa-3 mb-3" Elevation="1">
+                    <MudText Typo="Typo.subtitle1">Fortify Form</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">
+                        1 Vitae per point, up to the matching attribute; lasts the scene.
+                    </MudText>
+                    @foreach (var discipline in Enum.GetValues<FortifyDiscipline>())
+                    {
+                        var d = discipline;
+                        var value = _npc.Boosts.GetValueOrDefault(d);
+                        var cap = _npc.BoostCaps.GetValueOrDefault(d);
+                        <div class="play-row">
+                            <span class="play-label">@d</span>
+                            <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small" Variant="Variant.Outlined" Class="play-tap"
+                                           aria-label="@($"Let 1 {d} lapse")" Disabled="_busy || value <= 0"
+                                           OnClick="() => ActAsync(new PlayAction { Kind = PlayActionKind.AdjustBoost, Boost = d, Amount = -1 })" />
+                            <span class="play-value">@value/@cap</span>
+                            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" Variant="Variant.Outlined" Class="play-tap"
+                                           aria-label="@($"Spend 1 Vitae on {d}")" Disabled="_busy || value >= cap || _npc.VitaeCurrent <= 0"
+                                           OnClick="() => ActAsync(new PlayAction { Kind = PlayActionKind.AdjustBoost, Boost = d, Amount = 1 })" />
+                        </div>
+                    }
+                </MudPaper>
+            }
+
+            <MudPaper Class="pa-3 mb-3" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Class="mb-1">Compels</MudText>
+                @foreach (var compel in _npc.Compels)
+                {
+                    <div class="play-row">
+                        <span style="flex:1">
+                            @compel.Name <b>@compel.Rating</b>
+                            @if (compel.EndsWhen is { } ends)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Inline="true"> · ends @ends</MudText>
+                            }
+                        </span>
+                        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Disabled="_busy" aria-label="@($"Clear {compel.Name}")"
+                                       OnClick="() => ActAsync(new PlayAction { Kind = PlayActionKind.RemoveCompel, TargetId = compel.Id })" />
+                    </div>
+                }
+                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="1" Wrap="Wrap.Wrap" Class="mt-1">
+                    <MudAutocomplete T="string" @bind-Value="_compelName" Placeholder="Compel" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                     SearchFunc="SearchCompelsAsync" CoerceValue="true" MaxLength="200" Style="flex:1; min-width:9rem" />
+                    <MudNumericField T="int" @bind-Value="_compelRating" Min="1" Max="10" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                     Style="width:5.5rem" aria-label="Rating" />
+                    <MudTextField T="string" @bind-Value="_compelEnds" Placeholder="Ends when" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  MaxLength="200" Style="flex:1; min-width:9rem" />
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-1" Disabled="_busy || string.IsNullOrWhiteSpace(_compelName)"
+                               OnClick="AddCompelAsync">Add</MudButton>
+                </MudStack>
+            </MudPaper>
+
+            <MudPaper Class="pa-3 mb-3" Elevation="1">
+                <MudText Typo="Typo.subtitle1" Class="mb-1">Conditions</MudText>
+                @foreach (var condition in _npc.Conditions)
+                {
+                    <MudChip T="string" Color="Color.Info" Variant="Variant.Outlined"
+                             OnClose="() => ActAsync(new PlayAction { Kind = PlayActionKind.RemoveCondition, TargetId = condition.Id })">@condition.Name</MudChip>
+                }
+                <MudTextField T="string" @bind-Value="_condition" Placeholder="Add a condition" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Add" OnAdornmentClick="AddConditionAsync"
+                              AdornmentAriaLabel="Add condition" OnKeyDown="OnConditionKeyAsync" Immediate="true" MaxLength="200" Class="mt-1" />
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="7">
+            <MudPaper Class="pa-3 mb-3" Elevation="1">
+                <MudText Typo="Typo.subtitle1">Dice pools</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">@PoolNote</MudText>
+
+                @foreach (var pool in _npc.Pools)
+                {
+                    <div class="play-pool">
+                        <div style="flex:1; min-width:0">
+                            <div>@pool.Label</div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@pool.Detail</MudText>
+                        </div>
+                        <PoolDice Npc="_npc" Dice="pool.Dice" />
+                    </div>
+                }
+
+                @if (_npc.IsFullSheet)
+                {
+                    <MudDivider Class="my-2" />
+                    <MudText Typo="Typo.subtitle2" Class="mb-1">Any roll</MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
+                        <MudSelect T="CharacterAttribute" @bind-Value="_attribute" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:10rem" aria-label="Attribute">
+                            @foreach (var attribute in Enum.GetValues<CharacterAttribute>())
+                            {
+                                <MudSelectItem T="CharacterAttribute" Value="attribute">@($"{attribute} {_npc.Attributes.GetValueOrDefault(attribute)}")</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <span>+</span>
+                        <MudSelect T="Skill?" @bind-Value="_skill" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:10rem" aria-label="Skill"
+                                   Clearable="true" Placeholder="No skill">
+                            @foreach (var skill in Enum.GetValues<Skill>())
+                            {
+                                <MudSelectItem T="Skill?" Value="skill">@($"{skill} {_npc.Skills.GetValueOrDefault(skill)}")</MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudSpacer />
+                        <PoolDice Npc="_npc" Dice="BuiltPool" />
+                    </MudStack>
+                }
+
+                @if (_npc.Specialties.Count > 0 || _npc.Assets.Count > 0)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">
+                        @if (_npc.Specialties.Count > 0)
+                        {
+                            <span>Specialties (+1 when they apply): @string.Join(", ", _npc.Specialties). </span>
+                        }
+                        @if (_npc.Assets.Count > 0)
+                        {
+                            <span>Assets (+2 when used): @string.Join(", ", _npc.Assets).</span>
+                        }
+                    </MudText>
+                }
+            </MudPaper>
+
+            @if (Powers.Count > 0)
+            {
+                <MudPaper Class="pa-3 mb-3" Elevation="1">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">Powers</MudText>
+                    <PowerList Powers="Powers">
+                        <Actions Context="power">
+                            @if (_npc.IsVampire && power.VitaeCost is > 0 and var cost)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2"
+                                           Disabled="_busy || _npc.VitaeCurrent < cost"
+                                           OnClick="() => SpendForPowerAsync(power, cost)">Use: spend @cost Vitae</MudButton>
+                            }
+                        </Actions>
+                    </PowerList>
+                </MudPaper>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(_npc.Notes) || !string.IsNullOrWhiteSpace(_npc.GmNotes))
+            {
+                <MudPaper Class="pa-3 mb-3" Elevation="1">
+                    @if (!string.IsNullOrWhiteSpace(_npc.Notes))
+                    {
+                        <MudText Typo="Typo.subtitle2">Notes</MudText>
+                        <MudText Typo="Typo.body2" Class="power-text mb-2">@_npc.Notes</MudText>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(_npc.GmNotes))
+                    {
+                        <MudText Typo="Typo.subtitle2">GM notes</MudText>
+                        <MudText Typo="Typo.body2" Class="power-text">@_npc.GmNotes</MudText>
+                    }
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "scene")] public Guid? Scene { get; set; }
+
+    private PlayCharacter? _npc;
+    private bool _notFound;
+    private bool _busy;
+    private IReadOnlyList<PowerOption> _catalog = [];
+    private IReadOnlyList<CompelOption> _compels = [];
+
+    private string? _compelName;
+    private int _compelRating = 1;
+    private string? _compelEnds;
+    private string? _condition;
+    private CharacterAttribute _attribute = CharacterAttribute.Dexterity;
+    private Skill? _skill = Skill.Brawl;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _npc = await Api.GetPlayAsync(Id);
+        _notFound = _npc is null;
+        _catalog = await Api.GetPowersAsync();
+        _compels = await Api.GetCompelsAsync();
+    }
+
+    private string BackUrl => Scene is { } scene ? $"scenes/{scene}" : "";
+    private string EditUrl => _npc?.IsFullSheet == true ? $"sheets/{Id}" : $"npcs/{Id}";
+
+    private string Subtitle => string.Join(" · ", new[]
+    {
+        _npc!.Kind.ToString(), _npc.BloodlineName, _npc.Concept, _npc.IsFullSheet ? null : "Supporting Cast",
+        _npc.BloodPotency is { } bp ? $"Blood Potency {bp}" : null,
+    }.Where(s => !string.IsNullOrEmpty(s)));
+
+    private string? Morality => _npc switch
+    {
+        { Humanity: { } h } => $"Humanity {h}",
+        { Morality: { } m } => $"Morality {m}",
+        _ => null,
+    };
+
+    private string PoolNote
+    {
+        get
+        {
+            var parts = new List<string> { "Before modifiers from the scene." };
+            if (_npc!.Status.DicePenalty > 0) parts.Add($"Wound penalty −{_npc.Status.DicePenalty} applied.");
+            if (_npc.HungerDice > 0) parts.Add(_npc.HungerDice == 1 ? "One die is a Hunger die." : $"{_npc.HungerDice} dice are Hunger dice.");
+            if (_npc.CanSpendWillpower) parts.Add($"Willpower adds {DerivedStats.DicePerWillpowerPoint} dice per point.");
+            return string.Join(" ", parts);
+        }
+    }
+
+    private int BuiltPool => _npc!.Attributes.GetValueOrDefault(_attribute) + (_skill is { } s ? _npc.Skills.GetValueOrDefault(s) : 0);
+
+    private List<PowerOption> Powers => _npc!.PowerIds
+        .Select(id => _catalog.FirstOrDefault(p => p.Id == id))
+        .OfType<PowerOption>()
+        .ToList();
+
+    private async Task<bool> ActAsync(PlayAction action)
+    {
+        _busy = true;
+        try
+        {
+            var result = await Api.PlayAsync(Id, action);
+            if (result.Saved is { } saved) _npc = saved;
+            else Snackbar.Add(result.Message ?? "That didn't save.", Severity.Warning);
+            return result.Succeeded;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task<IEnumerable<string>> SearchCompelsAsync(string? text, CancellationToken cancellationToken)
+    {
+        var search = text?.Trim();
+        return Task.FromResult(_compels
+            .Where(c => string.IsNullOrEmpty(search) || c.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Name));
+    }
+
+    private async Task AddCompelAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_compelName)) return;
+        await ActAsync(new PlayAction { Kind = PlayActionKind.AddCompel, Text = _compelName, Amount = _compelRating, EndsWhen = _compelEnds });
+        _compelName = _compelEnds = null;
+        _compelRating = 1;
+    }
+
+    private async Task OnConditionKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await AddConditionAsync();
+    }
+
+    private async Task AddConditionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_condition)) return;
+        var text = _condition.Trim();
+        _condition = null;
+        await ActAsync(new PlayAction { Kind = PlayActionKind.AddCondition, Text = text });
+    }
+
+    private async Task SpendForPowerAsync(PowerOption power, int cost)
+    {
+        if (await ActAsync(new PlayAction { Kind = PlayActionKind.AdjustVitae, Amount = -cost }))
+            Snackbar.Add($"{power.Name}: spent {cost} Vitae.", Severity.Info);
+    }
+}

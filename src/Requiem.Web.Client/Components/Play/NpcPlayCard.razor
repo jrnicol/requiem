@@ -1,0 +1,107 @@
+@* One NPC in a scene: trackers, compels and conditions at a glance. Tap the name for the full play view. *@
+@inject RequiemApi Api
+@inject ISnackbar Snackbar
+
+<MudPaper Class="play-card pa-3" Elevation="1">
+    <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="1" Class="mb-2">
+        <div style="flex:1; min-width:0">
+            <MudLink Href="@PlayUrl" Typo="Typo.h6" Color="Color.Inherit" Class="play-card-name">@Npc.Name</MudLink>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">@Subtitle</MudText>
+        </div>
+        @if (OnRemove.HasDelegate)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small" aria-label="@($"Take {Npc.Name} out of the scene")"
+                           OnClick="() => OnRemove.InvokeAsync(Npc)" />
+        }
+    </MudStack>
+
+    <PlayTrackers Npc="Npc" OnAct="ActAsync" Busy="_busy" />
+
+    @if (Npc.Wounds.Count > 0)
+    {
+        <div class="mt-1">
+            @foreach (var wound in Npc.Wounds)
+            {
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                         Color="@(wound.Type == DamageType.Aggravated ? Color.Error : Color.Default)"
+                         OnClose="() => ActAsync(new PlayAction { Kind = PlayActionKind.RemoveWound, TargetId = wound.Id })">
+                    @wound.Description · @wound.Amount @wound.Type
+                </MudChip>
+            }
+        </div>
+    }
+    <WoundEntryForm OnAdd="ActAsync" Disabled="_busy" />
+
+    @if (Npc.Boosts.Values.Any(v => v > 0))
+    {
+        <MudText Typo="Typo.caption" Class="d-block mt-1">
+            Fortify Form: @string.Join(", ", Npc.Boosts.Where(b => b.Value > 0).Select(b => $"{b.Key} +{b.Value}"))
+        </MudText>
+    }
+
+    @if (Npc.Compels.Count > 0 || Npc.Conditions.Count > 0)
+    {
+        <div class="mt-2">
+            @foreach (var compel in Npc.Compels)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Secondary" Variant="Variant.Outlined"
+                         OnClose="() => ActAsync(new PlayAction { Kind = PlayActionKind.RemoveCompel, TargetId = compel.Id })"
+                         title="@compel.EndsWhen">@compel.Name @compel.Rating</MudChip>
+            }
+            @foreach (var condition in Npc.Conditions)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Info" Variant="Variant.Outlined"
+                         OnClose="() => ActAsync(new PlayAction { Kind = PlayActionKind.RemoveCondition, TargetId = condition.Id })">@condition.Name</MudChip>
+            }
+        </div>
+    }
+
+    <MudTextField T="string" @bind-Value="_condition" Placeholder="Add a condition" Variant="Variant.Text" Margin="Margin.Dense"
+                  Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Add" OnAdornmentClick="AddConditionAsync"
+                  AdornmentAriaLabel="Add condition" OnKeyDown="OnConditionKeyAsync" Immediate="true" MaxLength="200" Class="mt-1" />
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public PlayCharacter Npc { get; set; } = null!;
+    [Parameter] public EventCallback<PlayCharacter> NpcChanged { get; set; }
+    [Parameter] public Guid? SceneId { get; set; }
+    [Parameter] public EventCallback<PlayCharacter> OnRemove { get; set; }
+
+    private bool _busy;
+    private string? _condition;
+
+    private string PlayUrl => SceneId is { } scene ? $"play/{Npc.Id}?scene={scene}" : $"play/{Npc.Id}";
+
+    private string Subtitle => string.Join(" · ", new[]
+    {
+        Npc.Kind.ToString(), Npc.BloodlineName, Npc.IsFullSheet ? null : "Supporting Cast",
+    }.Where(s => !string.IsNullOrEmpty(s)));
+
+    private async Task ActAsync(PlayAction action)
+    {
+        _busy = true;
+        try
+        {
+            var result = await Api.PlayAsync(Npc.Id, action);
+            if (result.Saved is { } saved) await NpcChanged.InvokeAsync(saved);
+            else Snackbar.Add(result.Message ?? "That didn't save.", Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task OnConditionKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await AddConditionAsync();
+    }
+
+    private async Task AddConditionAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_condition)) return;
+        var text = _condition.Trim();
+        _condition = null;
+        await ActAsync(new PlayAction { Kind = PlayActionKind.AddCondition, Text = text });
+    }
+}

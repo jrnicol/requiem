@@ -1,0 +1,121 @@
+// Bloodlines, Magi Houses and Caitiff (VtR "Bloodline Weakness Chart" p.17; compels p.5).
+// Descriptions are rules summaries; sourcePage points at the full text (PDF page).
+[
+  {
+    "name": "Ventrue",
+    "kind": "Bloodline",
+    "weaknessName": "Exclusive Prey",
+    "weaknessText": "Can feed only from one specific kind of kine (their Exclusive Prey) and may never drink anything else, under any circumstances. The restriction grows more specific as they grow more powerful, and applies even to a Ventrue cut off from their sire.",
+    "compelName": "Intolerance",
+    "compelText": "Hunger raises your worst passions. You fume at being interrupted or silenced, and any such incursion earns an overly arrogant response.",
+    "sourcePage": 24
+  },
+  {
+    "name": "Brujah",
+    "kind": "Bloodline",
+    "weaknessName": "Eternal Jyhad",
+    "weaknessText": "Every Brujah bears an Eternal Scar from the blow that killed them, which never heals. Rage: a Brujah never has fewer Hunger dice than 1 plus 1 per 3 Blood Potency (1 at BP 1, 2 at BP 4, 3 at BP 7, 4 at BP 10). Destroyer: on entering Dominion, gain Compel: Destroyer 6.",
+    "compelName": "Intractable",
+    "compelText": "No room for finesse. You are unyielding in your position and accept nothing less than complete agreement, though you may withdraw or defer to the group against your better judgment.",
+    "sourcePage": 27
+  },
+  {
+    "name": "Nosferatu",
+    "kind": "Bloodline",
+    "weaknessName": "Hideous Visage of the Beast",
+    "weaknessText": "You look like a rotting corpse; no makeup or surgery hides it. Any human who sees you suffers Compel: Disgusted at a rating equal to your Blood Potency. Your decay can be smelled in a small room (Perception + Investigation to detect), and any masking fails when you spend Willpower. Around people or things of exceptional beauty, spend 1 Willpower or gain Compel: Spiteful 3.",
+    "compelName": "Destructive Envy",
+    "compelText": "A powerful envy overcomes you. You irrationally crave the blood of the most attractive person in the room, mortals before vampires.",
+    "sourcePage": 32
+  },
+  {
+    "name": "Malkavian",
+    "kind": "Bloodline",
+    "weaknessName": "Shattered Mind",
+    "weaknessText": "You struggle to tell real from imagined and past from present. Roll a d5 once per scene (or when the Storyteller calls for it) and play out that tick until the next roll: 1 Hearing voices; 2 Seeing false visions; 3 Reliving past days; 4 Living the future; 5 Compulsion (e.g. a ritual you must perform; losing a cherished object forces a Dominion roll at −2). Play these as an oracle caught in true visions, not for comedy.",
+    "compelName": "I Have Seen What Must Be Done!",
+    "compelText": "You cannot tolerate inaction. You do what you wish immediately and attack anyone who obstructs you until they submit, you are incapacitated, or it is done.",
+    "sourcePage": 35
+  },
+  {
+    "name": "Toreador",
+    "kind": "Bloodline",
+    "weaknessName": "Entrancement",
+    "weaknessText": "When you encounter a subject you find attractive, beautiful or exquisite, roll Resolve −2 (a further −1 if you have fed from this person before). Botch: you become obsessed with it; a person becomes an obsession that ends only with their death. Fail: you are enraptured for the scene, ignoring any peril. Success: you must stop and admire it before moving on. The depravity of the fixation deepens as Humanity falls.",
+    "compelName": "Eye of the Beholder",
+    "compelText": "A profound jealousy overwhelms you. You seek to vandalize or destroy any art, photograph, sculpture or beauty nearby that is not your own.",
+    "sourcePage": 38
+  },
+  {
+    "name": "Gangrel",
+    "kind": "Bloodline",
+    "weaknessName": "Predation",
+    "weaknessText": "Two weaknesses. First, you must Cull the Herd once per year. Second, you carry a permanent Compel: Predation, rated at half your Blood Potency (round up), shown as toying with prey, stalking, ambush or trophy-taking, socially as much as violently. Spend 1 Willpower to ignore it for a scene; any challenge from someone you see as Prey reinstates it and Willpower can't be spent again that scene.",
+    "compelName": "Primitive Intellect",
+    "compelText": "Hunger makes all things civilized intolerable; courtesy is pointless. You cannot use any Mental skills until you feed, though you can still converse more or less normally.",
+    "sourcePage": 43
+  },
+  {
+    "name": "Al-Haqqadi",
+    "kind": "Bloodline",
+    "weaknessName": "Cursed Talisman",
+    "weaknessText": "At your Blood Bond you are bound to a talisman (silver-dollar to baseball size, from a place and time that shaped you). Travel farther from it than a man can walk in a day (+1 day per Blood Potency over 5) and you fall into torpor until returned. Whoever holds it can command you to a single, finite task by any means; you can't be ordered to destroy yourself or directly strike the holder. Holding another Al-Haqqadi's talisman sends you into torpor; holding your own disperses you into smoke until someone spills blood on it.",
+    "compelName": "Predatory Contention",
+    "compelText": "You immediately seek to feed from whoever present holds ideals most opposed to yours. If no such mortal is nearby, you turn on the nearest vampire who does.",
+    "sourcePage": 46
+  },
+  {
+    "name": "Tremere",
+    "kind": "MagiHouse",
+    "weaknessName": "Dread Countenance",
+    "weaknessText": "At the end of each scene, every living thing able to sense you takes 1 Bashing damage that can't be soaked, +1 per 3 Blood Potency (1 at BP 1, 2 at BP 4, 3 at BP 7, 4 at BP 10). Other Tremere are unaffected. Every Tremere must also surrender their Phylactery to the Council of Nine.",
+    "compelName": "The Magician",
+    "compelText": "You are better and more powerful than everyone else, and they must see it. You must use your Sorcery in a showy way to gain awe.",
+    "sourcePage": 51
+  },
+  {
+    "name": "Lasombra",
+    "kind": "MagiHouse",
+    "weaknessName": "Voices of Vengeance",
+    "weaknessText": "You are haunted by everyone you have murdered in cold blood (the first is the mortal whose blood was mixed into your induction Potion). You glimpse them in reflections and hear their accusations; destroying all reflections silences them. Your shadows, mundane or sorcerous, can be possessed by them and turn on you, and you are perpetually, distractingly cold. The Voices can rise on any failed or botched roll, or when you are surrounded by death you caused.",
+    "compelName": "Painful Withdrawal",
+    "compelText": "You cannot stand to be looked upon. You must immediately seek to be unseen, through solitude or a Discipline.",
+    "sourcePage": 54
+  },
+  {
+    "name": "Giovanni",
+    "kind": "MagiHouse",
+    "weaknessName": "Flesh to Stone",
+    "weaknessText": "Each dot of Humanity lost turns you further to marble; regaining Humanity doesn't reverse it. 1st loss: body weight doubles. 2nd: movement speed halves. 3rd: maximum Celerity −1 (minimum 1). 4th: 2 pints of blood per Vitae. 5th: lose the sense of touch. 6th: lose sight. 7th loss, or Humanity 1: you become a marble statue who can only observe (Giovanni sorcery can still reach you).",
+    "compelName": "Easily Baited",
+    "compelText": "Restraint fades. If you so much as overhear a contrary opinion, you must stop what you're doing and interject your own, forcefully if necessary.",
+    "sourcePage": 57
+  },
+  {
+    "name": "Tzimisce",
+    "kind": "MagiHouse",
+    "weaknessName": "Until Final Death Do We Part",
+    "weaknessText": "The spirit of Tzimisce can possess any Tzimisce magi without warning. Sleep each day with two fistfuls of Mount Ararat soil or lose your Blood Magic until you do. Each session draw one poker card per Blood Potency dot, +1 per Humanity dot below 7. On a Joker you are possessed; draw a tarot card to set its aims. Red Joker (The Fool): Tzimisce seeks something, you keep your will, it may impose Compel 3 or seize control on a botch, and it never risks your destruction. Black Joker (Death): full control toward an objective, even at the risk of Final Death.",
+    "compelName": "Alienation",
+    "compelText": "You can't hold a prolonged conversation without revealing some aspect of your vampiric nature or drawing attention to your deformity.",
+    "sourcePage": 60
+  },
+  {
+    "name": "Ravnos",
+    "kind": "MagiHouse",
+    "weaknessName": "Karmic Debt",
+    "weaknessText": "Roll a d10 each time you wake: 1 your Disciplines carry a sorrowful theme tonight; 2 you lose a cherished item; 3 you find yourself in harm's way; 4 someone alters your plans; 5 something endangers someone you love; 6 a reputation goes sour; 7 allies come to doubt you; 8–10 nothing tonight. A botch brings true, lasting tragedy. Kind deeds never reduce the debt, but another vampire can accept up to your Blood Potency in nights of it as a Boon.",
+    "compelName": "Altered Perceptions",
+    "compelText": "Sensory input becomes a puzzle to solve artistically. You must survey the scene in some unorthodox way: tasting the light, catching the air, or finding the highest perch.",
+    "sourcePage": 63
+  },
+  {
+    "name": "Caitiff",
+    "kind": "Caitiff",
+    "weaknessName": null,
+    "weaknessText": "None. Caitiff carry no Bloodline Weakness. A Caitiff who completes a Blood Bond with a Bloodline vampire inherits that Bloodline, its Discipline at 1 dot, and its Weakness.",
+    "compelName": "Base Compulsion",
+    "compelText": "Caitiff are not a Bloodline and suffer only Base Compels: roll on the Base Compels table.",
+    "sourcePage": 17
+  }
+]

@@ -1,0 +1,93 @@
+@* Blood Sorcery rituals and Sabbat Ritae, learned one at a time (house ruling 2026-10-23). *@
+
+@if (Learned.Count == 0)
+{
+    <MudText Color="Color.Secondary" Class="mb-2">No rituals learned yet.</MudText>
+}
+else
+{
+    @foreach (var group in Learned.GroupBy(p => p.PowerGroupId))
+    {
+        <MudText Typo="Typo.subtitle2" Class="mt-2 mb-1">@GroupName(group.Key)</MudText>
+        <PowerList Powers="group.ToList()" OnRemove="RemoveAsync" RemoveText="Forget" Class="mb-2" />
+    }
+}
+
+<MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mt-3">
+    <MudAutocomplete T="PowerOption" @bind-Value="_pick" Label="Learn a ritual or rite" Variant="Variant.Outlined" Margin="Margin.Dense"
+                     SearchFunc="SearchAsync" ToStringFunc="@(p => p is null ? string.Empty : p.Name)" MaxItems="null"
+                     Clearable="true" ResetValueOnEmptyText="true" Style="min-width:16rem">
+        <ItemTemplate Context="power">
+            <MudText Typo="Typo.body2">@power.Name</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                @GroupName(power.PowerGroupId)@(power.Category is { } category ? $" · {category}" : "")
+            </MudText>
+        </ItemTemplate>
+    </MudAutocomplete>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="AddAsync" Disabled="_pick is null" Class="mt-1">Learn</MudButton>
+</MudStack>
+<MudText Typo="Typo.caption" Color="Color.Secondary">
+    @(OwnSorcery is { } own ? $"{own.Name} rituals are listed first, then Sabbat Ritae." : "Sabbat Ritae are listed first, then every house's rituals.")
+</MudText>
+<ValidationMessage For="() => Form.LearnedPowerIds" class="mud-error-text mud-typography-caption" />
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<DisciplineOption> Options { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<PowerOption> Powers { get; set; } = [];
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private PowerOption? _pick;
+
+    private DisciplineOption? OwnSorcery =>
+        Options.FirstOrDefault(o => o.Kind == PowerGroupKind.BloodSorcery && o.BloodlineId is not null && o.BloodlineId == Form.BloodlineId);
+
+    private List<PowerOption> Learned => Form.LearnedPowerIds
+        .Select(id => Powers.FirstOrDefault(p => p.Id == id))
+        .OfType<PowerOption>()
+        .Where(IsLearnable) // Investiture picks live with their Discipline
+        .OrderBy(p => GroupOrder(p.PowerGroupId)).ThenBy(p => p.Name)
+        .ToList();
+
+    // Own house's sorcery first, then Ritae, then other houses' rituals (learned from a teacher or stolen).
+    private int GroupOrder(int groupId)
+    {
+        var group = Options.FirstOrDefault(o => o.Id == groupId);
+        if (group is null) return 3;
+        if (group.Id == OwnSorcery?.Id) return 0;
+        return group.Kind == PowerGroupKind.SabbatRitae ? 1 : 2;
+    }
+
+    private bool IsLearnable(PowerOption power) =>
+        Options.FirstOrDefault(o => o.Id == power.PowerGroupId)?.Kind is PowerGroupKind.BloodSorcery or PowerGroupKind.SabbatRitae;
+
+    private string GroupName(int id) => Options.FirstOrDefault(o => o.Id == id)?.Name ?? "Unknown";
+
+    private Task<IEnumerable<PowerOption>> SearchAsync(string? text, CancellationToken cancellationToken)
+    {
+        var search = text?.Trim();
+        var matches = Powers
+            .Where(p => IsLearnable(p) && !Form.LearnedPowerIds.Contains(p.Id))
+            .Where(p => string.IsNullOrEmpty(search)
+                        || p.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                        || GroupName(p.PowerGroupId).Contains(search, StringComparison.OrdinalIgnoreCase)
+                        || p.Category?.Contains(search, StringComparison.OrdinalIgnoreCase) == true)
+            .OrderBy(p => GroupOrder(p.PowerGroupId)).ThenBy(p => GroupName(p.PowerGroupId)).ThenBy(p => p.Name);
+        return Task.FromResult<IEnumerable<PowerOption>>(matches.ToList());
+    }
+
+    private async Task AddAsync()
+    {
+        if (_pick is null || Form.LearnedPowerIds.Contains(_pick.Id)) return;
+        Form.LearnedPowerIds.Add(_pick.Id);
+        _pick = null;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(PowerOption power)
+    {
+        Form.LearnedPowerIds.Remove(power.Id);
+        await Changed.InvokeAsync();
+    }
+}

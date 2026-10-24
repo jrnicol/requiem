@@ -1,0 +1,94 @@
+@* The numbers needed at the table, computed live by the rules engine, plus any rules warnings. *@
+
+<MudPaper Outlined="true" Class="pa-4 sticky-summary">
+    <MudText Typo="Typo.h6" Class="mb-2">At the table</MudText>
+    <MudSimpleTable Dense="true" Elevation="0">
+        <tbody>
+            <tr><td>Health</td><td class="text-right"><b>@Form.Health</b></td></tr>
+            @if (Status.TotalDamage > 0)
+            {
+                <tr><td>Wounds total</td><td class="text-right"><b>@Status.TotalDamage</b></td></tr>
+            }
+            @if (Status.DicePenalty > 0)
+            {
+                <tr><td>Wound penalty</td><td class="text-right"><b>−@Status.DicePenalty</b></td></tr>
+            }
+            <tr><td>Defense</td><td class="text-right"><b>@Form.Defense</b></td></tr>
+            <tr><td>Willpower</td><td class="text-right" style="white-space:nowrap"><b>@Form.WillpowerCurrent / @Form.WillpowerDots</b></td></tr>
+            <tr><td>Max Willpower per roll</td><td class="text-right"><b>@DerivedStats.MaxWillpowerSpendPerRoll(Form.Attribute(CharacterAttribute.Resolve))</b></td></tr>
+            @if (Form.IsVampire)
+            {
+                <tr><td>Humanity</td><td class="text-right"><b>@(Form.Humanity ?? 0)</b></td></tr>
+                <tr><td>Vitae</td><td class="text-right" style="white-space:nowrap"><b>@Vitae / @MaxVitae</b></td></tr>
+                <tr><td>Hunger dice</td><td class="text-right"><b>@HungerDice</b></td></tr>
+                <tr><td>Max Vitae per round</td><td class="text-right"><b>@BloodRules.EfficiencyFor(BloodPotency)</b></td></tr>
+                <tr><td>Masquerade cost</td><td class="text-right"><b>@BloodRules.MasqueradeCost(Math.Clamp(Form.Humanity ?? 0, 0, 10))</b></td></tr>
+                @foreach (var effect in BloodlineEffects)
+                {
+                    <tr>
+                        <td>
+                            @effect.Label
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display:block">@effect.Detail</MudText>
+                        </td>
+                        <td class="text-right"><b>@effect.Value</b></td>
+                    </tr>
+                }
+            }
+            else
+            {
+                <tr><td>Morality</td><td class="text-right"><b>@(Form.Morality ?? 0)</b></td></tr>
+            }
+            <tr><td>XP available</td><td class="text-right"><b>@Form.ExperienceAvailable</b></td></tr>
+        </tbody>
+    </MudSimpleTable>
+
+    @foreach (var warning in Warnings)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@warning</MudAlert>
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public BloodlineOption? Bloodline { get; set; }
+    [Parameter] public IReadOnlyList<DisciplineOption> Disciplines { get; set; } = [];
+
+    private int BloodPotency => Form.BloodPotency ?? BloodRules.MinBloodPotency;
+    private int MaxVitae => BloodRules.MaxVitae(BloodPotency, Form.IsThinblood);
+    private int Vitae => Math.Clamp(Form.VitaeCurrent ?? 0, 0, MaxVitae);
+
+    private HealthStatus Status => WoundRules.Evaluate(
+        Form.Wounds.Select(w => new Wound(w.Description, w.Amount, w.Type)), Form.Health);
+
+    private bool IsBrujah => string.Equals(Bloodline?.Name, "Brujah", StringComparison.OrdinalIgnoreCase);
+
+    private int HungerDice => BloodRules.HungerDice(Vitae, BloodPotency,
+        IsBrujah ? BloodlineRules.BrujahMinimumHungerDice(BloodPotency) : 0);
+
+    private IReadOnlyList<BloodlineEffect> BloodlineEffects => BloodlineRules.EffectsFor(Bloodline?.Name, BloodPotency);
+
+    /// <summary>Rules the GM can override: shown, never enforced.</summary>
+    private IEnumerable<string> Warnings
+    {
+        get
+        {
+            if (!Form.IsVampire) yield break;
+
+            foreach (var violation in PowerRules.Validate(BloodPotency, Form.Disciplines.Select(d =>
+                         new DisciplineRating(Disciplines.FirstOrDefault(o => o.Id == d.PowerGroupId)?.Name ?? "Discipline", d.Dots))))
+                yield return violation.Message;
+
+            if (Form is { Humanity: { } humanity, Generation: { } generation }
+                && GenerationRules.Strength(generation) is { } strength
+                && humanity + BloodPotency > strength)
+                yield return $"Humanity {humanity} + Blood Potency {BloodPotency} exceeds Generation {generation}'s strength of {strength}; " +
+                             $"Humanity should drop to {HumanityRules.ClampToGeneration(humanity, BloodPotency, generation)}.";
+
+            if (Form.Experience.Any(e => e.Amount < 0) && !ExperienceRules.IsXpUnlocked(Form.CorruptionMarks.Count))
+                yield return $"XP has been spent with only {Form.CorruptionMarks.Count} of {FullSheetForm.MaxCorruption} Corruption.";
+
+            if (Vitae == 0)
+                yield return "At 0 Vitae the Beast takes Dominion.";
+        }
+    }
+}

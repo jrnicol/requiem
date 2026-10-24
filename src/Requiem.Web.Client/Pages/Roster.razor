@@ -1,0 +1,157 @@
+@page "/"
+@attribute [Authorize(Policy = Policies.GameMaster)]
+@inject RequiemApi Api
+@inject ISnackbar Snackbar
+
+<PageTitle>NPC Roster · Requiem</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap" Class="mb-4">
+    <MudText Typo="Typo.h4" Class="brand-font">NPC Roster</MudText>
+    @if (_characters is not null)
+    {
+        <MudText Color="Color.Secondary">@CountText</MudText>
+    }
+</MudStack>
+
+<MudGrid Spacing="2" Class="mb-4">
+    <MudItem xs="12" md="6">
+        <MudTextField T="string" @bind-Value="_search" Placeholder="Search name, concept or faction"
+                      Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
+                      Clearable="true" DebounceInterval="300" OnDebounceIntervalElapsed="_ => LoadAsync()"
+                      OnClearButtonClick="_ => LoadAsync()" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      aria-label="Search the roster" />
+    </MudItem>
+    <MudItem xs="12" md="6">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="1">
+            <MudChipSet T="string" SelectedValue="_kindFilter" SelectedValueChanged="OnKindFilterChanged"
+                        SelectionMode="SelectionMode.SingleSelection" CheckMark="false" Variant="Variant.Text"
+                        SelectedColor="Color.Primary">
+                @foreach (var option in KindOptions)
+                {
+                    <MudChip Value="option" Text="@option" />
+                }
+            </MudChipSet>
+            <MudSpacer />
+            <MudSwitch T="bool" Value="_includeArchived" ValueChanged="OnIncludeArchivedChanged"
+                       Color="Color.Primary" Label="Archived" />
+        </MudStack>
+    </MudItem>
+</MudGrid>
+
+@if (_loadFailed)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined">
+        Couldn't load the roster.
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoadAsync">Try again</MudButton>
+    </MudAlert>
+}
+else if (_characters is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_characters.Count == 0)
+{
+    <MudPaper Outlined="true" Class="pa-8">
+        <MudStack AlignItems="AlignItems.Center" Spacing="2">
+            <MudIcon Icon="@Icons.Material.Outlined.NightsStay" Size="Size.Large" Color="Color.Secondary" />
+            @if (IsFiltered)
+            {
+                <MudText Typo="Typo.h6">No NPCs match</MudText>
+                <MudText Color="Color.Secondary">Try a different search or filter.</MudText>
+            }
+            else
+            {
+                <MudText Typo="Typo.h6">The city is quiet</MudText>
+                <MudText Color="Color.Secondary">Add your first character to start the roster.</MudText>
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Justify="Justify.Center">
+                    <MudButton Href="npcs/new" Variant="Variant.Filled" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.PersonAdd">Supporting Cast</MudButton>
+                    <MudButton Href="sheets/new" Variant="Variant.Outlined" Color="Color.Primary"
+                               StartIcon="@Icons.Material.Filled.Description">Full sheet</MudButton>
+                </MudStack>
+            }
+        </MudStack>
+    </MudPaper>
+}
+else
+{
+    <MudGrid Spacing="3">
+        @foreach (var npc in _characters)
+        {
+            <MudItem xs="12" sm="6" lg="4" @key="npc.Id">
+                <a class="npc-card-link" href="@EditorUrl(npc)" aria-label="Edit @npc.Name">
+                    <NpcCard Npc="npc" Bloodline="BloodlineFor(npc)" />
+                </a>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@* The empty state has its own button, so the floating one only appears once there's a roster. *@
+@if (_characters is { Count: > 0 } || IsFiltered)
+{
+    <div class="fab-bottom-right">
+        <NewCharacterMenu />
+    </div>
+}
+
+@code {
+    private static readonly string[] KindOptions = ["All", .. Enum.GetNames<CharacterKind>()];
+
+    private List<CharacterSummary>? _characters;
+    private IReadOnlyList<BloodlineOption> _bloodlines = [];
+    private bool _loadFailed;
+    private string? _search;
+    private string _kindFilter = "All";
+    private bool _includeArchived;
+
+    private bool IsFiltered => !string.IsNullOrWhiteSpace(_search) || _kindFilter != "All" || _includeArchived;
+
+    private string CountText => _characters!.Count == 1 ? "1 NPC" : $"{_characters.Count} NPCs";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _bloodlines = await Api.GetBloodlinesAsync();
+        }
+        catch (HttpRequestException)
+        {
+            // Cards just won't show weakness tooltips; the roster itself still loads.
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loadFailed = false;
+        try
+        {
+            CharacterKind? kind = Enum.TryParse<CharacterKind>(_kindFilter, out var k) ? k : null;
+            _characters = await Api.ListCharactersAsync(new CharacterQuery(_search, Kind: kind, IncludeArchived: _includeArchived));
+        }
+        catch (HttpRequestException)
+        {
+            _loadFailed = true;
+            Snackbar.Add("Couldn't reach the server.", Severity.Error);
+        }
+    }
+
+    private async Task OnKindFilterChanged(string? value)
+    {
+        _kindFilter = value ?? "All";
+        await LoadAsync();
+    }
+
+    private async Task OnIncludeArchivedChanged(bool value)
+    {
+        _includeArchived = value;
+        await LoadAsync();
+    }
+
+    private static string EditorUrl(CharacterSummary npc) =>
+        npc.Tier == CharacterTier.FullSheet ? $"sheets/{npc.Id}" : $"npcs/{npc.Id}";
+
+    private BloodlineOption? BloodlineFor(CharacterSummary npc) =>
+        npc.BloodlineName is null ? null : _bloodlines.FirstOrDefault(b => b.Name == npc.BloodlineName);
+}

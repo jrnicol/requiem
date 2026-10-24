@@ -1,0 +1,483 @@
+@page "/npcs/new"
+@page "/npcs/{Id:guid}"
+@attribute [Authorize(Policy = Policies.GameMaster)]
+@inject RequiemApi Api
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>@(IsNew ? "New NPC" : string.IsNullOrWhiteSpace(_form?.Name) ? "NPC" : _form.Name) · Requiem</PageTitle>
+
+@if (_notFound)
+{
+    <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-4">
+        This NPC doesn't exist any more.
+        <MudButton Href="" Variant="Variant.Text" Color="Color.Inherit">Back to the roster</MudButton>
+    </MudAlert>
+}
+else if (_loadFailed)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-4">
+        Couldn't load this NPC.
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoadAsync">Try again</MudButton>
+    </MudAlert>
+}
+else if (_form is null || _editContext is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+        <MudIconButton Href="" Icon="@Icons.Material.Filled.ArrowBack" aria-label="Back to the roster" />
+        <MudText Typo="Typo.h5" Class="brand-font" Style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+            @(IsNew ? "New Supporting Cast" : string.IsNullOrWhiteSpace(_form.Name) ? "Unnamed NPC" : _form.Name)
+        </MudText>
+        @if (!IsNew)
+        {
+            <MudMenu Icon="@Icons.Material.Filled.MoreVert" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
+                     aria-label="More actions">
+                <MudMenuItem Icon="@Icons.Material.Filled.Casino" Href="@($"play/{Id}")">Run at the table</MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Outlined.Upgrade" OnClick="PromoteAsync">
+                    Promote to full sheet…
+                </MudMenuItem>
+                <MudMenuItem Icon="@Icons.Material.Outlined.DeleteForever" IconColor="Color.Error" OnClick="DeleteAsync">
+                    Delete NPC…
+                </MudMenuItem>
+            </MudMenu>
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
+                   Disabled="_saving" OnClick="SaveAsync">
+            @(_saving ? "Saving…" : "Save")
+        </MudButton>
+    </MudStack>
+
+    @if (_conflict)
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Filled" Class="mb-4">
+            Someone changed this NPC after you opened it, so your save was not applied.
+            <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="ReloadAfterConflictAsync">Load their version</MudButton>
+        </MudAlert>
+    }
+
+    @* No submit button inside the form: Enter adds list entries instead of saving. *@
+    <EditForm EditContext="_editContext">
+        <DataAnnotationsValidator />
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="8">
+                <MudStack Spacing="3">
+                    <MudPaper Outlined="true" Class="pa-4">
+                        <MudText Typo="Typo.h6" Class="mb-2">Who they are</MudText>
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_form.Name" For="() => _form.Name" Label="Name" Required="true"
+                                              Variant="Variant.Outlined" Immediate="true" AutoFocus="IsNew" MaxLength="200" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.subtitle2" Class="mb-1">Kind</MudText>
+                                <MudToggleGroup T="CharacterKind" Value="_form.Kind" ValueChanged="OnKindChanged"
+                                                SelectionMode="SelectionMode.SingleSelection" Color="Color.Primary"
+                                                CheckMark="true" Outlined="true">
+                                    <MudToggleItem Value="CharacterKind.Mortal" Text="Mortal" />
+                                    <MudToggleItem Value="CharacterKind.Ghoul" Text="Ghoul" />
+                                    <MudToggleItem Value="CharacterKind.Vampire" Text="Vampire" />
+                                </MudToggleGroup>
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="_form.Concept" For="() => _form.Concept" Label="Concept"
+                                              Placeholder="e.g. Crooked harbor cop" Variant="Variant.Outlined" MaxLength="200" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <MudTextField @bind-Value="_form.Faction" For="() => _form.Faction" Label="Faction"
+                                              Placeholder="e.g. Carthians" Variant="Variant.Outlined" MaxLength="200" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="_form.Ambition" For="() => _form.Ambition" Label="Ambition"
+                                              HelperText="How they approach every situation, and what they want."
+                                              Variant="Variant.Outlined" Lines="2" Sizing="InputSizing.Auto" MaxLength="500" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+
+                    <MudPaper Outlined="true" Class="pa-4">
+                        <MudText Typo="Typo.h6">Stat block</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            1 below average · 2 average · 3 above average · 4 amazing · 5 among the best in the world
+                        </MudText>
+                        <DotRating Label="Physical" Value="_form.Physical" ValueChanged="v => _form.Physical = v" />
+                        <DotRating Label="Mental" Value="_form.Mental" ValueChanged="v => _form.Mental = v" />
+                        <DotRating Label="Social" Value="_form.Social" ValueChanged="v => _form.Social = v" />
+
+                        <MudDivider Class="my-3" />
+                        <MudText Typo="Typo.subtitle2">Edges</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">Most NPCs have none.</MudText>
+                        <MudChipSet T="NpcEdge" SelectedValues="SelectedEdges" SelectedValuesChanged="OnEdgesChanged"
+                                    SelectionMode="SelectionMode.MultiSelection" CheckMark="true"
+                                    SelectedColor="Color.Tertiary" Variant="Variant.Outlined" Class="mt-1">
+                            @foreach (var edge in _edges.Where(e => e.Edge is not null))
+                            {
+                                <MudTooltip Text="@edge.Description" Placement="Placement.Top">
+                                    <MudChip Value="edge.Edge!.Value" Text="@edge.Name" />
+                                </MudTooltip>
+                            }
+                        </MudChipSet>
+
+                        <MudDivider Class="my-3" />
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12" sm="6">
+                                <ListEditor Label="Specialties" HelperText="+1 die on related rolls"
+                                            Placeholder="Add a specialty" @bind-Items="_form.Specialties" />
+                                <ValidationMessage For="() => _form.Specialties" class="mud-error-text mud-typography-caption" />
+                            </MudItem>
+                            <MudItem xs="12" sm="6">
+                                <ListEditor Label="Assets" HelperText="+2 dice when used"
+                                            Placeholder="Add a place, group or tool" @bind-Items="_form.Assets" />
+                                <ValidationMessage For="() => _form.Assets" class="mud-error-text mud-typography-caption" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudPaper>
+
+                    @if (_form.IsVampire)
+                    {
+                        <MudPaper Outlined="true" Class="pa-4">
+                            <MudText Typo="Typo.h6" Class="mb-2">The Blood</MudText>
+                            <MudGrid Spacing="2">
+                                <MudItem xs="12" sm="6">
+                                    <MudSelect T="int?" @bind-Value="_form.BloodlineId" For="() => _form.BloodlineId"
+                                               Label="Bloodline" Clearable="true" Variant="Variant.Outlined"
+                                               ToStringFunc="BloodlineName">
+                                        @foreach (var b in _bloodlines)
+                                        {
+                                            <MudSelectItem T="int?" Value="b.Id">
+                                                @b.Name
+                                                <MudText Inline="true" Typo="Typo.caption" Color="Color.Secondary">
+                                                    @(b.Kind == "MagiHouse" ? " · Magi House" : "")
+                                                </MudText>
+                                            </MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+                                <MudItem xs="12" sm="6">
+                                    <MudSelect T="int?" @bind-Value="_form.PredatorTypeId" For="() => _form.PredatorTypeId"
+                                               Label="Predator type" Clearable="true" Variant="Variant.Outlined"
+                                               ToStringFunc="PredatorName">
+                                        @foreach (var p in _predatorTypes)
+                                        {
+                                            <MudSelectItem T="int?" Value="p.Id">@p.Name</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                </MudItem>
+
+                                @if (SelectedBloodline is { } bloodline)
+                                {
+                                    <MudItem xs="12">
+                                        <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined" Dense="true" NoIcon="true">
+                                            @if (bloodline.WeaknessName is not null)
+                                            {
+                                                <MudText Typo="Typo.subtitle2">Weakness: @bloodline.WeaknessName</MudText>
+                                            }
+                                            <MudText Typo="Typo.body2" Class="mb-2">@bloodline.WeaknessText</MudText>
+                                            <MudText Typo="Typo.subtitle2">Compel: @bloodline.CompelName</MudText>
+                                            <MudText Typo="Typo.body2">@bloodline.CompelText</MudText>
+                                            @if (bloodline.SourcePage is { } sourcePage)
+                                            {
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">VtR p.@(sourcePage)</MudText>
+                                            }
+                                        </MudAlert>
+                                    </MudItem>
+                                }
+
+                                @if (SelectedPredator is { } predator)
+                                {
+                                    <MudItem xs="12">
+                                        <MudText Typo="Typo.body2" Color="Color.Secondary">@predator.Description</MudText>
+                                        @if (PredatorRestrictionWarning is { } warning)
+                                        {
+                                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2">@warning</MudAlert>
+                                        }
+                                    </MudItem>
+                                }
+
+                                <MudItem xs="12">
+                                    <DotRating Label="Blood Potency" Max="10" Value="_form.BloodPotency ?? 1"
+                                               ValueChanged="OnBloodPotencyChanged" />
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudNumericField T="int?" @bind-Value="_form.Generation" For="() => _form.Generation"
+                                                     Label="Generation" Min="1" Max="13" Variant="Variant.Outlined" />
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudNumericField T="int?" @bind-Value="_form.VitaeCurrent" For="() => _form.VitaeCurrent"
+                                                     Label="Vitae" Min="0" Max="MaxVitae" HelperText="@($"of {MaxVitae}")"
+                                                     Variant="Variant.Outlined" />
+                                </MudItem>
+                            </MudGrid>
+                        </MudPaper>
+                    }
+
+                    <MudPaper Outlined="true" Class="pa-4">
+                        <MudText Typo="Typo.h6" Class="mb-2">Notes</MudText>
+                        <MudStack Spacing="2">
+                            <MudTextField @bind-Value="_form.Notes" For="() => _form.Notes" Label="Notes"
+                                          Variant="Variant.Outlined" Lines="3" Sizing="InputSizing.Auto" MaxLength="4000" />
+                            <MudTextField @bind-Value="_form.GmNotes" For="() => _form.GmNotes" Label="GM-only notes"
+                                          HelperText="Hidden from players once campaigns arrive."
+                                          Variant="Variant.Outlined" Lines="3" Sizing="InputSizing.Auto" MaxLength="4000"
+                                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Lock" />
+                            <MudSwitch T="bool" @bind-Value="_form.IsArchived" Color="Color.Primary"
+                                       Label="Archived (hidden from the roster by default)" />
+                        </MudStack>
+                    </MudPaper>
+                </MudStack>
+            </MudItem>
+
+            <MudItem xs="12" md="4" Class="summary-item">
+                <MudPaper Outlined="true" Class="pa-4 sticky-summary">
+                    <MudText Typo="Typo.h6" Class="mb-2">At the table</MudText>
+                    <MudSimpleTable Dense="true" Elevation="0">
+                        <tbody>
+                            <tr><td>Health</td><td class="text-right"><b>@SupportingCastRules.Health(_form.Physical, _form.Edges)</b></td></tr>
+                            <tr><td>Willpower</td><td class="text-right"><b>@SupportingCastRules.Willpower(_form.Mental, _form.Edges)</b></td></tr>
+                            <tr><td>Social</td><td class="text-right"><b>@SupportingCastRules.EffectiveSocial(_form.Social, _form.Edges)</b></td></tr>
+                            @if (_form.IsVampire)
+                            {
+                                <tr><td>Vitae</td><td class="text-right" style="white-space:nowrap"><b>@(_form.VitaeCurrent ?? 0) / @MaxVitae</b></td></tr>
+                                <tr><td>Hunger dice</td><td class="text-right"><b>@HungerDice</b></td></tr>
+                                <tr><td>Max Vitae per round</td><td class="text-right"><b>@BloodRules.EfficiencyFor(BloodPotency)</b></td></tr>
+                                @foreach (var effect in BloodlineEffects)
+                                {
+                                    <tr>
+                                        <td>
+                                            @effect.Label
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display:block">@effect.Detail</MudText>
+                                        </td>
+                                        <td class="text-right"><b>@effect.Value</b></td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </MudSimpleTable>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2" Style="display:block">
+                        Supporting Cast never spend Willpower; Vitae starts each scene full.
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    </EditForm>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private SupportingCastForm? _form;
+    private EditContext? _editContext;
+    private ValidationMessageStore? _serverErrors;
+    private IReadOnlyList<BloodlineOption> _bloodlines = [];
+    private IReadOnlyList<PredatorTypeOption> _predatorTypes = [];
+    private IReadOnlyList<EdgeOption> _edges = [];
+    private bool _notFound;
+    private bool _loadFailed;
+    private bool _saving;
+    private bool _conflict;
+
+    private bool IsNew => Id is null;
+
+    private int BloodPotency => _form?.BloodPotency ?? BloodRules.MinBloodPotency;
+    private int MaxVitae => BloodRules.MaxVitae(BloodPotency);
+
+    private BloodlineOption? SelectedBloodline => _bloodlines.FirstOrDefault(b => b.Id == _form?.BloodlineId);
+    private PredatorTypeOption? SelectedPredator => _predatorTypes.FirstOrDefault(p => p.Id == _form?.PredatorTypeId);
+
+    private IReadOnlyList<BloodlineEffect> BloodlineEffects => BloodlineRules.EffectsFor(SelectedBloodline?.Name, BloodPotency);
+
+    private int HungerDice => BloodRules.HungerDice(
+        Math.Clamp(_form?.VitaeCurrent ?? 0, 0, MaxVitae), BloodPotency,
+        string.Equals(SelectedBloodline?.Name, "Brujah", StringComparison.OrdinalIgnoreCase)
+            ? BloodlineRules.BrujahMinimumHungerDice(BloodPotency) : 0);
+
+    /// <summary>Predator restrictions name the Bloodline they exclude, e.g. "Not available to Ventrue."</summary>
+    private string? PredatorRestrictionWarning =>
+        SelectedPredator?.Restrictions is { } restriction && SelectedBloodline is { } b
+        && restriction.Contains(b.Name, StringComparison.OrdinalIgnoreCase)
+            ? $"{SelectedPredator.Name}: {restriction}"
+            : null;
+
+    private IReadOnlyCollection<NpcEdge> SelectedEdges =>
+        Enum.GetValues<NpcEdge>().Where(e => e != NpcEdge.None && _form!.Edges.HasFlag(e)).ToList();
+
+    protected override async Task OnParametersSetAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loadFailed = _notFound = _conflict = false;
+        _form = null;
+        try
+        {
+            _bloodlines = await Api.GetBloodlinesAsync();
+            _predatorTypes = await Api.GetPredatorTypesAsync();
+            _edges = await Api.GetEdgesAsync();
+
+            var form = Id is { } id ? await Api.GetSupportingCastAsync(id) : new SupportingCastForm();
+            if (form is null)
+            {
+                _notFound = true;
+                return;
+            }
+            SetForm(form);
+        }
+        catch (HttpRequestException)
+        {
+            _loadFailed = true;
+        }
+    }
+
+    private void SetForm(SupportingCastForm form)
+    {
+        _form = form;
+        _editContext = new EditContext(form);
+        _serverErrors = new ValidationMessageStore(_editContext);
+        _editContext.OnFieldChanged += (_, e) =>
+        {
+            _serverErrors?.Clear(e.FieldIdentifier);
+            _editContext.NotifyValidationStateChanged();
+        };
+    }
+
+    private void OnKindChanged(CharacterKind kind)
+    {
+        _form!.Kind = kind;
+        _form.ApplyVampireDefaults();
+    }
+
+    private void OnBloodPotencyChanged(int value)
+    {
+        var wasFull = _form!.VitaeCurrent == MaxVitae;
+        _form.BloodPotency = value;
+        // Keep a full pool full; never leave more Vitae than the new maximum.
+        if (wasFull || _form.VitaeCurrent > MaxVitae) _form.VitaeCurrent = MaxVitae;
+    }
+
+    private void OnEdgesChanged(IReadOnlyCollection<NpcEdge>? edges) =>
+        _form!.Edges = (edges ?? []).Aggregate(NpcEdge.None, (all, e) => all | e);
+
+    private string BloodlineName(int? id) => _bloodlines.FirstOrDefault(b => b.Id == id)?.Name ?? "";
+    private string PredatorName(int? id) => _predatorTypes.FirstOrDefault(p => p.Id == id)?.Name ?? "";
+
+    private async Task SaveAsync()
+    {
+        if (_form is null || _editContext is null || _saving) return;
+        _serverErrors?.Clear();
+        if (!_editContext.Validate())
+        {
+            Snackbar.Add("Some fields need fixing.", Severity.Warning);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var result = await Api.SaveSupportingCastAsync(_form);
+            if (result.Saved is { } saved)
+            {
+                _conflict = false;
+                Snackbar.Add($"Saved {saved.Name}.", Severity.Success);
+                if (IsNew)
+                {
+                    Navigation.NavigateTo($"npcs/{saved.Id}", replace: true);
+                    return;
+                }
+                SetForm(saved);
+            }
+            else if (result.IsConflict)
+            {
+                _conflict = true;
+            }
+            else
+            {
+                ShowServerErrors(result.Errors);
+                Snackbar.Add(result.Message ?? "Couldn't save.", Severity.Error);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Couldn't reach the server. Your changes are still here; try again.", Severity.Error);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ShowServerErrors(IReadOnlyDictionary<string, string[]>? errors)
+    {
+        if (errors is null || _serverErrors is null || _editContext is null || _form is null) return;
+        foreach (var (field, messages) in errors)
+        {
+            var property = typeof(SupportingCastForm).GetProperties()
+                .FirstOrDefault(p => string.Equals(p.Name, field, StringComparison.OrdinalIgnoreCase))?.Name ?? "";
+            _serverErrors.Add(new FieldIdentifier(_form, property), messages);
+        }
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    private async Task ReloadAfterConflictAsync() => await LoadAsync();
+
+    /// <summary>
+    /// Promotes the saved NPC. Uses the version last loaded or saved, so unsaved edits aren't included,
+    /// and the server refuses if the NPC changed elsewhere.
+    /// </summary>
+    private async Task PromoteAsync()
+    {
+        if (_form?.Id is not { } id) return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Promote to a full sheet?",
+            $"{_form.Name} becomes a full character sheet: each attribute starts at its Physical/Mental/Social rating, " +
+            "skills start at 0, and Specialties and Edges are kept in the notes. This can't be undone. " +
+            "Unsaved changes on this page are not included, so save first if you need them.",
+            yesText: "Promote", cancelText: "Cancel");
+        if (confirmed != true) return;
+
+        try
+        {
+            var result = await Api.PromoteAsync(id, _form.Version);
+            if (result.Saved is { } sheet)
+            {
+                Snackbar.Add($"{sheet.Name} now has a full sheet.", Severity.Success);
+                Navigation.NavigateTo($"sheets/{sheet.Id}", replace: true);
+            }
+            else if (result.IsConflict)
+            {
+                _conflict = true;
+            }
+            else
+            {
+                Snackbar.Add(result.Message ?? "Couldn't promote.", Severity.Error);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Couldn't reach the server. Try again.", Severity.Error);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        if (_form?.Id is not { } id) return;
+        var confirmed = await Dialogs.ShowMessageBoxAsync(
+            "Delete NPC?",
+            $"{_form.Name} and everything on their sheet will be permanently deleted. Archive them instead if they might come back.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true) return;
+
+        try
+        {
+            await Api.DeleteCharacterAsync(id);
+            Snackbar.Add($"Deleted {_form.Name}.", Severity.Info);
+            Navigation.NavigateTo("");
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Couldn't delete. Try again.", Severity.Error);
+        }
+    }
+}

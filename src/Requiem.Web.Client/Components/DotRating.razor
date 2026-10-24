@@ -1,0 +1,41 @@
+@* A labeled row of rating dots (the sheet's ●●○○○), sized for touch. Never goes below Min. *@
+
+<div class="dot-rating @(Max > 5 ? "dot-rating-wide" : "") @(Stacked ? "dot-rating-stacked" : "") @Class">
+    @if (Label is not null)
+    {
+        <MudText Typo="Typo.body1" Class="dot-label">@Label</MudText>
+    }
+    <MudRating @key="_resetKey"
+               SelectedValue="Value"
+               SelectedValueChanged="OnSelectedValueChanged"
+               MaxValue="Max"
+               FullIcon="@Icons.Material.Filled.Circle"
+               EmptyIcon="@Icons.Material.Outlined.Circle"
+               Color="Color.Primary"
+               Size="Size"
+               ReadOnly="ReadOnly"
+               aria-label="@Label" />
+</div>
+
+@code {
+    [Parameter] public int Value { get; set; }
+    [Parameter] public EventCallback<int> ValueChanged { get; set; }
+    [Parameter] public int Max { get; set; } = 5;
+    [Parameter] public int Min { get; set; } = 1;
+    [Parameter] public string? Label { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public Size Size { get; set; } = Size.Large;
+    [Parameter] public string? Class { get; set; }
+    /// <summary>Label above the dots, for narrow columns such as the sheet's three-column grids.</summary>
+    [Parameter] public bool Stacked { get; set; }
+
+    // Recreates the rating when a click is clamped, so it can't keep showing the rejected value.
+    private int _resetKey;
+
+    private async Task OnSelectedValueChanged(int value)
+    {
+        var clamped = Math.Clamp(value, Min, Max);
+        if (clamped != value) _resetKey++;
+        await ValueChanged.InvokeAsync(clamped);
+    }
+}

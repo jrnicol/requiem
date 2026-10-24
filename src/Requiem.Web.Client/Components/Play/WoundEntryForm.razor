@@ -1,0 +1,38 @@
+@* Records one wound: what caused it, how much, and its type (house rules: each wound keeps its own value). *@
+
+<div class="wound-entry">
+    <MudTextField T="string" @bind-Value="_text" Placeholder="What caused it" Variant="Variant.Outlined" Margin="Margin.Dense"
+                  MaxLength="200" Immediate="true" OnKeyDown="OnKeyAsync" aria-label="Wound description" Class="wound-entry-text" />
+    <MudNumericField T="int" @bind-Value="_amount" Min="1" Max="50" Variant="Variant.Outlined" Margin="Margin.Dense"
+                     Class="wound-entry-amount" aria-label="Damage" />
+    <MudSelect T="DamageType" @bind-Value="_type" Variant="Variant.Outlined" Margin="Margin.Dense" Class="wound-entry-type" aria-label="Damage type">
+        @foreach (var type in Enum.GetValues<DamageType>())
+        {
+            <MudSelectItem T="DamageType" Value="type">@type</MudSelectItem>
+        }
+    </MudSelect>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" Disabled="Disabled || string.IsNullOrWhiteSpace(_text)" OnClick="AddAsync">Add wound</MudButton>
+</div>
+
+@code {
+    [Parameter] public EventCallback<PlayAction> OnAdd { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+
+    private string? _text;
+    private int _amount = 1;
+    private DamageType _type = DamageType.Lethal;
+
+    private async Task OnKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await AddAsync();
+    }
+
+    private async Task AddAsync()
+    {
+        if (Disabled || string.IsNullOrWhiteSpace(_text)) return;
+        var action = new PlayAction { Kind = PlayActionKind.AddWound, Text = _text.Trim(), Amount = _amount, DamageType = _type };
+        _text = null;
+        _amount = 1;
+        await OnAdd.InvokeAsync(action);
+    }
+}

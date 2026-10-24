@@ -1,0 +1,63 @@
+@* Editable list of short text entries shown as removable chips (Specialties, Assets). *@
+
+<div class="@Class">
+    <MudText Typo="Typo.subtitle2">@Label</MudText>
+    @if (HelperText is not null)
+    {
+        <MudText Typo="Typo.caption" Color="Color.Secondary">@HelperText</MudText>
+    }
+
+    @if (Items.Count > 0)
+    {
+        <MudChipSet T="string" AllClosable="true" OnClose="RemoveAsync" Class="my-1">
+            @foreach (var item in Items)
+            {
+                <MudChip Value="item" Text="@item" Color="Color.Default" Variant="Variant.Outlined" />
+            }
+        </MudChipSet>
+    }
+
+    <MudTextField T="string" @bind-Value="_draft" Immediate="true" Placeholder="@Placeholder"
+                  MaxLength="SupportingCastForm.MaxListItemLength" OnKeyDown="OnKeyDownAsync"
+                  Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Add"
+                  AdornmentAriaLabel="@($"Add {Label}")" OnAdornmentClick="AddAsync"
+                  Error="_error is not null" ErrorText="@_error" Variant="Variant.Outlined" Margin="Margin.Dense" />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public string? HelperText { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public List<string> Items { get; set; } = [];
+    [Parameter] public EventCallback<List<string>> ItemsChanged { get; set; }
+
+    private string? _draft;
+    private string? _error;
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await AddAsync();
+    }
+
+    private async Task AddAsync()
+    {
+        var value = _draft?.Trim();
+        if (string.IsNullOrEmpty(value)) return;
+        if (Items.Any(i => string.Equals(i, value, StringComparison.OrdinalIgnoreCase)))
+        {
+            _error = $"'{value}' is already listed.";
+            return;
+        }
+
+        _error = null;
+        _draft = null;
+        await ItemsChanged.InvokeAsync([.. Items, value]);
+    }
+
+    private async Task RemoveAsync(MudChip<string> chip)
+    {
+        _error = null;
+        await ItemsChanged.InvokeAsync(Items.Where(i => i != chip.Value).ToList());
+    }
+}

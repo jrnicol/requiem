@@ -1,0 +1,96 @@
+@* Health as a wound list (house rules, WoD Core p.30): Health is never marked down; each wound keeps
+   its own description and value, and the character is Taken Out once the wounds total Health. *@
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-2">
+    <MudText Typo="Typo.body1"><b>@Form.Health</b> (Stamina + Size)</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">
+        @(Status.TotalDamage == 0 ? "No wounds" : $"Wounds total {Status.TotalDamage} of {Form.Health}")
+        @if (Status.DicePenalty > 0)
+        {
+            <b> · −@Status.DicePenalty dice</b>
+        }
+    </MudText>
+</MudStack>
+
+@if (Status.IsTakenOut)
+{
+    <MudAlert Severity="Severity.Error" Dense="true" Class="mb-2">
+        @(Form.IsVampire ? "In torpor" : "Taken Out"): total damage has reached Health. Acting costs 1 Willpower per action.
+    </MudAlert>
+}
+@if (Status.HasPotentiallyLethalWound)
+{
+    <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">
+        A single wound exceeds double Health, which could have killed them outright (Storyteller may allow a Stamina roll).
+    </MudAlert>
+}
+
+@foreach (var wound in Form.Wounds.ToList())
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap" Class="mb-1">
+        <MudTextField T="string" Value="wound.Description" ValueChanged="v => Update(() => wound.Description = v ?? string.Empty)"
+                      Placeholder="What caused it" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      MaxLength="FullSheetForm.MaxTextLength" Style="flex:1; min-width:10rem" />
+        <MudNumericField T="int" Value="wound.Amount" ValueChanged="v => Update(() => wound.Amount = v)"
+                         Min="0" Max="50" Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:6rem" aria-label="Damage" />
+        <MudSelect T="DamageType" Value="wound.Type" ValueChanged="v => Update(() => wound.Type = v)"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:9rem" aria-label="Damage type">
+            @foreach (var type in Enum.GetValues<DamageType>())
+            {
+                <MudSelectItem T="DamageType" Value="type">@type (−@WoundRules.PenaltyFor(type))</MudSelectItem>
+            }
+        </MudSelect>
+        @if (Form.IsVampire)
+        {
+            var cost = HealingRules.Cost(wound.Type, wound.Amount);
+            <MudTooltip Text="@($"Heal: {cost.Vitae} Vitae{(cost.Willpower > 0 ? $" + {cost.Willpower} Willpower" : "")}")">
+                <MudIconButton Icon="@Icons.Material.Outlined.Bloodtype" Size="Size.Small" Color="Color.Primary"
+                               aria-label="Heal with Vitae" OnClick="() => HealAsync(wound)"
+                               Disabled="(Form.VitaeCurrent ?? 0) < cost.Vitae || Form.WillpowerCurrent < cost.Willpower" />
+            </MudTooltip>
+        }
+        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="Remove wound"
+                       OnClick="() => RemoveAsync(wound)" />
+    </MudStack>
+}
+
+<MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddAsync" Class="mt-1">
+    Add wound
+</MudButton>
+<ValidationMessage For="() => Form.Wounds" class="mud-error-text mud-typography-caption" />
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private HealthStatus Status => WoundRules.Evaluate(
+        Form.Wounds.Select(w => new Wound(w.Description, w.Amount, w.Type)), Form.Health);
+
+    private async Task Update(Action change)
+    {
+        change();
+        await Changed.InvokeAsync();
+    }
+
+    private async Task AddAsync()
+    {
+        Form.Wounds.Add(new WoundEntry());
+        await Changed.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(WoundEntry wound)
+    {
+        Form.Wounds.Remove(wound);
+        await Changed.InvokeAsync();
+    }
+
+    /// <summary>Spends the Vitae (and Willpower for Aggravated) and clears the wound (VtR p.19).</summary>
+    private async Task HealAsync(WoundEntry wound)
+    {
+        var cost = HealingRules.Cost(wound.Type, wound.Amount);
+        Form.VitaeCurrent = (Form.VitaeCurrent ?? 0) - cost.Vitae;
+        Form.WillpowerCurrent -= cost.Willpower;
+        Form.Wounds.Remove(wound);
+        await Changed.InvokeAsync();
+    }
+}

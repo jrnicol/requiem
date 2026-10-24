@@ -1,0 +1,42 @@
+// Base Compels (VtR p.6): rolled on a botch with a Hunger 1 showing, and by Caitiff in place of a Bloodline Compel.
+// They last until the vampire next feeds.
+// Rule compels: fixed Compels the rules impose. Social Compels (WoD Core p.10) are free-form, so they aren't listed.
+[
+  { "name": "The Adversary", "kind": "Base", "roll": 1, "endsWhen": "until fed", "source": "Vampire", "sourcePage": 6,
+    "description": "You play the cunning tempter, luring a mortal toward depravity, desecration or inhumanity. Once they have fallen to your bargains, you must feed on them so the Beast can savor the stained soul." },
+  { "name": "Predatory Fixation", "kind": "Base", "roll": 2, "endsWhen": "until fed", "source": "Vampire", "sourcePage": 6,
+    "description": "You fixate on the nearest source of mortal blood (or an animal if no mortal is near) and track them until they leave your sight, then move to the next closest. −1 die on Perception rolls." },
+  { "name": "Gluttonous Urge", "kind": "Base", "roll": 3, "endsWhen": "until fed", "source": "Vampire", "sourcePage": 6,
+    "description": "If blood is available, you refuse to leave the immediate area until you have fed." },
+  { "name": "Ravenous", "kind": "Base", "roll": 4, "endsWhen": "until fed", "source": "Vampire", "sourcePage": 6,
+    "description": "Hunger robs you of intellect and arcane detail. −4 dice on Intelligence-based rolls and skills." },
+  { "name": "Recalcitrance", "kind": "Base", "roll": 5, "endsWhen": "until fed", "source": "Vampire", "sourcePage": 6,
+    "description": "Hunger robs you of subtlety and cunning. −4 dice on Persuasion and Subterfuge rolls." },
+  { "name": "Sanguine Obsession", "kind": "Base", "roll": 6, "endsWhen": "until fed", "source": "Vampire", "sourcePage": 6,
+    "description": "You stalk the nearest source of blood with intent to feed and won't be deterred, though you may be discreet. −4 dice on Perception and Investigation rolls." },
+  { "name": "Reckless Abandon", "kind": "Base", "roll": 7, "endsWhen": "until fed", "source": "Vampire", "sourcePage": 6,
+    "description": "You think of nothing but hunger and can no longer hide your nature from humans: a walking breach of the Masquerade." },
+  { "name": "Rarified Taste", "kind": "Base", "roll": 8, "endsWhen": "until fed", "source": "Vampire", "sourcePage": 6,
+    "description": "An insatiable thirst for vampire blood, friend or foe; other vampires sense it and avoid you. You can't use Mental or Social powers on vampires, and once you taste one you need a Resolve roll to stop before attempting diablerie." },
+  { "name": "Fetishized Craving", "kind": "Base", "roll": 9, "endsWhen": "until fed", "source": "Vampire", "sourcePage": 6,
+    "description": "Ordinary feeding won't do. You must feed in a creative, bizarre, obscene, desecrating or adrenaline-fueled way." },
+  { "name": "Emotionally Charged", "kind": "Base", "roll": 10, "endsWhen": "until fed", "source": "Vampire", "sourcePage": 6,
+    "description": "You need passion: anger, jealousy, tears or screams. You provoke high emotion in whoever you feed on, and perhaps those around them." },
+
+  { "name": "Sorrow", "kind": "Rule", "rating": "3", "trigger": "Succeeding on a Stains roll", "source": "Vampire", "sourcePage": 14,
+    "description": "You feel the weight of guilt and regret and lament what you have done." },
+  { "name": "Hysteria", "kind": "Rule", "rating": "3", "trigger": "Spending a day outside a coffin, casket, tomb or sarcophagus", "endsWhen": "after resting a full day in a coffin", "source": "Vampire", "sourcePage": 16,
+    "description": "Applies to Dominion rolls as well." },
+  { "name": "Destroyer", "kind": "Rule", "rating": "6", "trigger": "A Brujah entering Dominion", "source": "Vampire", "sourcePage": 27,
+    "description": "Your Beast is at war and sees everything as an enemy to be destroyed: physically, socially, emotionally." },
+  { "name": "Disgusted", "kind": "Rule", "rating": "Blood Potency", "trigger": "A human seeing a Nosferatu", "source": "Vampire", "sourcePage": 32,
+    "description": "Panic, disgust and disbelief at the walking dead. The Nosferatu takes the penalty to engage with them, or they take it to work with the Nosferatu." },
+  { "name": "Spiteful", "kind": "Rule", "rating": "3", "trigger": "A Nosferatu around exceptional beauty who doesn't spend 1 Willpower", "source": "Vampire", "sourcePage": 32,
+    "description": "Overtly rude comments or small, petty acts that mar the person or thing tormenting you." },
+  { "name": "Predation", "kind": "Rule", "rating": "Half Blood Potency, rounded up", "trigger": "Gangrel Bloodline Weakness (permanent)", "endsWhen": "never; 1 Willpower ignores it for a scene", "source": "Vampire", "sourcePage": 43,
+    "description": "The insatiable urge to hunt: toying with prey, stalking, ambush, trophies, socially as much as violently. Any challenge from 'Prey' reinstates it." },
+  { "name": "Madness (Vampire Blood)", "kind": "Rule", "rating": "3", "trigger": "Committing diablerie a third time within a year and a day", "endsWhen": "permanent (taken as a Flaw)", "source": "Vampire", "sourcePage": 4,
+    "description": "A craving for vampire blood; you must take vampires as your preferred prey." },
+  { "name": "Bloodlust", "kind": "Rule", "rating": "Hunger dice when gained", "trigger": "A Bestial Success: at least half of a roll's successes on Hunger dice", "endsWhen": "until fed", "source": "Vampire", "sourcePage": 5,
+    "description": "Act on your Bloodline Compel (Base Compel for Caitiff). It doesn't stop what you meant to do; it adds to and complicates it." }
+]

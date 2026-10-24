@@ -1,0 +1,144 @@
+@* Merits or Flaws (one kind per instance): catalog entries with their cost range, or custom ones. *@
+
+@if (Entries.Count == 0)
+{
+    <MudText Color="Color.Secondary" Class="mb-2">No @(Kind == MeritKind.Merit ? "Merits" : "Flaws") yet.</MudText>
+}
+
+@foreach (var entry in Entries)
+{
+    var option = OptionFor(entry);
+    <MudPaper Outlined="true" Class="pa-2 mb-2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
+            <div style="flex:1; min-width:10rem">
+                <MudText Typo="Typo.body1">
+                    @entry.Name
+                    @if (option is null)
+                    {
+                        <MudText Inline="true" Typo="Typo.caption" Color="Color.Secondary"> · custom</MudText>
+                    }
+                </MudText>
+                @if (option is not null)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                        @option.Cost pts · @(option.Source == RuleSource.Vampire ? "VtR" : "WoD") p.@(option.SourcePage)
+                    </MudText>
+                }
+            </div>
+            <DotRating Value="entry.Dots" Min="option?.MinDots ?? 0" Max="Math.Max(option?.MaxDots ?? 5, entry.Dots)"
+                       ValueChanged="v => SetDotsAsync(entry, v)" />
+            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="@($"Remove {entry.Name}")"
+                           OnClick="() => RemoveAsync(entry)" />
+        </MudStack>
+        <MudTextField T="string" Value="entry.Qualifier" ValueChanged="v => SetQualifierAsync(entry, v)"
+                      Placeholder="Detail, e.g. who or what (optional)" Variant="Variant.Text" Margin="Margin.Dense"
+                      MaxLength="FullSheetForm.MaxTextLength" />
+        @if (option?.Description is { } description)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display:block" Class="mt-1">@description</MudText>
+        }
+        @if (option?.Restrictions is { } restrictions)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Warning" Style="display:block">@restrictions</MudText>
+        }
+    </MudPaper>
+}
+
+<MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
+    <MudAutocomplete T="MeritOption" @bind-Value="_pick" SearchFunc="SearchAsync" ToStringFunc="@(o => o?.Name)"
+                     Label="@($"Add {(Kind == MeritKind.Merit ? "a Merit" : "a Flaw")}")" Variant="Variant.Outlined"
+                     Margin="Margin.Dense" Clearable="true" MaxItems="null" Style="min-width:16rem" ResetValueOnEmptyText="true">
+        <ItemTemplate Context="option">
+            <div>
+                @option.Name <MudText Inline="true" Typo="Typo.caption" Color="Color.Secondary">· @option.Cost</MudText>
+            </div>
+        </ItemTemplate>
+    </MudAutocomplete>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="AddPickedAsync" Disabled="_pick is null" Class="mt-1">Add</MudButton>
+</MudStack>
+<MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mt-1">
+    <MudTextField T="string" @bind-Value="_custom" Immediate="true" Placeholder="…or name a custom one"
+                  Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="FullSheetForm.MaxTextLength" Style="min-width:16rem" />
+    <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="AddCustomAsync"
+               Disabled="string.IsNullOrWhiteSpace(_custom)" Class="mt-1">Add custom</MudButton>
+</MudStack>
+<ValidationMessage For="() => Form.Merits" class="mud-error-text mud-typography-caption" />
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<MeritOption> Options { get; set; } = [];
+    [Parameter] public MeritKind Kind { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private MeritOption? _pick;
+    private string? _custom;
+
+    private List<MeritEntry> Entries => Form.Merits.Where(m => m.Kind == Kind).ToList();
+
+    /// <summary>
+    /// Vampires get Vampire-book entries plus Core entries the Vampire book doesn't override;
+    /// everyone else gets Core entries only.
+    /// </summary>
+    private IEnumerable<MeritOption> Applicable
+    {
+        get
+        {
+            var ofKind = Options.Where(o => o.Kind == Kind);
+            if (!Form.IsVampire) return ofKind.Where(o => o.Source == RuleSource.WodCore);
+            var vampireNames = ofKind.Where(o => o.Source == RuleSource.Vampire).Select(o => o.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return ofKind.Where(o => o.Source == RuleSource.Vampire || !vampireNames.Contains(o.Name));
+        }
+    }
+
+    private MeritOption? OptionFor(MeritEntry entry) => Options.FirstOrDefault(o => o.Id == entry.MeritDefinitionId);
+
+    private Task<IEnumerable<MeritOption>> SearchAsync(string? text, CancellationToken _)
+    {
+        var matches = Applicable;
+        if (!string.IsNullOrWhiteSpace(text))
+            matches = matches.Where(o => o.Name.Contains(text.Trim(), StringComparison.OrdinalIgnoreCase));
+        return Task.FromResult(matches.OrderBy(o => o.Name).AsEnumerable());
+    }
+
+    private async Task AddPickedAsync()
+    {
+        if (_pick is not { } option) return;
+        Form.Merits.Add(new MeritEntry
+        {
+            MeritDefinitionId = option.Id,
+            Name = option.Name,
+            Kind = option.Kind,
+            Dots = option.MinDots ?? 1,
+        });
+        _pick = null;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task AddCustomAsync()
+    {
+        var name = _custom?.Trim();
+        if (string.IsNullOrEmpty(name)) return;
+        Form.Merits.Add(new MeritEntry { Name = name, Kind = Kind, Dots = 1 });
+        _custom = null;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetDotsAsync(MeritEntry entry, int dots)
+    {
+        entry.Dots = dots;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetQualifierAsync(MeritEntry entry, string? value)
+    {
+        entry.Qualifier = value;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(MeritEntry entry)
+    {
+        Form.Merits.Remove(entry);
+        await Changed.InvokeAsync();
+    }
+}

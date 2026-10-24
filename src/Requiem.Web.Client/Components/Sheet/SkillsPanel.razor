@@ -1,0 +1,86 @@
+@* The 15 skills by category, with their specialties as chips under each skill. *@
+
+<MudGrid Spacing="3">
+    @foreach (var category in new[] { TraitCategory.Mental, TraitCategory.Physical, TraitCategory.Social })
+    {
+        <MudItem xs="12" md="4">
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-1">@category</MudText>
+            @foreach (var skill in Enum.GetValues<Skill>().Where(s => Traits.CategoryOf(s) == category))
+            {
+                <DotRating Label="@(skill.ToString())" Value="Form.SkillDots(skill)" Min="0" Stacked="true" Size="Size.Medium" ValueChanged="v => SetAsync(skill, v)" />
+                @if (Form.Specialties.Any(s => s.Skill == skill))
+                {
+                    <MudChipSet T="string" AllClosable="true" OnClose="chip => RemoveAsync(skill, chip.Value)" Class="ml-2 mb-1">
+                        @foreach (var specialty in Form.Specialties.Where(s => s.Skill == skill))
+                        {
+                            <MudChip Value="specialty.Name" Text="@specialty.Name" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Tertiary" />
+                        }
+                    </MudChipSet>
+                }
+            }
+        </MudItem>
+    }
+</MudGrid>
+
+<MudDivider Class="my-3" />
+<MudText Typo="Typo.subtitle2">Add a specialty</MudText>
+<MudText Typo="Typo.caption" Color="Color.Secondary">One word or short phrase, on a skill with at least 1 dot.</MudText>
+<MudStack Row="true" AlignItems="AlignItems.Start" Wrap="Wrap.Wrap" Spacing="2" Class="mt-1">
+    <MudSelect T="Skill?" @bind-Value="_skill" Label="Skill" Variant="Variant.Outlined" Margin="Margin.Dense" Style="min-width:12rem"
+              >
+        @foreach (var skill in Enum.GetValues<Skill>().Where(s => Form.SkillDots(s) > 0))
+        {
+            <MudSelectItem T="Skill?" Value="skill">@skill</MudSelectItem>
+        }
+    </MudSelect>
+    <MudTextField T="string" @bind-Value="_name" Immediate="true" Label="Specialty" Variant="Variant.Outlined"
+                  Margin="Margin.Dense" MaxLength="FullSheetForm.MaxTextLength" OnKeyDown="OnKeyDownAsync"
+                  Error="_error is not null" ErrorText="@_error" Style="min-width:12rem" />
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="AddAsync" Disabled="_skill is null || string.IsNullOrWhiteSpace(_name)" Class="mt-1">Add</MudButton>
+</MudStack>
+<ValidationMessage For="() => Form.Specialties" class="mud-error-text mud-typography-caption" />
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private Skill? _skill;
+    private string? _name;
+    private string? _error;
+
+    private async Task SetAsync(Skill skill, int value)
+    {
+        Form.Skills[skill] = value;
+        // A specialty can't outlive its last dot.
+        if (value == 0) Form.Specialties.RemoveAll(s => s.Skill == skill);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task OnKeyDownAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await AddAsync();
+    }
+
+    private async Task AddAsync()
+    {
+        var name = _name?.Trim();
+        if (_skill is not { } skill || string.IsNullOrEmpty(name)) return;
+        if (Form.Specialties.Any(s => s.Skill == skill && string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase)))
+        {
+            _error = $"{skill} already has '{name}'.";
+            return;
+        }
+
+        Form.Specialties.Add(new SpecialtyEntry { Skill = skill, Name = name });
+        _name = null;
+        _error = null;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(Skill skill, string? name)
+    {
+        Form.Specialties.RemoveAll(s => s.Skill == skill && s.Name == name);
+        await Changed.InvokeAsync();
+    }
+}

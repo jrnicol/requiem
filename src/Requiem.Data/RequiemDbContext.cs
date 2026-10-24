@@ -1,0 +1,122 @@
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Requiem.Data.Entities;
+using Requiem.Shared.Characters;
+using Requiem.Shared.Rules;
+
+namespace Requiem.Data;
+
+public class RequiemDbContext(DbContextOptions<RequiemDbContext> options, TimeProvider? timeProvider = null)
+    : IdentityDbContext<RequiemUser>(options)
+{
+    private readonly TimeProvider _time = timeProvider ?? TimeProvider.System;
+
+    // Catalog
+    public DbSet<Bloodline> Bloodlines => Set<Bloodline>();
+    public DbSet<PredatorType> PredatorTypes => Set<PredatorType>();
+    public DbSet<MeritDefinition> MeritDefinitions => Set<MeritDefinition>();
+    public DbSet<CompelDefinition> CompelDefinitions => Set<CompelDefinition>();
+    public DbSet<EdgeDefinition> EdgeDefinitions => Set<EdgeDefinition>();
+    public DbSet<PowerGroup> PowerGroups => Set<PowerGroup>();
+    public DbSet<Power> Powers => Set<Power>();
+
+    // Characters
+    public DbSet<Character> Characters => Set<Character>();
+    public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<CharacterRelationship> Relationships => Set<CharacterRelationship>();
+    public DbSet<BloodBond> BloodBonds => Set<BloodBond>();
+    public DbSet<Boon> Boons => Set<Boon>();
+
+    // Table play
+    public DbSet<Scene> Scenes => Set<Scene>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        // Identity's users, roles, claims and logins (AspNet* tables).
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(RequiemDbContext).Assembly);
+    }
+
+    protected override void ConfigureConventions(ModelConfigurationBuilder builder)
+    {
+        // Store enums as text so the database reads clearly and enum members can be reordered safely.
+        // NpcEdge is a [Flags] enum and stays numeric.
+        builder.Properties<BloodlineKind>().HaveConversion<string>().HaveMaxLength(32);
+        builder.Properties<MeritKind>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<RuleSource>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<CompelKind>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<PowerGroupKind>().HaveConversion<string>().HaveMaxLength(32);
+        builder.Properties<CharacterAttribute>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<Skill>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<CharacterTier>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<CharacterKind>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<DamageType>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<ScriptKind>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<MilestoneStage>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<ItemKind>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<PurchaseKind>().HaveConversion<string>().HaveMaxLength(32);
+        builder.Properties<RelationshipKind>().HaveConversion<string>().HaveMaxLength(16);
+
+        // SQLite can't compare or sort DateTimeOffset values; store them as sortable integers there.
+        if (Database.IsSqlite())
+            builder.Properties<DateTimeOffset>().HaveConversion<DateTimeOffsetToBinaryConverter>();
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        StampCharacters();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        StampCharacters();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <summary>
+    /// Deletes a character and everything that points at it: its childer lose their Sire link,
+    /// and relationships, blood bonds and boons involving it are removed.
+    /// Prefer archiving (<see cref="Character.IsArchived"/>) for NPCs you might bring back.
+    /// </summary>
+    /// <returns>False if no character has that id.</returns>
+    public Task<bool> DeleteCharacterAsync(Guid id, CancellationToken cancellationToken = default) =>
+        // The execution strategy retries the whole transaction on transient Azure SQL failures.
+        Database.CreateExecutionStrategy().ExecuteAsync(async ct =>
+        {
+            await using var transaction = await Database.BeginTransactionAsync(ct);
+
+            await Characters.Where(c => c.SireId == id)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.SireId, (Guid?)null), ct);
+            await Relationships.Where(r => r.FromCharacterId == id || r.ToCharacterId == id)
+                .ExecuteDeleteAsync(ct);
+            await BloodBonds.Where(b => b.ThrallId == id || b.RegnantId == id)
+                .ExecuteDeleteAsync(ct);
+            await Boons.Where(b => b.DebtorId == id || b.CreditorId == id)
+                .ExecuteDeleteAsync(ct);
+            var deleted = await Characters.Where(c => c.Id == id).ExecuteDeleteAsync(ct);
+
+            await transaction.CommitAsync(ct);
+            return deleted > 0;
+        }, cancellationToken);
+
+    private void StampCharacters()
+    {
+        var now = _time.GetUtcNow();
+        foreach (var entry in ChangeTracker.Entries<Character>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                if (entry.Entity.Id == Guid.Empty) entry.Entity.Id = Guid.CreateVersion7(now);
+                entry.Entity.CreatedAt = now;
+            }
+
+            if (entry.State is EntityState.Added or EntityState.Modified)
+            {
+                entry.Entity.UpdatedAt = now;
+                entry.Entity.Version = Guid.NewGuid();
+            }
+        }
+    }
+}

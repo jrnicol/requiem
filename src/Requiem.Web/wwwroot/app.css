@@ -1,0 +1,462 @@
+/* Dark from the first paint, so the WebAssembly download never flashes white. */
+html, body {
+    background: #121014;
+    color: #ece6e8;
+    margin: 0;
+}
+
+.brand-font {
+    font-family: "Cinzel", Georgia, serif;
+    letter-spacing: 0.04em;
+}
+
+/* ---------- Boot splash ---------- */
+.boot-splash {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-family: "Roboto", system-ui, sans-serif;
+}
+
+.boot-splash-title {
+    font-family: "Cinzel", Georgia, serif;
+    font-size: 2rem;
+    color: #c62828;
+}
+
+.boot-splash-text {
+    color: #b3a9ad;
+}
+
+body:has(.mud-layout) .boot-splash {
+    display: none;
+}
+
+/* ---------- Sign-in and setup ---------- */
+.auth-page {
+    display: flex;
+    justify-content: center;
+    padding-top: 6vh;
+}
+
+.auth-card {
+    width: 100%;
+    max-width: 440px;
+}
+
+/* ---------- Dot ratings ---------- */
+.dot-rating {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 48px;
+}
+
+.dot-rating .dot-label {
+    min-width: 6.5rem;
+}
+
+.dot-rating-stacked {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+    min-height: 0;
+    margin-bottom: 0.25rem;
+}
+
+.dot-rating-stacked .mud-rating-root {
+    flex-wrap: nowrap;
+}
+
+.dot-rating .mud-rating-root {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+/* Large touch targets for tablet use. */
+.dot-rating .mud-rating-item {
+    padding: 4px;
+}
+
+/* Ten-dot tracks (Blood Potency) must still fit a phone: smaller dots, wrapping if needed. */
+@media (max-width: 599.98px) {
+    .dot-rating-wide {
+        flex-wrap: wrap;
+    }
+
+    .dot-rating-wide .mud-rating-item {
+        padding: 2px;
+    }
+
+    .dot-rating-wide .mud-rating-item .mud-icon-root {
+        font-size: 1.6rem;
+    }
+}
+
+/* ---------- Health track ---------- */
+.health-track {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.health-box {
+    width: 22px;
+    height: 22px;
+    border: 2px solid #c62828;
+    border-radius: 3px;
+}
+
+.health-box.taken {
+    background: #c62828;
+}
+
+/* ---------- Roster cards ---------- */
+.npc-card-link {
+    display: block;
+    height: 100%;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 8px;
+}
+
+.npc-card-link:focus-visible {
+    outline: 2px solid #c62828;
+    outline-offset: 2px;
+}
+
+.npc-card {
+    height: 100%;
+    transition: border-color 120ms ease, transform 120ms ease;
+}
+
+.npc-card-link:hover .npc-card {
+    border-color: #c62828;
+}
+
+.npc-card-link:active .npc-card {
+    transform: scale(0.99);
+}
+
+.stat-line {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    column-gap: 0.75rem;
+    row-gap: 0.125rem;
+}
+
+/* ---------- Editor ---------- */
+.sticky-summary {
+    position: sticky;
+    top: 80px;
+}
+
+/* Single-column layouts: put the table numbers first instead of after the whole form. */
+@media (max-width: 959.98px) {
+    .summary-item {
+        order: -1;
+    }
+
+    .sticky-summary {
+        position: static;
+    }
+}
+
+.fab-bottom-right {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 10;
+}
+
+/* ---------- Blazor error UI ---------- */
+#blazor-error-ui {
+    background: #3b0d0d;
+    color: #fff;
+    bottom: 0;
+    box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.4);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 2000;
+}
+
+#blazor-error-ui .reload {
+    color: #ffcdd2;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+.blazor-error-boundary {
+    background: #b32121;
+    padding: 1rem;
+    color: white;
+}
+
+.blazor-error-boundary::after {
+    content: "Something went wrong on this part of the page.";
+}
+
+/* ---------- Powers ---------- */
+
+/* Imported rules text keeps its paragraph breaks. */
+.power-text {
+    white-space: pre-line;
+}
+
+.power-stats {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.25rem 0.75rem;
+    margin: 0;
+}
+
+.power-stats dt {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.875rem;
+    font-weight: 500;
+}
+
+.power-stats dd {
+    font-size: 0.875rem;
+    margin: 0;
+}
+
+/* Labels stack over values on phones so long text gets the full width. */
+@media (max-width: 599.98px) {
+    .power-stats {
+        grid-template-columns: 1fr;
+        gap: 0;
+    }
+
+    .power-stats dd {
+        margin-bottom: 0.4rem;
+    }
+}
+
+.power-bonus {
+    font-size: 0.875rem;
+    margin: 0.25rem 0 0 0;
+    padding-left: 1.25rem;
+}
+
+.power-list {
+    display: flex;
+    flex-direction: column;
+}
+
+.power-list-group {
+    display: block;
+    margin-top: 0.75rem;
+}
+
+.power-row {
+    align-items: center;
+    background: none;
+    border: 0;
+    border-radius: 4px;
+    color: inherit;
+    cursor: pointer;
+    display: flex;
+    font: inherit;
+    gap: 0.5rem;
+    min-height: 44px; /* touch target */
+    padding: 0.35rem 0.5rem;
+    text-align: left;
+    width: 100%;
+}
+
+.power-row:hover,
+.power-row:focus-visible {
+    background: var(--mud-palette-action-default-hover);
+}
+
+.power-row-active {
+    background: var(--mud-palette-primary-hover);
+}
+
+.power-row-level {
+    color: var(--mud-palette-primary);
+    flex: 0 0 4.25rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+}
+
+.power-row-name {
+    flex: 1;
+}
+
+.power-row-category {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.75rem;
+}
+/* ---------- Table play ---------- */
+
+.play-row {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    min-height: 44px;
+}
+
+.play-label {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.875rem;
+    min-width: 5rem;
+}
+
+.play-value {
+    font-size: 1.125rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 3rem;
+    text-align: center;
+}
+
+/* Comfortable touch targets for mid-scene taps. */
+.play-tap {
+    min-height: 36px;
+    min-width: 40px;
+}
+
+.play-card {
+    height: 100%;
+}
+
+.play-card-name {
+    overflow-wrap: anywhere;
+}
+
+/* Damage types read at a glance: bashing half-filled, lethal full, aggravated marked. */
+.health-box.taken-bashing {
+    background: linear-gradient(135deg, #c62828 50%, transparent 50%);
+}
+
+.health-box.taken-aggravated {
+    background: #c62828;
+    box-shadow: inset 0 0 0 3px #ffcdd2;
+}
+
+.play-pool {
+    align-items: center;
+    border-bottom: 1px solid var(--mud-palette-lines-default);
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.4rem 0;
+}
+
+.pool-dice {
+    align-items: baseline;
+    display: flex;
+    flex-direction: column;
+    min-width: 5.5rem;
+    text-align: right;
+}
+
+.pool-dice-total {
+    align-self: flex-end;
+    font-size: 1.5rem;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
+.pool-dice-detail {
+    align-self: flex-end;
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.75rem;
+}
+
+.pool-dice-hunger {
+    color: var(--mud-palette-primary);
+}
+/* ---------- Tracker boxes (Willpower, Vitae) ---------- */
+
+.tracker-boxes {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.tracker-box {
+    background: transparent;
+    border: 2px solid var(--mud-palette-text-secondary);
+    border-radius: 3px;
+    cursor: pointer;
+    height: 26px;
+    padding: 0;
+    width: 26px;
+}
+
+.tracker-box:focus-visible {
+    outline: 2px solid var(--mud-palette-primary);
+    outline-offset: 2px;
+}
+
+.tracker-box:disabled {
+    cursor: default;
+    opacity: 0.6;
+}
+
+.tracker-boxes.willpower .tracker-box {
+    border-color: #90a4ae;
+}
+
+.tracker-boxes.willpower .tracker-box.filled {
+    background: #90a4ae;
+}
+
+.tracker-boxes.vitae .tracker-box {
+    border-color: #c62828;
+}
+
+.tracker-boxes.vitae .tracker-box.filled {
+    background: #c62828;
+}
+
+.tracker-count {
+    color: var(--mud-palette-text-secondary);
+    font-size: 0.8125rem;
+    font-variant-numeric: tabular-nums;
+    margin-left: 0.25rem;
+}
+
+/* ---------- Wound entry ---------- */
+
+.wound-entry {
+    align-items: flex-start;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+}
+
+.wound-entry-text {
+    flex: 1 1 10rem;
+}
+
+.wound-entry-amount {
+    flex: 0 0 5rem;
+}
+
+.wound-entry-type {
+    flex: 0 0 8.5rem;
+}
+
+.wound-entry .mud-button-root {
+    margin-top: 4px;
+}

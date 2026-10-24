@@ -1,0 +1,18 @@
+@* Signed in, but without the GM role (e.g. a future player account). *@
+@inject CookieAuthenticationStateProvider Auth
+@inject NavigationManager Navigation
+
+<MudStack AlignItems="AlignItems.Center" Class="mt-16" Spacing="3">
+    <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Large" Color="Color.Secondary" />
+    <MudText Typo="Typo.h5">GM only</MudText>
+    <MudText Color="Color.Secondary">This account can't open the GM's tools.</MudText>
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="SignOutAsync">Sign in as someone else</MudButton>
+</MudStack>
+
+@code {
+    private async Task SignOutAsync()
+    {
+        await Auth.LogoutAsync();
+        Navigation.NavigateTo("login");
+    }
+}

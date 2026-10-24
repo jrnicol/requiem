@@ -1,0 +1,255 @@
+@page "/catalog/powers"
+@attribute [Authorize(Policy = Policies.GameMaster)]
+@inject RequiemApi Api
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+<PageTitle>Powers · Requiem</PageTitle>
+
+<MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Wrap="Wrap.Wrap" Class="mb-2">
+    <MudText Typo="Typo.h4" Class="brand-font">Powers</MudText>
+    @if (_powers is not null)
+    {
+        <MudText Color="Color.Secondary">@ReviewedCount of @_powers.Count reviewed</MudText>
+    }
+</MudStack>
+
+@if (_powers is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudProgressLinear Value="ReviewedPercent" Color="Color.Success" Class="mb-4" aria-label="Review progress" />
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5" Class="@(_selected is null ? null : "d-none d-md-block")">
+            <MudStack Spacing="2" Class="mb-3">
+                <MudTextField T="string" @bind-Value="_search" Immediate="true" DebounceInterval="200"
+                              Placeholder="Search names and rules text" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable="true" />
+                <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2">
+                    <MudSelect T="int?" @bind-Value="_groupFilter" Label="Group" Variant="Variant.Outlined" Margin="Margin.Dense"
+                               Style="min-width:12rem" ToStringFunc="@(id => id is null ? "All groups" : GroupName(id.Value))">
+                        <MudSelectItem T="int?" Value="null">All groups</MudSelectItem>
+                        @foreach (var group in _groups)
+                        {
+                            <MudSelectItem T="int?" Value="group.Id">@group.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudSwitch T="bool" @bind-Value="_unreviewedOnly" Color="Color.Primary" Label="Unreviewed only" />
+                </MudStack>
+            </MudStack>
+
+            @if (Filtered.Count == 0)
+            {
+                <MudText Color="Color.Secondary">No powers match.</MudText>
+            }
+            <div class="power-list">
+                @foreach (var group in Filtered.GroupBy(p => p.PowerGroupId))
+                {
+                    <MudText Typo="Typo.overline" Color="Color.Secondary" Class="power-list-group">@GroupName(group.Key)</MudText>
+                    @foreach (var power in group)
+                    {
+                        <button type="button" class="@($"power-row {(power.Id == _selected?.Id ? "power-row-active" : "")}")"
+                                @onclick="() => SelectAsync(power)">
+                            <span class="power-row-level">@Dots(power.Level)</span>
+                            <span class="power-row-name">@power.Name</span>
+                            @if (power.Category is { } category)
+                            {
+                                <span class="power-row-category">@category</span>
+                            }
+                            @if (power.IsReviewed)
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" aria-label="Reviewed" />
+                            }
+                        </button>
+                    }
+                }
+            </div>
+        </MudItem>
+
+        <MudItem xs="12" md="7">
+            @if (_selected is null || _edit is null)
+            {
+                <MudText Color="Color.Secondary" Class="d-none d-md-block mt-4">
+                    Pick a power to check it against the book. Imported text can land in the wrong field or carry OCR slips (I for 1, split words).
+                </MudText>
+            }
+            else
+            {
+                <MudPaper Class="pa-3 pa-sm-4" Elevation="1">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Class="mb-2">
+                        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" Class="d-md-none" aria-label="Back to the list" OnClick="CloseAsync" />
+                        <div style="flex:1">
+                            <MudText Typo="Typo.h6">@_selected.Name</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @GroupName(_selected.PowerGroupId)@(_selected.SourcePage is { } page ? $" · VtR p.{page}" : "")
+                            </MudText>
+                        </div>
+                    </MudStack>
+
+                    <MudTabs @bind-ActivePanelIndex="_tab" Elevation="0" Rounded="true" TabPanelsClass="pt-3">
+                        <MudTabPanel Text="Edit">
+                            <PowerEditor Form="_edit" Groups="_groups" Rated="IsRated(_selected)" Errors="_errors" />
+                        </MudTabPanel>
+                        <MudTabPanel Text="Preview">
+                            <PowerDetails Power="Preview" />
+                        </MudTabPanel>
+                    </MudTabs>
+
+                    @if (_message is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Dense="true" Class="mt-3">@_message</MudAlert>
+                    }
+
+                    <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Justify="Justify.FlexEnd" Class="mt-4">
+                        <MudButton Variant="Variant.Text" OnClick="Revert" Disabled="!IsDirty || _saving">Revert</MudButton>
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="() => SaveAsync(markReviewed: false, next: false)"
+                                   Disabled="!IsDirty || _saving">Save</MudButton>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Check"
+                                   OnClick="() => SaveAsync(markReviewed: true, next: true)" Disabled="_saving">
+                            Mark reviewed &amp; next
+                        </MudButton>
+                    </MudStack>
+                </MudPaper>
+            }
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "power")] public int? PowerId { get; set; }
+
+    private IReadOnlyList<PowerOption>? _powers;
+    private IReadOnlyList<DisciplineOption> _groups = [];
+    private string? _search;
+    private int? _groupFilter;
+    private bool _unreviewedOnly;
+
+    private PowerOption? _selected;
+    private PowerEditForm? _edit;
+    private string _original = "";
+    private int _tab;
+    private bool _saving;
+    private string? _message;
+    private IReadOnlyDictionary<string, string[]>? _errors;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _groups = await Api.GetDisciplinesAsync();
+        _powers = await Api.GetPowersAsync();
+        if (PowerId is { } id && _powers.FirstOrDefault(p => p.Id == id) is { } power) Select(power);
+    }
+
+    private int ReviewedCount => _powers?.Count(p => p.IsReviewed) ?? 0;
+    private double ReviewedPercent => _powers is { Count: > 0 } ? 100.0 * ReviewedCount / _powers.Count : 0;
+
+    // Groups in catalog order (base powers, Caitiff, Bloodline, sorcery, ritae, ghoul), powers by level then book order.
+    private List<PowerOption> Filtered
+    {
+        get
+        {
+            if (_powers is null) return [];
+            var order = _groups.Select((g, i) => (g.Id, i)).ToDictionary(x => x.Id, x => x.i);
+            var search = _search?.Trim();
+            return _powers
+                .Where(p => _groupFilter is null || p.PowerGroupId == _groupFilter)
+                .Where(p => !_unreviewedOnly || !p.IsReviewed || p.Id == _selected?.Id)
+                .Where(p => string.IsNullOrEmpty(search)
+                            || p.SearchText.Contains(search, StringComparison.OrdinalIgnoreCase)
+                            || GroupName(p.PowerGroupId).Contains(search, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(p => order.GetValueOrDefault(p.PowerGroupId, int.MaxValue))
+                .ThenBy(p => p.Level ?? 0)
+                .ThenBy(p => p.SourcePage ?? 0)
+                .ToList();
+        }
+    }
+
+    private bool IsDirty => _edit is not null && Snapshot(_edit) != _original;
+
+    // The preview shows the edits as they would be saved.
+    private PowerOption Preview => _selected! with
+    {
+        Name = _edit!.Name, Level = _edit.Level, Category = _edit.Category, Flavor = _edit.Flavor,
+        VitaeCost = _edit.VitaeCost, WillpowerCost = _edit.WillpowerCost, CostText = _edit.CostText,
+        DicePoolText = _edit.DicePoolText, OpposedBy = _edit.OpposedBy, ActionText = _edit.ActionText,
+        Duration = _edit.Duration, CastingDuration = _edit.CastingDuration, HowToLearn = _edit.HowToLearn,
+        DramaticFailureText = _edit.DramaticFailureText, FailureText = _edit.FailureText, SuccessText = _edit.SuccessText,
+        ExceptionalSuccessText = _edit.ExceptionalSuccessText, Notes = _edit.Notes, IsReviewed = _edit.IsReviewed,
+        BonusOptions = _edit.BonusOptions.Select(b => new PowerBonusOptionDto(b.SuccessCost, b.Effect)).ToList(),
+    };
+
+    private string GroupName(int id) => _groups.FirstOrDefault(g => g.Id == id)?.Name ?? "Unknown group";
+
+    private bool IsRated(PowerOption power) => _groups.FirstOrDefault(g => g.Id == power.PowerGroupId)?.HasDots == true;
+
+    private static string Dots(int? level) => level is { } l ? new string('●', l) : "";
+
+    private static string Snapshot(PowerEditForm form) => System.Text.Json.JsonSerializer.Serialize(form, RequiemJson.Options);
+
+    private void Select(PowerOption power)
+    {
+        _selected = power;
+        _edit = PowerEditForm.From(power);
+        _original = Snapshot(_edit);
+        _message = null;
+        _errors = null;
+    }
+
+    private async Task<bool> ConfirmDiscardAsync() =>
+        !IsDirty || await Dialogs.ShowMessageBoxAsync("Discard changes?",
+            $"Your edits to {_selected!.Name} haven't been saved.", yesText: "Discard", cancelText: "Keep editing") == true;
+
+    private async Task SelectAsync(PowerOption power)
+    {
+        if (power.Id == _selected?.Id || !await ConfirmDiscardAsync()) return;
+        Select(power);
+    }
+
+    private async Task CloseAsync()
+    {
+        if (!await ConfirmDiscardAsync()) return;
+        _selected = null;
+        _edit = null;
+    }
+
+    private void Revert()
+    {
+        if (_selected is not null) Select(_selected);
+    }
+
+    private async Task SaveAsync(bool markReviewed, bool next)
+    {
+        if (_selected is null || _edit is null) return;
+        if (markReviewed) _edit.IsReviewed = true;
+
+        // Pick the next power before saving: with "Unreviewed only" this one drops out of the list.
+        var list = Filtered;
+        var index = list.FindIndex(p => p.Id == _selected.Id);
+        var following = list.Skip(index + 1).FirstOrDefault(p => !p.IsReviewed) ?? list.Skip(index + 1).FirstOrDefault();
+
+        _saving = true;
+        try
+        {
+            var result = await Api.SavePowerAsync(_selected.Id, _edit);
+            if (!result.Succeeded)
+            {
+                _message = result.Errors is { Count: > 0 } errors
+                    ? string.Join(" ", errors.Values.SelectMany(v => v))
+                    : result.Message;
+                _errors = result.Errors;
+                return;
+            }
+
+            _powers = await Api.GetPowersAsync();
+            Snackbar.Add($"Saved {result.Saved!.Name}.", Severity.Success);
+            if (next && following is not null) Select(_powers.First(p => p.Id == following.Id));
+            else Select(result.Saved);
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

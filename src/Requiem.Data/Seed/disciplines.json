@@ -1,0 +1,41 @@
+// Power groups (VtR table of contents, PDF p.2). sourcePage is the PDF page (book page + 4).
+// "bloodline" names the owning Bloodline or Magi House by its catalog name.
+// Caitiff and Bloodline Disciplines are rated in dots (dot N grants powers 1..N);
+// Blood Sorcery rituals and Sabbat Ritae are learned one at a time (house ruling 2026-10-23).
+// Individual powers arrive with the powers-catalog import.
+[
+  { "name": "Base Powers", "kind": "BasePower", "sourcePage": 19,
+    "description": "Fortify Form, Masquerading, Healing and Heightened Senses: what every vampire can do." },
+
+  { "name": "Auspex", "kind": "CaitiffDiscipline", "sourcePage": 144 },
+  { "name": "Cleptes", "kind": "CaitiffDiscipline", "sourcePage": 147 },
+  { "name": "Concord", "kind": "CaitiffDiscipline", "sourcePage": 150 },
+  { "name": "Furor", "kind": "CaitiffDiscipline", "sourcePage": 153 },
+  { "name": "Idolatry", "kind": "CaitiffDiscipline", "sourcePage": 156 },
+  { "name": "Impetus", "kind": "CaitiffDiscipline", "sourcePage": 159 },
+  { "name": "Investiture", "kind": "CaitiffDiscipline", "sourcePage": 162 },
+  { "name": "Nightmare", "kind": "CaitiffDiscipline", "sourcePage": 163 },
+  { "name": "Quietus", "kind": "CaitiffDiscipline", "sourcePage": 168 },
+
+  { "name": "Dementation", "kind": "BloodlineDiscipline", "bloodline": "Malkavian", "sourcePage": 172 },
+  { "name": "Dominate", "kind": "BloodlineDiscipline", "bloodline": "Ventrue", "sourcePage": 176 },
+  { "name": "Du'l-Faqar", "kind": "BloodlineDiscipline", "bloodline": "Al-Haqqadi", "sourcePage": 181 },
+  { "name": "Majesty", "kind": "BloodlineDiscipline", "bloodline": "Toreador", "sourcePage": 185 },
+  { "name": "Obfuscate", "kind": "BloodlineDiscipline", "bloodline": "Nosferatu", "sourcePage": 189 },
+  { "name": "Protean", "kind": "BloodlineDiscipline", "bloodline": "Gangrel", "sourcePage": 192 },
+  { "name": "Tartarus", "kind": "BloodlineDiscipline", "bloodline": "Brujah", "sourcePage": 196 },
+
+  { "name": "Hekate", "kind": "BloodSorcery", "bloodline": "Tremere", "sourcePage": 200,
+    "description": "House Tremere's sorcery (the Tremere header calls it Evocation)." },
+  { "name": "Vishap", "kind": "BloodSorcery", "bloodline": "Tzimisce", "sourcePage": 208 },
+  { "name": "Mayaparisatya", "kind": "BloodSorcery", "bloodline": "Ravnos", "sourcePage": 214 },
+  { "name": "Noctis", "kind": "BloodSorcery", "bloodline": "Lasombra", "sourcePage": 219,
+    "description": "House Lasombra's sorcery, including Obtenebration." },
+  { "name": "Necromancy", "kind": "BloodSorcery", "bloodline": "Giovanni", "sourcePage": 224 },
+
+  { "name": "Auctoritas", "kind": "SabbatRitae", "sourcePage": 234,
+    "description": "Sabbat Ritae taught by elders; some need Status (Sabbat)." },
+  { "name": "Ignobilis", "kind": "SabbatRitae", "sourcePage": 238 },
+
+  { "name": "Ghoul Powers", "kind": "GhoulPower", "sourcePage": 66 }
+]

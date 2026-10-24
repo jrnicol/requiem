@@ -1,0 +1,98 @@
+@page "/login"
+@inject CookieAuthenticationStateProvider Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Sign in · Requiem</PageTitle>
+
+<div class="auth-page">
+    <MudPaper Outlined="true" Class="pa-6 auth-card">
+        <MudText Typo="Typo.h4" Align="Align.Center" Class="brand-font mb-1">Requiem</MudText>
+        <MudText Align="Align.Center" Color="Color.Secondary" Class="mb-6">Sign in to your chronicle</MudText>
+
+        @if (_ready)
+        {
+            <EditForm Model="_request" OnValidSubmit="SignInAsync">
+                <DataAnnotationsValidator />
+                <MudStack Spacing="3">
+                    @if (_error is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true">@_error</MudAlert>
+                    }
+                    <MudTextField @bind-Value="_request.Email" For="() => _request.Email" Label="Email"
+                                  InputType="InputType.Email" Variant="Variant.Outlined" AutoFocus="true"
+                                  UserAttributes="@(new() { ["autocomplete"] = "username" })" />
+                    <MudTextField @bind-Value="_request.Password" For="() => _request.Password" Label="Password"
+                                  InputType="InputType.Password" Variant="Variant.Outlined"
+                                  UserAttributes="@(new() { ["autocomplete"] = "current-password" })" />
+                    <MudCheckBox T="bool" @bind-Value="_request.RememberMe" Color="Color.Primary"
+                                 Label="Keep me signed in on this device" />
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                               Size="Size.Large" FullWidth="true" Disabled="_busy">
+                        @(_busy ? "Signing in…" : "Sign in")
+                    </MudButton>
+                </MudStack>
+            </EditForm>
+        }
+        else
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+    </MudPaper>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private readonly LoginRequest _request = new();
+    private string? _error;
+    private bool _busy;
+    private bool _ready;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await Auth.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated == true)
+        {
+            Navigation.NavigateTo(Components.ReturnUrl.SafeOrHome(ReturnUrl), replace: true);
+            return;
+        }
+
+        try
+        {
+            if (await Auth.GetSetupStatusAsync() is { NeedsSetup: true })
+            {
+                Navigation.NavigateTo("setup", replace: true);
+                return;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Couldn't reach the server. Check your connection and try again.";
+        }
+        _ready = true;
+    }
+
+    private async Task SignInAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var result = await Auth.LoginAsync(_request);
+            if (result.Succeeded)
+            {
+                Navigation.NavigateTo(Components.ReturnUrl.SafeOrHome(ReturnUrl), replace: true);
+                return;
+            }
+            _error = result.Message;
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Couldn't reach the server. Try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

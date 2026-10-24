@@ -1,0 +1,13 @@
+// Supporting Cast Edges (WoD Core p.117). The Vampire book adds none.
+[
+  { "name": "Tough", "edge": "Tough", "sourcePage": 117,
+    "description": "Treats Strength (Physical) as 5 higher when harmed and checking for Wounds; +2 to rolls to survive or endure physical hardship." },
+  { "name": "Unshakable", "edge": "Unshakable", "sourcePage": 117,
+    "description": "Treats Mental as 5 higher when it stands in for Willpower; Social Confrontation against them is at Challenging difficulty." },
+  { "name": "Quick Witted", "edge": "QuickWitted", "sourcePage": 117,
+    "description": "Treats Social as 5 higher, and gains +2 dice when dealing a Social Confrontation attack." },
+  { "name": "Well Connected", "edge": "WellConnected", "sourcePage": 117,
+    "description": "Attempts to affect any group or location listed as one of their Assets are at Challenging difficulty." },
+  { "name": "Assassin", "edge": "Assassin", "sourcePage": 117,
+    "description": "Practiced at killing: +2 dice on attacks and +1 Harm with any weapon." }
+]

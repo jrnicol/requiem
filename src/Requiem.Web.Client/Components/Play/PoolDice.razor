@@ -1,0 +1,27 @@
+@* A pool as it would be rolled now: wound penalty taken off, Hunger dice split out. *@
+
+@{
+    var roll = Npc.Roll(Dice);
+}
+<div class="pool-dice" aria-label="@AriaText(roll)">
+    <span class="pool-dice-total">@roll.Total</span>
+    <span class="pool-dice-detail">
+        @if (roll.HungerDice > 0)
+        {
+            <span>@roll.RegularDice + <b class="pool-dice-hunger">@roll.HungerDice Hunger</b></span>
+        }
+        else
+        {
+            <span>@(roll.Total == 1 ? "die" : "dice")</span>
+        }
+    </span>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PlayCharacter Npc { get; set; } = null!;
+    /// <summary>Base dice before the wound penalty.</summary>
+    [Parameter] public int Dice { get; set; }
+
+    private static string AriaText(DicePoolSplit roll) =>
+        roll.HungerDice > 0 ? $"{roll.Total} dice, {roll.HungerDice} of them Hunger dice" : $"{roll.Total} dice";
+}

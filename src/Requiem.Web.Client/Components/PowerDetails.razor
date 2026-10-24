@@ -1,0 +1,88 @@
+@* A catalog power as the book prints it: the roll first, then results, bonus successes and notes. *@
+
+<div class="power-details">
+    @if (!string.IsNullOrWhiteSpace(Power.Flavor))
+    {
+        <MudText Typo="Typo.body2" Class="power-text mb-2">@Power.Flavor</MudText>
+    }
+
+    @if (Stats.Count > 0)
+    {
+        <dl class="power-stats mb-2">
+            @foreach (var (label, value) in Stats)
+            {
+                <dt>@label</dt>
+                <dd class="power-text">@value</dd>
+            }
+        </dl>
+    }
+
+    @if (Results.Count > 0)
+    {
+        <dl class="power-stats mb-2">
+            @foreach (var (label, value) in Results)
+            {
+                <dt>@label</dt>
+                <dd class="power-text">@value</dd>
+            }
+        </dl>
+    }
+
+    @if (Power.BonusOptions.Count > 0)
+    {
+        <MudText Typo="Typo.subtitle2">Bonus successes</MudText>
+        <ul class="power-bonus mb-2">
+            @foreach (var option in Power.BonusOptions)
+            {
+                <li><strong>+@option.SuccessCost</strong> @option.Effect</li>
+            }
+        </ul>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(Power.Notes))
+    {
+        <MudText Typo="Typo.subtitle2">Notes</MudText>
+        <MudText Typo="Typo.body2" Class="power-text mb-2">@Power.Notes</MudText>
+    }
+
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
+        @if (Power.SourcePage is { } page)
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary">VtR p.@(page)</MudText>
+        }
+        @if (!Power.IsReviewed)
+        {
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning">Unreviewed import</MudChip>
+        }
+    </MudStack>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PowerOption Power { get; set; } = null!;
+
+    private List<(string Label, string Value)> Stats => Pairs(
+        ("Cost", Power.CostText ?? CostFromNumbers()),
+        ("Dice pool", Power.DicePoolText),
+        ("Opposed by", Power.DicePoolText?.Contains(Power.OpposedBy ?? "\u0000", StringComparison.OrdinalIgnoreCase) == true ? null : Power.OpposedBy),
+        ("Action", Power.ActionText),
+        ("Duration", Power.Duration),
+        ("Casting time", Power.CastingDuration),
+        ("How to learn", Power.HowToLearn));
+
+    private List<(string Label, string Value)> Results => Pairs(
+        ("Dramatic failure", Power.DramaticFailureText),
+        ("Failure", Power.FailureText),
+        ("Success", Power.SuccessText),
+        ("Exceptional success", Power.ExceptionalSuccessText));
+
+    private string? CostFromNumbers() => (Power.VitaeCost, Power.WillpowerCost) switch
+    {
+        (null, null) => null,
+        ({ } v, null) => $"{v} Vitae",
+        (null, { } w) => $"{w} Willpower",
+        var (v, w) => $"{v} Vitae + {w} Willpower",
+    };
+
+    private static List<(string, string)> Pairs(params (string Label, string? Value)[] items) =>
+        items.Where(i => !string.IsNullOrWhiteSpace(i.Value)).Select(i => (i.Label, i.Value!)).ToList();
+}

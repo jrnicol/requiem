@@ -1,0 +1,150 @@
+@* Fields for correcting an imported power. Long text keeps paragraph breaks (blank lines). *@
+
+<MudGrid Spacing="2">
+    <MudItem xs="12" sm="@(Rated ? 8 : 6)">
+        <MudTextField T="string" @bind-Value="Form.Name" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      MaxLength="200" Error="@HasError(nameof(Form.Name))" ErrorText="@ErrorFor(nameof(Form.Name))" />
+    </MudItem>
+    @if (Rated)
+    {
+        <MudItem xs="12" sm="4">
+            <MudSelect T="int?" @bind-Value="Form.Level" Label="Dot level" Variant="Variant.Outlined" Margin="Margin.Dense">
+                @for (var level = 1; level <= 5; level++)
+                {
+                    var value = level;
+                    <MudSelectItem T="int?" Value="value">@(new string('●', value))</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+    }
+    else
+    {
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" @bind-Value="Form.Category" Label="Category" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          MaxLength="200" HelperText="The sub-heading it's listed under, if any" />
+        </MudItem>
+    }
+
+    <MudItem xs="12">
+        <MudTextField T="string" @bind-Value="Form.Flavor" Label="Description" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Lines="3" Sizing="InputSizing.Auto" MaxLength="PowerEditForm.MaxLongText" />
+    </MudItem>
+
+    <MudItem xs="12"><MudText Typo="Typo.subtitle2">Cost</MudText></MudItem>
+    <MudItem xs="6" sm="3">
+        <MudNumericField T="int?" @bind-Value="Form.VitaeCost" Label="Vitae" Min="0" Max="20" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    </MudItem>
+    <MudItem xs="6" sm="3">
+        <MudNumericField T="int?" @bind-Value="Form.WillpowerCost" Label="Willpower" Min="0" Max="10" Variant="Variant.Outlined" Margin="Margin.Dense" />
+    </MudItem>
+    <MudItem xs="12" sm="6">
+        <MudTextField T="string" @bind-Value="Form.CostText" Label="Cost as printed" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" />
+    </MudItem>
+
+    <MudItem xs="12"><MudText Typo="Typo.subtitle2">Roll</MudText></MudItem>
+    <MudItem xs="12">
+        <MudTextField T="string" @bind-Value="Form.DicePoolText" Label="Dice pool as printed" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" />
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudSelect T="CharacterAttribute?" @bind-Value="Form.DicePoolAttribute" Label="Attribute" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+            @foreach (var attribute in Enum.GetValues<CharacterAttribute>())
+            {
+                <MudSelectItem T="CharacterAttribute?" Value="attribute">@(attribute)</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudSelect T="Skill?" @bind-Value="Form.DicePoolSkill" Label="Skill" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true">
+            @foreach (var skill in Enum.GetValues<Skill>())
+            {
+                <MudSelectItem T="Skill?" Value="skill">@skill</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="4">
+        <MudSelect T="int?" @bind-Value="Form.DicePoolPowerGroupId" Label="Discipline" Variant="Variant.Outlined" Margin="Margin.Dense" Clearable="true"
+                   ToStringFunc="@(id => Groups.FirstOrDefault(g => g.Id == id)?.Name ?? string.Empty)">
+            @foreach (var group in Groups.Where(g => g.HasDots))
+            {
+                <MudSelectItem T="int?" Value="group.Id">@group.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </MudItem>
+    <MudItem xs="12" sm="6">
+        <MudTextField T="string" @bind-Value="Form.OpposedBy" Label="Opposed by" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" />
+    </MudItem>
+    <MudItem xs="12" sm="6">
+        <MudTextField T="string" @bind-Value="Form.Duration" Label="Duration" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" />
+    </MudItem>
+    <MudItem xs="12">
+        <MudTextField T="string" @bind-Value="Form.ActionText" Label="Action" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Lines="1" Sizing="InputSizing.Auto" MaxLength="PowerEditForm.MaxLongText" />
+    </MudItem>
+    @if (!Rated)
+    {
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" @bind-Value="Form.CastingDuration" Label="Casting time" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" @bind-Value="Form.HowToLearn" Label="How to learn" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Lines="1" Sizing="InputSizing.Auto" MaxLength="PowerEditForm.MaxLongText" />
+        </MudItem>
+    }
+
+    <MudItem xs="12"><MudText Typo="Typo.subtitle2">Results</MudText></MudItem>
+    @foreach (var (label, get, set) in ResultFields)
+    {
+        <MudItem xs="12">
+            <MudTextField T="string" Value="get()" ValueChanged="set" Label="@label" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Lines="2" Sizing="InputSizing.Auto" MaxLength="PowerEditForm.MaxLongText" />
+        </MudItem>
+    }
+
+    <MudItem xs="12">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+            <MudText Typo="Typo.subtitle2">Bonus successes</MudText>
+            <MudButton Size="Size.Small" StartIcon="@Icons.Material.Filled.Add" OnClick="() => Form.BonusOptions.Add(new PowerBonusEntry())">Add option</MudButton>
+        </MudStack>
+    </MudItem>
+    @foreach (var option in Form.BonusOptions)
+    {
+        <MudItem xs="12">
+            <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="1">
+                <MudNumericField T="int" @bind-Value="option.SuccessCost" Label="+" Min="1" Max="10" Variant="Variant.Outlined"
+                                 Margin="Margin.Dense" Style="max-width:5rem" />
+                <MudTextField T="string" @bind-Value="option.Effect" Label="Effect" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              Lines="1" Sizing="InputSizing.Auto" MaxLength="1000" Style="flex:1" />
+                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" Class="mt-2" aria-label="Remove option"
+                               OnClick="() => Form.BonusOptions.Remove(option)" />
+            </MudStack>
+        </MudItem>
+    }
+
+    <MudItem xs="12">
+        <MudTextField T="string" @bind-Value="Form.Notes" Label="Notes" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      Lines="3" Sizing="InputSizing.Auto" MaxLength="PowerEditForm.MaxLongText"
+                      HelperText="Sidebars, extended rolls, tables and anything without its own field" />
+    </MudItem>
+    <MudItem xs="12">
+        <MudSwitch T="bool" @bind-Value="Form.IsReviewed" Color="Color.Success" Label="Checked against the book" />
+    </MudItem>
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public PowerEditForm Form { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<DisciplineOption> Groups { get; set; } = [];
+    /// <summary>True for dot-rated Disciplines (shows the level); false for rituals, ritae and base powers.</summary>
+    [Parameter] public bool Rated { get; set; }
+    [Parameter] public IReadOnlyDictionary<string, string[]>? Errors { get; set; }
+
+    private IEnumerable<(string Label, Func<string?> Get, Action<string?> Set)> ResultFields =>
+    [
+        ("Dramatic failure", () => Form.DramaticFailureText, v => Form.DramaticFailureText = v),
+        ("Failure", () => Form.FailureText, v => Form.FailureText = v),
+        ("Success", () => Form.SuccessText, v => Form.SuccessText = v),
+        ("Exceptional success", () => Form.ExceptionalSuccessText, v => Form.ExceptionalSuccessText = v),
+    ];
+
+    private bool HasError(string field) => Errors?.ContainsKey(field) == true;
+    private string? ErrorFor(string field) => Errors?.TryGetValue(field, out var messages) == true ? string.Join(" ", messages) : null;
+}

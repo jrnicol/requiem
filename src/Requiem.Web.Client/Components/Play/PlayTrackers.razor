@@ -1,0 +1,58 @@
+@* Health, Willpower and Vitae as on the paper sheet. Health is never marked down: wounds are listed
+   separately and counted against it (house rules). Willpower and Vitae are boxes; each tap saves at once. *@
+
+@{
+    var status = Npc.Status;
+}
+<div class="play-trackers">
+    <div class="play-row">
+        <span class="play-label">Health</span>
+        <span class="play-value">@Npc.Health</span>
+        <MudText Typo="Typo.body2" Color="Color.Secondary">
+            @(status.TotalDamage == 0 ? "no wounds" : $"wounds total {status.TotalDamage}")
+        </MudText>
+        @if (status.DicePenalty > 0)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Warning" Variant="Variant.Outlined">−@status.DicePenalty dice</MudChip>
+        }
+        @if (status.IsTakenOut)
+        {
+            <MudChip T="string" Size="Size.Small" Color="Color.Error">@(Npc.IsVampire ? "Torpor" : "Taken Out")</MudChip>
+        }
+    </div>
+
+    <div class="play-row">
+        <span class="play-label">Willpower</span>
+        @if (Npc.CanSpendWillpower)
+        {
+            <TrackerBoxes Label="Willpower" Max="Npc.WillpowerDots" Current="Npc.WillpowerCurrent" Disabled="Busy" Class="willpower"
+                          CurrentChanged="v => Act(new PlayAction { Kind = PlayActionKind.AdjustWillpower, Amount = v - Npc.WillpowerCurrent })" />
+        }
+        else
+        {
+            <span class="play-value">@Npc.WillpowerDots</span>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">Supporting Cast don't spend it</MudText>
+        }
+    </div>
+
+    @if (Npc.IsVampire && Npc.VitaeCurrent is { } vitae && Npc.MaxVitae is { } max)
+    {
+        <div class="play-row">
+            <span class="play-label">Vitae</span>
+            <TrackerBoxes Label="Vitae" Max="max" Current="vitae" Disabled="Busy" Class="vitae"
+                          CurrentChanged="v => Act(new PlayAction { Kind = PlayActionKind.AdjustVitae, Amount = v - vitae })" />
+            @if (Npc.HungerDice > 0)
+            {
+                <MudChip T="string" Size="Size.Small" Color="Color.Primary" Variant="Variant.Outlined">Hunger @Npc.HungerDice</MudChip>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public PlayCharacter Npc { get; set; } = null!;
+    [Parameter] public EventCallback<PlayAction> OnAct { get; set; }
+    [Parameter] public bool Busy { get; set; }
+
+    private Task Act(PlayAction action) => action.Amount == 0 ? Task.CompletedTask : OnAct.InvokeAsync(action);
+}

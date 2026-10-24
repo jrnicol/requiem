@@ -1,0 +1,113 @@
+@page "/setup"
+@inject CookieAuthenticationStateProvider Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Set up · Requiem</PageTitle>
+
+<div class="auth-page">
+    <MudPaper Outlined="true" Class="pa-6 auth-card">
+        <MudText Typo="Typo.h4" Align="Align.Center" Class="brand-font mb-1">Requiem</MudText>
+        <MudText Align="Align.Center" Color="Color.Secondary" Class="mb-6">
+            Create the GM account. This only happens once.
+        </MudText>
+
+        @if (_status is null)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+        }
+        else
+        {
+            <EditForm EditContext="_editContext" OnValidSubmit="CreateAsync">
+                <DataAnnotationsValidator />
+                <MudStack Spacing="3">
+                    @if (_error is not null)
+                    {
+                        <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true">@_error</MudAlert>
+                    }
+                    <MudTextField @bind-Value="_request.DisplayName" For="() => _request.DisplayName" Label="Your name"
+                                  HelperText="Shown in the app, e.g. 'The Storyteller'" Variant="Variant.Outlined" AutoFocus="true" />
+                    <MudTextField @bind-Value="_request.Email" For="() => _request.Email" Label="Email"
+                                  InputType="InputType.Email" Variant="Variant.Outlined"
+                                  UserAttributes="@(new() { ["autocomplete"] = "username" })" />
+                    <MudTextField @bind-Value="_request.Password" For="() => _request.Password" Label="Password"
+                                  HelperText="At least 12 characters. A passphrase of a few words works well."
+                                  InputType="InputType.Password" Variant="Variant.Outlined"
+                                  UserAttributes="@(new() { ["autocomplete"] = "new-password" })" />
+                    <MudTextField @bind-Value="_request.ConfirmPassword" For="() => _request.ConfirmPassword" Label="Confirm password"
+                                  InputType="InputType.Password" Variant="Variant.Outlined"
+                                  UserAttributes="@(new() { ["autocomplete"] = "new-password" })" />
+                    @if (_status.RequiresSetupCode)
+                    {
+                        <MudTextField @bind-Value="_request.SetupCode" For="() => _request.SetupCode" Label="Setup code"
+                                      HelperText="The Auth:SetupCode value from the server's configuration."
+                                      Variant="Variant.Outlined" />
+                    }
+                    <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                               Size="Size.Large" FullWidth="true" Disabled="_busy">
+                        @(_busy ? "Creating…" : "Create GM account")
+                    </MudButton>
+                </MudStack>
+            </EditForm>
+        }
+    </MudPaper>
+</div>
+
+@code {
+    private readonly SetupRequest _request = new();
+    private EditContext _editContext = null!;
+    private ValidationMessageStore _serverErrors = null!;
+    private SetupStatus? _status;
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _editContext = new EditContext(_request);
+        _serverErrors = new ValidationMessageStore(_editContext);
+        _editContext.OnFieldChanged += (_, e) => _serverErrors.Clear(e.FieldIdentifier);
+
+        try
+        {
+            _status = await Auth.GetSetupStatusAsync();
+            if (_status is { NeedsSetup: false }) Navigation.NavigateTo("login", replace: true);
+        }
+        catch (HttpRequestException)
+        {
+            _status = new SetupStatus(true, false);
+            _error = "Couldn't reach the server. Check your connection and try again.";
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        _busy = true;
+        _error = null;
+        _serverErrors.Clear();
+        try
+        {
+            var result = await Auth.SetupAsync(_request);
+            if (result.Succeeded)
+            {
+                Navigation.NavigateTo("", replace: true);
+                return;
+            }
+
+            _error = result.Message;
+            foreach (var (field, messages) in result.Errors ?? new Dictionary<string, string[]>())
+            {
+                var property = typeof(SetupRequest).GetProperties()
+                    .FirstOrDefault(p => string.Equals(p.Name, field, StringComparison.OrdinalIgnoreCase))?.Name ?? "";
+                _serverErrors.Add(new FieldIdentifier(_request, property), messages);
+            }
+            _editContext.NotifyValidationStateChanged();
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Couldn't reach the server. Try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,113 @@
+@* Active Compels (with quick-add from the rules and a Base Compel roll) and Stains. *@
+
+<MudText Typo="Typo.subtitle2">Compels</MudText>
+<MudText Typo="Typo.caption" Color="Color.Secondary">
+    The rating comes off rolls that fight the Compel, or adds to rolls that go along with it.
+</MudText>
+
+@foreach (var compel in Form.Compels.ToList())
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap" Class="mt-1">
+        <MudTextField T="string" Value="compel.Name" ValueChanged="v => Update(() => compel.Name = v ?? string.Empty)"
+                      Placeholder="e.g. Fearful of guns" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      MaxLength="FullSheetForm.MaxTextLength" Style="flex:1; min-width:10rem" />
+        <MudNumericField T="int" Value="compel.Rating" ValueChanged="v => Update(() => compel.Rating = v)" Min="0" Max="10"
+                         Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:6rem" aria-label="Rating" />
+        <MudTextField T="string" Value="compel.EndsWhen" ValueChanged="v => Update(() => compel.EndsWhen = v)"
+                      Placeholder="Ends when…" Variant="Variant.Outlined" Margin="Margin.Dense"
+                      MaxLength="FullSheetForm.MaxTextLength" Style="min-width:9rem" />
+        <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="Remove Compel"
+                       OnClick="() => Update(() => Form.Compels.Remove(compel))" />
+    </MudStack>
+}
+
+<MudStack Row="true" Spacing="1" Wrap="Wrap.Wrap" Class="mt-2">
+    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+               OnClick="() => Update(() => Form.Compels.Add(new CompelEntry()))">Add Compel</MudButton>
+    <MudMenu Label="From the rules" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowDropDown"
+             AnchorOrigin="Origin.BottomLeft" TransformOrigin="Origin.TopLeft">
+        @foreach (var option in Options.Where(o => o.Kind == CompelKind.Rule))
+        {
+            <MudMenuItem OnClick="() => AddFromRuleAsync(option)">
+                @option.Name <MudText Inline="true" Typo="Typo.caption" Color="Color.Secondary">· @option.Rating · @option.Trigger</MudText>
+            </MudMenuItem>
+        }
+    </MudMenu>
+    @if (Form.IsVampire)
+    {
+        <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Casino" OnClick="RollBaseCompelAsync">
+            Roll Base Compel
+        </MudButton>
+    }
+</MudStack>
+@if (_lastRoll is not null)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mt-2" ShowCloseIcon="true" CloseIconClicked="() => _lastRoll = null">
+        d10 → @_lastRoll.Roll: <b>@_lastRoll.Name</b>. @_lastRoll.Description
+    </MudAlert>
+}
+<ValidationMessage For="() => Form.Compels" class="mud-error-text mud-typography-caption" />
+
+<MudDivider Class="my-3" />
+<ListEditor Label="Conditions" HelperText="Short statuses from play, e.g. 'Blinded' or 'Shaken until sunrise'"
+            Placeholder="Add a condition" Items="Form.Conditions" ItemsChanged="items => Update(() => Form.Conditions = items)" />
+<ValidationMessage For="() => Form.Conditions" class="mud-error-text mud-typography-caption" />
+
+@if (Form.IsVampire)
+{
+    <MudDivider Class="my-3" />
+    <ListEditor Label="Stains" HelperText="What they can no longer do, e.g. 'Laugh at good-natured humor'"
+                Placeholder="No longer can…" Items="Form.Stains" ItemsChanged="items => Update(() => Form.Stains = items)" />
+    <MudText Typo="Typo.caption" Color="Color.Secondary">
+        Stains roll at Humanity @(Form.Humanity ?? 0): @(StainsPool is { } pool ? $"{pool} dice" : "the character is lost").
+    </MudText>
+}
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter, EditorRequired] public IReadOnlyList<CompelOption> Options { get; set; } = [];
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private CompelOption? _lastRoll;
+
+    private int? StainsPool => HumanityRules.StainsDicePool(Math.Clamp(Form.Humanity ?? 0, 0, 10));
+
+    private async Task Update(Action change)
+    {
+        change();
+        await Changed.InvokeAsync();
+    }
+
+    private Task AddFromRuleAsync(CompelOption option) => Update(() => Form.Compels.Add(new CompelEntry
+    {
+        Name = option.Name,
+        Rating = RatingFor(option),
+        EndsWhen = option.EndsWhen,
+    }));
+
+    /// <summary>Fixed ratings are used as-is; Blood Potency-based ones are worked out for this character.</summary>
+    private int RatingFor(CompelOption option)
+    {
+        var bp = Form.BloodPotency ?? BloodRules.MinBloodPotency;
+        return option.Name switch
+        {
+            "Disgusted" => BloodlineRules.NosferatuDisgustedRating(bp),
+            "Predation" => BloodlineRules.GangrelPredationRating(bp),
+            _ => int.TryParse(option.Rating, out var fixedRating) ? fixedRating : 1,
+        };
+    }
+
+    private Task RollBaseCompelAsync()
+    {
+        var baseCompels = Options.Where(o => o.Kind == CompelKind.Base && o.Roll is not null).ToList();
+        if (baseCompels.Count == 0) return Task.CompletedTask;
+        var roll = Random.Shared.Next(1, 11);
+        _lastRoll = baseCompels.FirstOrDefault(o => o.Roll == roll) ?? baseCompels[0];
+        var compel = _lastRoll;
+        // Rated at the Hunger dice when gained (VtR p.5), at least 1.
+        var bp = Form.BloodPotency ?? BloodRules.MinBloodPotency;
+        var vitae = Math.Clamp(Form.VitaeCurrent ?? 0, 0, BloodRules.MaxVitae(bp, Form.IsThinblood));
+        var rating = Math.Max(1, BloodRules.HungerDice(vitae, bp));
+        return Update(() => Form.Compels.Add(new CompelEntry { Name = compel.Name, Rating = rating, EndsWhen = compel.EndsWhen }));
+    }
+}

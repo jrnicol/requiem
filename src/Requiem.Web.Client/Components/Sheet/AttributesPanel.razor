@@ -1,0 +1,74 @@
+@* The nine attributes in the sheet's three columns, with Fortify Form boosts under the physical ones. *@
+
+<MudGrid Spacing="3">
+    @foreach (var (title, attributes) in Columns)
+    {
+        <MudItem xs="12" md="4">
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary" Class="mb-1">@title</MudText>
+            @foreach (var attribute in attributes)
+            {
+                <DotRating Label="@(attribute.ToString())" Value="Form.Attribute(attribute)" Stacked="true" Size="Size.Medium"
+                           ValueChanged="v => SetAsync(attribute, v)" />
+                @if (Form.IsVampire && FortifyFor(attribute) is { } fortify)
+                {
+                    <DotRating Label="@(fortify.ToString())" Value="BoostOf(fortify)" Min="0"
+                               Max="Form.Attribute(attribute)" Size="Size.Small" Class="ml-4" Stacked="true"
+                               ValueChanged="v => SetBoostAsync(fortify, v)" />
+                }
+            }
+        </MudItem>
+    }
+</MudGrid>
+@if (Form.IsVampire)
+{
+    <MudText Typo="Typo.caption" Color="Color.Secondary">
+        Small dots are Fortify Form: Vitae spent for temporary Potence, Celerity or Fortitude, up to the attribute. Clear them when the scene ends.
+    </MudText>
+}
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    // Same layout as the printed sheet: Physical, then Social (Charisma/Manipulation/Resolve), then Mental.
+    private static readonly (string Title, CharacterAttribute[] Attributes)[] Columns =
+    [
+        ("Physical", [CharacterAttribute.Strength, CharacterAttribute.Dexterity, CharacterAttribute.Stamina]),
+        ("Social", [CharacterAttribute.Charisma, CharacterAttribute.Manipulation, CharacterAttribute.Resolve]),
+        ("Mental", [CharacterAttribute.Perception, CharacterAttribute.Intelligence, CharacterAttribute.Wits]),
+    ];
+
+    private static FortifyDiscipline? FortifyFor(CharacterAttribute attribute) => attribute switch
+    {
+        CharacterAttribute.Strength => FortifyDiscipline.Potence,
+        CharacterAttribute.Dexterity => FortifyDiscipline.Celerity,
+        CharacterAttribute.Stamina => FortifyDiscipline.Fortitude,
+        _ => null,
+    };
+
+    private int BoostOf(FortifyDiscipline discipline) => discipline switch
+    {
+        FortifyDiscipline.Potence => Form.PotenceBoost,
+        FortifyDiscipline.Celerity => Form.CelerityBoost,
+        _ => Form.FortitudeBoost,
+    };
+
+    private async Task SetAsync(CharacterAttribute attribute, int value)
+    {
+        Form.Attributes[attribute] = value;
+        // A boost can never be higher than the attribute it rides on.
+        if (FortifyFor(attribute) is { } fortify && BoostOf(fortify) > value) await SetBoostAsync(fortify, value);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task SetBoostAsync(FortifyDiscipline discipline, int value)
+    {
+        switch (discipline)
+        {
+            case FortifyDiscipline.Potence: Form.PotenceBoost = value; break;
+            case FortifyDiscipline.Celerity: Form.CelerityBoost = value; break;
+            default: Form.FortitudeBoost = value; break;
+        }
+        await Changed.InvokeAsync();
+    }
+}
