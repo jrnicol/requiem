@@ -11,6 +11,7 @@ internal static class FullSheetMapper
     public static FullSheetForm ToForm(Character c) => new()
     {
         Id = c.Id,
+        CampaignId = c.CampaignId,
         Name = c.Name,
         Kind = c.Kind,
         Concept = c.Concept,

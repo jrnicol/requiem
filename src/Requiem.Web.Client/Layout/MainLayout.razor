@@ -11,7 +11,7 @@
 
 <MudLayout>
     <MudAppBar Elevation="1" Dense="false">
-        <AuthorizeView Policy="@Policies.GameMaster">
+        <AuthorizeView Policy="@Policies.Member">
             <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
                            aria-label="Toggle navigation" OnClick="() => _drawerOpen = !_drawerOpen" />
         </AuthorizeView>
@@ -33,15 +33,19 @@
         </AuthorizeView>
     </MudAppBar>
 
-    <AuthorizeView Policy="@Policies.GameMaster">
+    <AuthorizeView Policy="@Policies.Member">
         <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Responsive" Breakpoint="Breakpoint.Lg"
                    ClipMode="DrawerClipMode.Always" Elevation="1">
             <MudNavMenu Class="pt-2">
-                <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Groups">NPC Roster</MudNavLink>
-                <MudNavLink Href="scenes" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Casino">Scenes</MudNavLink>
-                <MudNavLink Href="npcs/new" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.PersonAdd">New Supporting Cast</MudNavLink>
-                <MudNavLink Href="sheets/new" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Description">New full sheet</MudNavLink>
-                <MudNavLink Href="catalog/powers" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AutoStories">Powers</MudNavLink>
+                <MudNavLink Href="campaigns" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Castle">Campaigns</MudNavLink>
+                @* Players see Campaigns; the rest are the GM's tools. *@
+                <AuthorizeView Policy="@Policies.GameMaster" Context="gm">
+                    <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Groups">NPC Roster</MudNavLink>
+                    <MudNavLink Href="scenes" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.Casino">Scenes</MudNavLink>
+                    <MudNavLink Href="npcs/new" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.PersonAdd">New Supporting Cast</MudNavLink>
+                    <MudNavLink Href="sheets/new" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Description">New full sheet</MudNavLink>
+                    <MudNavLink Href="catalog/powers" Match="NavLinkMatch.Prefix" Icon="@Icons.Material.Filled.AutoStories">Powers</MudNavLink>
+                </AuthorizeView>
             </MudNavMenu>
         </MudDrawer>
     </AuthorizeView>

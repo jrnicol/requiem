@@ -1,0 +1,150 @@
+@page "/join/{Token}"
+@inject RequiemApi Api
+@inject CookieAuthenticationStateProvider Auth
+@inject NavigationManager Navigation
+
+<PageTitle>Join a campaign · Requiem</PageTitle>
+
+<div class="auth-page">
+    <MudPaper Outlined="true" Class="pa-6 auth-card">
+        <MudText Typo="Typo.h4" Align="Align.Center" Class="brand-font mb-1">Requiem</MudText>
+
+        @if (_preview is null)
+        {
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true">@_error</MudAlert>
+            }
+            else
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+        }
+        else if (!_preview.IsUsable)
+        {
+            <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined" Class="mt-4">
+                @_preview.Problem Ask your Storyteller for a new link.
+            </MudAlert>
+        }
+        else
+        {
+            <MudText Align="Align.Center" Color="Color.Secondary" Class="mb-6">
+                @(_preview.StorytellerName ?? "Your Storyteller") invites you to play in
+                <strong>@_preview.CampaignName</strong>.
+            </MudText>
+
+            @if (_error is not null)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Dense="true" Class="mb-3">@_error</MudAlert>
+            }
+
+            @if (_signedInAs is not null)
+            {
+                <MudStack Spacing="3">
+                    <MudText Typo="Typo.body2">You're signed in as @_signedInAs.</MudText>
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Size="Size.Large" FullWidth="true"
+                               Disabled="_busy" OnClick="AcceptAsync">@(_busy ? "Joining…" : "Join the campaign")</MudButton>
+                </MudStack>
+            }
+            else
+            {
+                <EditForm Model="_request" OnValidSubmit="JoinAsync">
+                    <DataAnnotationsValidator />
+                    <MudStack Spacing="3">
+                        <MudText Typo="Typo.subtitle1">Make your player account</MudText>
+                        <MudTextField @bind-Value="_request.DisplayName" For="() => _request.DisplayName" Label="Your name"
+                                      Variant="Variant.Outlined" AutoFocus="true" HelperText="What the Storyteller and other players see"
+                                      UserAttributes="@(new() { ["autocomplete"] = "nickname" })" />
+                        <MudTextField @bind-Value="_request.Email" For="() => _request.Email" Label="Email"
+                                      InputType="InputType.Email" Variant="Variant.Outlined"
+                                      UserAttributes="@(new() { ["autocomplete"] = "username" })" />
+                        <MudTextField @bind-Value="_request.Password" For="() => _request.Password" Label="Password"
+                                      InputType="InputType.Password" Variant="Variant.Outlined"
+                                      HelperText="At least 12 characters"
+                                      UserAttributes="@(new() { ["autocomplete"] = "new-password" })" />
+                        <MudTextField @bind-Value="_request.ConfirmPassword" For="() => _request.ConfirmPassword" Label="Password again"
+                                      InputType="InputType.Password" Variant="Variant.Outlined"
+                                      UserAttributes="@(new() { ["autocomplete"] = "new-password" })" />
+                        <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                                   Size="Size.Large" FullWidth="true" Disabled="_busy">
+                            @(_busy ? "Joining…" : "Create account and join")
+                        </MudButton>
+                        <MudText Typo="Typo.body2" Align="Align.Center">
+                            Already have an account? <MudLink Href="@($"login?returnUrl={Uri.EscapeDataString($"join/{Token}")}")">Sign in</MudLink>
+                        </MudText>
+                    </MudStack>
+                </EditForm>
+            }
+        }
+    </MudPaper>
+</div>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private InvitePreview? _preview;
+    private string? _signedInAs;
+    private readonly JoinRequest _request = new();
+    private string? _error;
+    private bool _busy;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            var user = (await Auth.GetAuthenticationStateAsync()).User;
+            _signedInAs = user.Identity?.IsAuthenticated == true ? user.Identity.Name : null;
+            _preview = await Api.PreviewInviteAsync(Token);
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Couldn't reach the server. Check your connection and try again.";
+        }
+    }
+
+    private async Task AcceptAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var (campaignId, problem) = await Api.AcceptInviteAsync(Token);
+            if (campaignId is { } id) Navigation.NavigateTo($"campaigns/{id}", replace: true);
+            else _error = problem ?? "That didn't work.";
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Couldn't reach the server. Try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task JoinAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var (result, campaignId) = await Auth.JoinAsync(Token, _request);
+            if (result.Succeeded && campaignId is { } id)
+            {
+                Navigation.NavigateTo($"campaigns/{id}", replace: true);
+                return;
+            }
+            _error = result.Errors is { Count: > 0 } errors
+                ? string.Join(" ", errors.Values.SelectMany(v => v))
+                : result.Message ?? "That didn't work.";
+        }
+        catch (HttpRequestException)
+        {
+            _error = "Couldn't reach the server. Try again.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

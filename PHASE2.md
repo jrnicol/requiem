@@ -140,6 +140,11 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
 | Step | Delivers | Depends on |
 | --- | --- | --- |
 | **2.0** | Azure hosting; email; per-campaign authorization (with security tests); data model and migrations | — |
+| **2.1** | Campaigns, invites and joining; roster and scenes scoped to a campaign; moving NPCs in | 2.0 |
+| **2.2** | `CreationRules` engine and tests; seed Concepts; player creation wizard; approval queue | 2.1 |
+| **2.3** | Player play view; XP awards; priced XP spends applied at once; Corruption and Links locks; Scripts and Milestones flows; audit log with undo for spends | 2.2 |
+| **2.4** | NPC visibility and public cards; PCs in scenes | 2.1 |
+| **2.5** | SignalR live sync; undo for other audited changes | 2.3 |
 
 **Progress on 2.0 (2026-10-24):**
 - **Data model and migrations: done.** `AddCampaigns` adds campaigns, members, invites, the audit log and Links, plus the new character, scene and XP-ledger fields. Existing characters upgrade as Active, Hidden and unowned (tested).
@@ -150,11 +155,19 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
   - The app migrates and seeds on start when `Database:MigrateOnStartup` is set, keeps its sign-in keys in the database, and has a `/healthz` endpoint.
   - DEPLOY.md has the steps.
 - **Email: not started.** Azure Communication Services goes into the template with the password-reset work.
-| **2.1** | Campaigns, invites and joining; roster and scenes scoped to a campaign; moving NPCs in | 2.0 |
-| **2.2** | `CreationRules` engine and tests; seed Concepts; player creation wizard; approval queue | 2.1 |
-| **2.3** | Player play view; XP awards; priced XP spends applied at once; Corruption and Links locks; Scripts and Milestones flows; audit log with undo for spends | 2.2 |
-| **2.4** | NPC visibility and public cards; PCs in scenes | 2.1 |
-| **2.5** | SignalR live sync; undo for other audited changes | 2.3 |
+
+**Progress on 2.1 (2026-10-24): done.**
+- **Campaigns.** Site GMs create campaigns and become their Storyteller. Each campaign has a page with tabs:
+  - Overview: the shared Coterie Script, which any member can edit (audited). Storytellers also get settings (name, description, Chronicle Tenet, allowed templates), archive and delete. Only an empty campaign can be deleted.
+  - Members: Storytellers remove players; anyone can leave, except the last Storyteller.
+  - Invites, NPCs and Scenes (Storytellers only).
+- **Invite links.**
+  - Storytellers make Player links. Each lasts 1–90 days and allows 1–50 uses, or any number.
+  - The full link is shown once, with a copy button. Only a hash is stored. Links can be revoked.
+  - `/join/{token}` previews the campaign. New players make an account and join in one step; signed-in users accept. Expired, used-up and revoked links explain themselves.
+- **Scoping.** The NPC and Scene tabs list only that campaign's. New Supporting Cast, full sheets and scenes can be created straight into a campaign. NPCs move between the GM's personal roster and a campaign (audited); player characters can't be moved.
+- **Players** land on their campaigns instead of the GM roster. The drawer shows Campaigns to every member and the GM tools only to GMs.
+- Covered by `CampaignApiTests`. Checked in the browser at tablet and phone sizes.
 
 Each step ships on its own, with tests, and is checked at tablet and phone sizes. **Security tests** (a player can't read another campaign, GM notes or a hidden NPC) are written in 2.0 and extended at every step.
 

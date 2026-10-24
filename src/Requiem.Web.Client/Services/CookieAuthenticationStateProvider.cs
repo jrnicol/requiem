@@ -63,6 +63,24 @@ public sealed class CookieAuthenticationStateProvider(HttpClient http) : Authent
         }
     }
 
+    /// <summary>Makes a player account through an invite link, joins the campaign and signs in.</summary>
+    /// <returns>The campaign joined, or null with the reason in the result.</returns>
+    public async Task<(AuthResult Result, Guid? CampaignId)> JoinAsync(string token, JoinRequest request)
+    {
+        using var response = await http.PostAsJsonAsync($"api/invites/{Uri.EscapeDataString(token)}/join", request, RequiemJson.Options);
+        switch (response.StatusCode)
+        {
+            case HttpStatusCode.OK:
+                var joined = (await response.Content.ReadFromJsonAsync<JoinedCampaign>(RequiemJson.Options))!;
+                Set(joined.User);
+                return (new AuthResult(true), joined.CampaignId);
+            case HttpStatusCode.BadRequest:
+                return (new AuthResult(false, "Check the highlighted fields.", await ReadErrorsAsync(response)), null);
+            default:
+                return (new AuthResult(false, await ReadDetailAsync(response) ?? $"Joining failed ({(int)response.StatusCode})."), null);
+        }
+    }
+
     /// <summary>Called when the API answers 401: the session expired or was signed out elsewhere.</summary>
     public void MarkSignedOut()
     {

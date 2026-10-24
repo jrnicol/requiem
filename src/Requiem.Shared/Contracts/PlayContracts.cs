@@ -116,14 +116,17 @@ public sealed class PlayAction
     public FortifyDiscipline? Boost { get; set; }
 }
 
-public sealed record SceneSummary(Guid Id, string Name, int MemberCount, DateTimeOffset UpdatedAt);
+public sealed record SceneSummary(Guid Id, string Name, int MemberCount, DateTimeOffset UpdatedAt, Guid? CampaignId = null);
 
-public sealed record SceneView(Guid Id, string Name, IReadOnlyList<PlayCharacter> Members);
+public sealed record SceneView(Guid Id, string Name, IReadOnlyList<PlayCharacter> Members, Guid? CampaignId = null);
 
 public sealed class SceneForm
 {
     [Required(ErrorMessage = "Give the scene a name."), StringLength(200)]
     public string Name { get; set; } = "";
+
+    /// <summary>The campaign the scene belongs to; null for a personal scene. Set on create only.</summary>
+    public Guid? CampaignId { get; set; }
 
     /// <summary>The NPCs in the scene, in display order.</summary>
     public List<Guid> CharacterIds { get; set; } = [];

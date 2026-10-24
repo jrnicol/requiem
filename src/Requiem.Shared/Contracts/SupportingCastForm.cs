@@ -15,6 +15,9 @@ public sealed class SupportingCastForm : IValidatableObject
     /// <summary>Null when creating.</summary>
     public Guid? Id { get; set; }
 
+    /// <summary>The campaign it belongs to; null for the GM's personal roster. Set on create; moving uses its own endpoint.</summary>
+    public Guid? CampaignId { get; set; }
+
     [Required(ErrorMessage = "Every NPC needs a name."), StringLength(200)]
     public string Name { get; set; } = "";
 

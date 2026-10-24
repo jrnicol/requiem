@@ -10,6 +10,7 @@ internal static class SupportingCastMapper
     public static SupportingCastForm ToForm(Character c) => new()
     {
         Id = c.Id,
+        CampaignId = c.CampaignId,
         Name = c.Name,
         Kind = c.Kind,
         Concept = c.Concept,

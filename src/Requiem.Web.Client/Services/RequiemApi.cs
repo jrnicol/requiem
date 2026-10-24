@@ -69,6 +69,8 @@ public sealed class RequiemApi(HttpClient http)
         if (query.Tier is { } tier) parameters.Add($"tier={tier}");
         if (query.Kind is { } kind) parameters.Add($"kind={kind}");
         if (query.IncludeArchived) parameters.Add("includeArchived=true");
+        if (query.CampaignId is { } campaignId) parameters.Add($"campaignId={campaignId}");
+        else if (query.PersonalOnly) parameters.Add("personalOnly=true");
         var url = parameters.Count == 0 ? "api/characters" : $"api/characters?{string.Join('&', parameters)}";
         return GetAsync<List<CharacterSummary>>(url);
     }
@@ -175,6 +177,114 @@ public sealed class RequiemApi(HttpClient http)
     {
         using var response = await http.DeleteAsync($"api/scenes/{id}");
         if (response.StatusCode != HttpStatusCode.NotFound) response.EnsureSuccessStatusCode();
+    }
+
+    // ---------- Campaigns ----------
+
+    public Task<List<CampaignSummary>> ListCampaignsAsync() => GetAsync<List<CampaignSummary>>("api/campaigns");
+
+    /// <returns>Null when the campaign doesn't exist or the user isn't in it.</returns>
+    public async Task<CampaignView?> GetCampaignAsync(Guid id)
+    {
+        using var response = await http.GetAsync($"api/campaigns/{id}");
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<CampaignView>(RequiemJson.Options);
+    }
+
+    public async Task<SaveResult<CampaignView>> SaveCampaignAsync(Guid? id, CampaignForm form)
+    {
+        using var response = id is { } campaignId
+            ? await http.PutAsJsonAsync($"api/campaigns/{campaignId}", form, RequiemJson.Options)
+            : await http.PostAsJsonAsync("api/campaigns", form, RequiemJson.Options);
+        return await ReadCampaignResultAsync<CampaignView>(response);
+    }
+
+    public async Task<SaveResult<CampaignView>> SaveCoterieScriptAsync(Guid id, string? text)
+    {
+        using var response = await http.PutAsJsonAsync($"api/campaigns/{id}/coterie-script", new CoterieScriptForm { Text = text }, RequiemJson.Options);
+        return await ReadCampaignResultAsync<CampaignView>(response);
+    }
+
+    public async Task<SaveResult<CampaignView>> SetCampaignArchivedAsync(Guid id, bool archived)
+    {
+        using var response = await http.PostAsync($"api/campaigns/{id}/{(archived ? "archive" : "unarchive")}", content: null);
+        return await ReadCampaignResultAsync<CampaignView>(response);
+    }
+
+    /// <returns>Null when deleted; otherwise why not (e.g. it still has characters).</returns>
+    public async Task<string?> DeleteCampaignAsync(Guid id)
+    {
+        using var response = await http.DeleteAsync($"api/campaigns/{id}");
+        return response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotFound
+            ? null
+            : await ReadDetailAsync(response) ?? $"Couldn't delete it ({(int)response.StatusCode}).";
+    }
+
+    /// <returns>Null when removed; otherwise why not.</returns>
+    public async Task<string?> RemoveMemberAsync(Guid campaignId, string userId)
+    {
+        using var response = await http.DeleteAsync($"api/campaigns/{campaignId}/members/{Uri.EscapeDataString(userId)}");
+        return response.IsSuccessStatusCode
+            ? null
+            : await ReadDetailAsync(response) ?? $"Couldn't remove them ({(int)response.StatusCode}).";
+    }
+
+    public async Task<SaveResult<CreatedInvite>> CreateInviteAsync(Guid campaignId, InviteForm form)
+    {
+        using var response = await http.PostAsJsonAsync($"api/campaigns/{campaignId}/invites", form, RequiemJson.Options);
+        return await ReadCampaignResultAsync<CreatedInvite>(response);
+    }
+
+    public async Task RevokeInviteAsync(Guid campaignId, Guid inviteId)
+    {
+        using var response = await http.DeleteAsync($"api/campaigns/{campaignId}/invites/{inviteId}");
+        if (response.StatusCode != HttpStatusCode.NotFound) response.EnsureSuccessStatusCode();
+    }
+
+    /// <summary>Open to anyone: what the join page shows before sign-in.</summary>
+    public Task<InvitePreview> PreviewInviteAsync(string token) =>
+        GetAsync<InvitePreview>($"api/invites/{Uri.EscapeDataString(token)}");
+
+    /// <summary>Joins as the signed-in user.</summary>
+    /// <returns>The campaign joined, or the reason it couldn't be.</returns>
+    public async Task<(Guid? CampaignId, string? Problem)> AcceptInviteAsync(string token)
+    {
+        using var response = await http.PostAsync($"api/invites/{Uri.EscapeDataString(token)}/accept", content: null);
+        if (response.IsSuccessStatusCode)
+            return ((await response.Content.ReadFromJsonAsync<JoinedCampaign>(RequiemJson.Options))!.CampaignId, null);
+        return (null, await ReadDetailAsync(response) ?? $"Couldn't join ({(int)response.StatusCode}).");
+    }
+
+    /// <summary>Moves an NPC between your personal roster (null) and a campaign you run.</summary>
+    /// <returns>Null when moved; otherwise why not.</returns>
+    public async Task<string?> MoveCharacterAsync(Guid id, Guid? campaignId)
+    {
+        using var response = await http.PostAsJsonAsync($"api/characters/{id}/move", new MoveCharacterRequest(campaignId), RequiemJson.Options);
+        if (response.IsSuccessStatusCode) return null;
+        var errors = response.StatusCode == HttpStatusCode.BadRequest ? await ReadValidationErrorsAsync(response) : null;
+        return errors is { Count: > 0 } ? string.Join(" ", errors.Values.SelectMany(v => v)) : $"Couldn't move it ({(int)response.StatusCode}).";
+    }
+
+    public Task<List<SceneSummary>> ListCampaignScenesAsync(Guid campaignId) =>
+        GetAsync<List<SceneSummary>>($"api/scenes?campaignId={campaignId}");
+
+    /// <summary>Like <see cref="ReadSaveResultAsync{T}"/>, with campaign wording and 403/410 handled.</summary>
+    private static async Task<SaveResult<T>> ReadCampaignResultAsync<T>(HttpResponseMessage response) where T : class
+    {
+        switch (response.StatusCode)
+        {
+            case HttpStatusCode.OK or HttpStatusCode.Created:
+                return new SaveResult<T>(await response.Content.ReadFromJsonAsync<T>(RequiemJson.Options));
+            case HttpStatusCode.BadRequest:
+                return new SaveResult<T>(null, await ReadValidationErrorsAsync(response), Message: "Some fields need fixing.");
+            case HttpStatusCode.Forbidden:
+                return new SaveResult<T>(null, Message: "Only the campaign's Storyteller can do that.");
+            case HttpStatusCode.NotFound:
+                return new SaveResult<T>(null, Message: "This campaign no longer exists, or you're no longer in it.");
+            default:
+                return new SaveResult<T>(null, Message: await ReadDetailAsync(response) ?? $"Unexpected response: {(int)response.StatusCode}.");
+        }
     }
 
     /// <returns>False if it was already gone.</returns>

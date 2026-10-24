@@ -1,0 +1,92 @@
+@page "/campaigns"
+@attribute [Authorize(Policy = Policies.Member)]
+@inject RequiemApi Api
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+
+<PageTitle>Campaigns · Requiem</PageTitle>
+
+<MudText Typo="Typo.h4" Class="brand-font mb-1">Campaigns</MudText>
+<MudText Color="Color.Secondary" Class="mb-4">The chronicles you run or play in.</MudText>
+
+<AuthorizeView Policy="@Policies.GameMaster">
+    <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mb-4">
+        <MudTextField T="string" @bind-Value="_name" Label="New campaign" Placeholder="e.g. Chicago by Night" Variant="Variant.Outlined"
+                      Margin="Margin.Dense" MaxLength="200" Immediate="true" OnKeyDown="OnKeyAsync" Style="min-width:16rem" />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="mt-1"
+                   Disabled="string.IsNullOrWhiteSpace(_name) || _creating" OnClick="CreateAsync">Create</MudButton>
+    </MudStack>
+</AuthorizeView>
+
+@if (_campaigns is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else if (_campaigns.Count == 0)
+{
+    <AuthorizeView Policy="@Policies.GameMaster">
+        <Authorized>
+            <MudText Color="Color.Secondary">No campaigns yet. Name one above to start.</MudText>
+        </Authorized>
+        <NotAuthorized>
+            <MudText Color="Color.Secondary">
+                You're not in any campaigns yet. Ask your Storyteller for an invite link.
+            </MudText>
+        </NotAuthorized>
+    </AuthorizeView>
+}
+else
+{
+    <MudGrid Spacing="2">
+        @foreach (var campaign in _campaigns)
+        {
+            <MudItem xs="12" sm="6" md="4">
+                <a href="@($"campaigns/{campaign.Id}")" class="npc-card-link">
+                    <MudPaper Class="pa-3" Elevation="1">
+                        <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween">
+                            <MudText Typo="Typo.h6">@campaign.Name</MudText>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined"
+                                     Color="@(campaign.MyRole == CampaignRole.Storyteller ? Color.Primary : Color.Default)">
+                                @(campaign.MyRole == CampaignRole.Storyteller ? "Storyteller" : "Player")
+                            </MudChip>
+                        </MudStack>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                            @(campaign.PlayerCount == 1 ? "1 player" : $"{campaign.PlayerCount} players")
+                            · @(campaign.CharacterCount == 1 ? "1 character" : $"{campaign.CharacterCount} characters")
+                            @(campaign.ArchivedAt is null ? "" : " · archived")
+                        </MudText>
+                    </MudPaper>
+                </a>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    private List<CampaignSummary>? _campaigns;
+    private string? _name;
+    private bool _creating;
+
+    protected override async Task OnInitializedAsync() => _campaigns = await Api.ListCampaignsAsync();
+
+    private async Task OnKeyAsync(KeyboardEventArgs e)
+    {
+        if (e.Key is "Enter" or "NumpadEnter") await CreateAsync();
+    }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_name) || _creating) return;
+        _creating = true;
+        try
+        {
+            var result = await Api.SaveCampaignAsync(null, new CampaignForm { Name = _name.Trim() });
+            if (result.Saved is { } campaign) Navigation.NavigateTo($"campaigns/{campaign.Id}");
+            else Snackbar.Add(result.Message ?? "The campaign wasn't created.", Severity.Error);
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+}

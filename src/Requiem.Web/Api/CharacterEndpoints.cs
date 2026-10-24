@@ -21,8 +21,37 @@ public static class CharacterEndpoints
         characters.MapPost("/supporting-cast", CreateSupportingCastAsync);
         characters.MapPut("/{id:guid}/supporting-cast", UpdateSupportingCastAsync);
         characters.MapDelete("/{id:guid}", DeleteAsync);
+        characters.MapPost("/{id:guid}/move", MoveAsync);
 
         return api;
+    }
+
+    /// <summary>
+    /// Moves an NPC you run between your personal roster (null) and a campaign you tell. Player
+    /// characters stay with their campaign.
+    /// </summary>
+    private static async Task<Results<NoContent, NotFound, ValidationProblem>> MoveAsync(
+        Guid id, MoveCharacterRequest request, RequiemDbContext db, CampaignAccess access, AuditLog audit, CancellationToken ct)
+    {
+        var character = await access.ManagedCharacters().SingleOrDefaultAsync(c => c.Id == id, ct);
+        if (character is null) return TypedResults.NotFound();
+        if (character.IsPlayerCharacter)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [""] = ["Player characters stay in their campaign."] });
+        if (request.CampaignId is { } target && !await access.IsStorytellerAsync(target, ct))
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(request.CampaignId)] = ["Unknown campaign."] });
+        if (character.CampaignId == request.CampaignId) return TypedResults.NoContent();
+
+        var from = character.CampaignId;
+        character.CampaignId = request.CampaignId;
+        // On your personal roster an NPC needs an owner: you.
+        if (request.CampaignId is null) character.OwnerUserId = access.UserId;
+        db.Entry(character).Property(c => c.UpdatedAt).IsModified = true;
+
+        var summary = request.CampaignId is null ? $"Moved {character.Name} to a personal roster." : $"Moved {character.Name} into the campaign.";
+        if (from is not null) audit.Record(from, id, "character.move", summary);
+        if (request.CampaignId is not null) audit.Record(request.CampaignId, id, "character.move", summary);
+        await db.SaveChangesAsync(ct);
+        return TypedResults.NoContent();
     }
 
     private static async Task<List<CharacterSummary>> ListAsync(
@@ -32,6 +61,8 @@ public static class CharacterEndpoints
         if (!query.IncludeArchived) characters = characters.Where(c => !c.IsArchived);
         if (query.Tier is { } tier) characters = characters.Where(c => c.Tier == tier);
         if (query.Kind is { } kind) characters = characters.Where(c => c.Kind == kind);
+        if (query.CampaignId is { } campaignId) characters = characters.Where(c => c.CampaignId == campaignId);
+        else if (query.PersonalOnly) characters = characters.Where(c => c.CampaignId == null);
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             // LIKE is case-insensitive on both SQLite (ASCII) and SQL Server's default collation.
@@ -51,7 +82,8 @@ public static class CharacterEndpoints
                         .Select(a => (int?)a.Dots).FirstOrDefault() + c.Size
                     : null,
                 c.Tier == CharacterTier.FullSheet ? c.WillpowerDots : null,
-                c.Tier == CharacterTier.FullSheet ? c.Humanity ?? c.Morality : null))
+                c.Tier == CharacterTier.FullSheet ? c.Humanity ?? c.Morality : null,
+                c.CampaignId))
             .ToListAsync(ct);
 
         // Sort in memory: SQLite's default collation sorts case-sensitively.
@@ -69,9 +101,11 @@ public static class CharacterEndpoints
         SupportingCastForm form, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
         if (await ValidateAsync(form, db, ct) is { } errors) return TypedResults.ValidationProblem(errors);
+        if (form.CampaignId is { } campaignId && !await access.IsStorytellerAsync(campaignId, ct))
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(form.CampaignId)] = ["Unknown campaign."] });
 
-        // New NPCs go to the creating GM's personal roster.
-        var character = new Character { Name = form.Name, OwnerUserId = access.UserId };
+        // New NPCs go to the chosen campaign, or the creating GM's personal roster.
+        var character = new Character { Name = form.Name, OwnerUserId = access.UserId, CampaignId = form.CampaignId };
         SupportingCastMapper.Apply(form, character);
         db.Characters.Add(character);
         await db.SaveChangesAsync(ct);

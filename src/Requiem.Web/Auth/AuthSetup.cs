@@ -70,6 +70,7 @@ public static class AuthSetup
         // Per-request answers to "may this user see or change that?" (PHASE2.md §4).
         services.AddHttpContextAccessor();
         services.AddScoped<CampaignAccess>();
+        services.AddScoped<AuditLog>();
 
         return services;
     }

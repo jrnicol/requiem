@@ -36,9 +36,11 @@ public static class FullSheetEndpoints
         FullSheetForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
         if (await ValidateAsync(form, null, db, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
+        if (form.CampaignId is { } campaignId && !await access.IsStorytellerAsync(campaignId, ct))
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(form.CampaignId)] = ["Unknown campaign."] });
 
-        // New NPCs go to the creating GM's personal roster.
-        var character = new Character { Name = form.Name, OwnerUserId = access.UserId };
+        // New NPCs go to the chosen campaign, or the creating GM's personal roster.
+        var character = new Character { Name = form.Name, OwnerUserId = access.UserId, CampaignId = form.CampaignId };
         FullSheetMapper.Apply(form, character, time.GetUtcNow());
         db.Characters.Add(character);
         await db.SaveChangesAsync(ct);

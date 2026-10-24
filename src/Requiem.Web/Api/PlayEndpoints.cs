@@ -197,24 +197,31 @@ public static class PlayEndpoints
 
     // ---------- Scenes ----------
 
-    private static async Task<List<SceneSummary>> ListScenesAsync(CampaignAccess access, CancellationToken ct)
+    /// <param name="campaignId">Only that campaign's scenes.</param>
+    private static async Task<List<SceneSummary>> ListScenesAsync(CampaignAccess access, Guid? campaignId, CancellationToken ct)
     {
-        var scenes = await access.ManagedScenes().AsNoTracking()
-            .Select(s => new { s.Id, s.Name, Count = s.Members.Count, s.UpdatedAt })
+        var query = access.ManagedScenes().AsNoTracking();
+        if (campaignId is { } id) query = query.Where(s => s.CampaignId == id);
+        var scenes = await query
+            .Select(s => new { s.Id, s.Name, Count = s.Members.Count, s.UpdatedAt, s.CampaignId })
             .ToListAsync(ct);
-        return scenes.OrderByDescending(s => s.UpdatedAt).Select(s => new SceneSummary(s.Id, s.Name, s.Count, s.UpdatedAt)).ToList();
+        return scenes.OrderByDescending(s => s.UpdatedAt)
+            .Select(s => new SceneSummary(s.Id, s.Name, s.Count, s.UpdatedAt, s.CampaignId)).ToList();
     }
 
     private static async Task<Results<Created<SceneView>, ValidationProblem>> CreateSceneAsync(
         SceneForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
         if (await ValidateSceneAsync(form, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
+        if (form.CampaignId is { } campaignId && !await access.IsStorytellerAsync(campaignId, ct))
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(form.CampaignId)] = ["Unknown campaign."] });
 
         var now = time.GetUtcNow();
-        // New scenes go to the creating GM's personal space.
+        // New scenes go to the chosen campaign, or the creating GM's personal space.
         var scene = new Scene
         {
-            Id = Guid.CreateVersion7(now), Name = form.Name.Trim(), OwnerUserId = access.UserId, CreatedAt = now, UpdatedAt = now,
+            Id = Guid.CreateVersion7(now), Name = form.Name.Trim(), OwnerUserId = access.UserId, CampaignId = form.CampaignId,
+            CreatedAt = now, UpdatedAt = now,
         };
         SetMembers(scene, form.CharacterIds);
         db.Scenes.Add(scene);
@@ -278,7 +285,7 @@ public static class PlayEndpoints
         var catalog = await CatalogAsync(db, ct);
         var members = order.Select(id => characters.FirstOrDefault(c => c.Id == id)).OfType<Character>()
             .Select(c => PlayMapper.ToPlay(c, catalog)).ToList();
-        return new SceneView(scene.Id, scene.Name, members);
+        return new SceneView(scene.Id, scene.Name, members, scene.CampaignId);
     }
 
     // ---------- Loading ----------

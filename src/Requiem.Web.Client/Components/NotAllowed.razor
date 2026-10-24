@@ -1,15 +1,24 @@
-@* Signed in, but without the GM role (e.g. a future player account). *@
+@* Signed in, but without the GM role: a player. The home page (the GM's roster) sends them to their
+   campaigns; other GM pages explain and offer a way there. *@
 @inject CookieAuthenticationStateProvider Auth
 @inject NavigationManager Navigation
 
 <MudStack AlignItems="AlignItems.Center" Class="mt-16" Spacing="3">
     <MudIcon Icon="@Icons.Material.Outlined.Lock" Size="Size.Large" Color="Color.Secondary" />
     <MudText Typo="Typo.h5">GM only</MudText>
-    <MudText Color="Color.Secondary">This account can't open the GM's tools.</MudText>
-    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="SignOutAsync">Sign in as someone else</MudButton>
+    <MudText Color="Color.Secondary">This page is part of the GM's tools.</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="campaigns">Go to your campaigns</MudButton>
+    <MudButton Variant="Variant.Text" OnClick="SignOutAsync">Sign in as someone else</MudButton>
 </MudStack>
 
 @code {
+    protected override void OnInitialized()
+    {
+        // Players land on the home page after signing in; their home is the campaigns list.
+        if (Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0] == "")
+            Navigation.NavigateTo("campaigns", replace: true);
+    }
+
     private async Task SignOutAsync()
     {
         await Auth.LogoutAsync();

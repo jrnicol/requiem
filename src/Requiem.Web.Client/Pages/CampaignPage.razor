@@ -1,0 +1,408 @@
+@page "/campaigns/{Id:guid}"
+@attribute [Authorize(Policy = Policies.Member)]
+@inject RequiemApi Api
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+@inject IJSRuntime JS
+
+<PageTitle>@(_campaign?.Name ?? "Campaign") · Requiem</PageTitle>
+
+@if (_notFound)
+{
+    <MudAlert Severity="Severity.Warning">This campaign doesn't exist, or you're not in it. <MudLink Href="campaigns">Your campaigns</MudLink></MudAlert>
+}
+else if (_campaign is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap" Class="mb-2">
+        <BackButton Fallback="campaigns" Label="Back" />
+        <MudText Typo="Typo.h4" Class="brand-font">@_campaign.Name</MudText>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@(_campaign.IsStoryteller ? Color.Primary : Color.Default)">
+            @(_campaign.IsStoryteller ? "Storyteller" : "Player")
+        </MudChip>
+        @if (_campaign.ArchivedAt is not null)
+        {
+            <MudChip T="string" Size="Size.Small" Icon="@Icons.Material.Outlined.Archive">Archived</MudChip>
+        }
+    </MudStack>
+    @if (!string.IsNullOrWhiteSpace(_campaign.Description))
+    {
+        <MudText Color="Color.Secondary" Class="power-text mb-2">@_campaign.Description</MudText>
+    }
+
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4" @bind-ActivePanelIndex="_tab">
+        <MudTabPanel Text="Overview" Icon="@Icons.Material.Outlined.Info">
+            <MudGrid Spacing="3">
+                <MudItem xs="12" md="6">
+                    <MudPaper Class="pa-3" Elevation="1">
+                        <MudText Typo="Typo.subtitle1">Scripts the coterie shares</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                            Every character's third and fourth Scripts (VtR p.136).
+                        </MudText>
+                        <MudText Typo="Typo.subtitle2">Coterie</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">Agreed by the players; anyone in the campaign can change it.</MudText>
+                        <MudTextField T="string" @bind-Value="_coterie" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500"
+                                      Placeholder="What binds you together" Immediate="true" />
+                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-1"
+                                   Disabled="_busy || (_coterie ?? string.Empty) == (_campaign.CoterieScript ?? string.Empty)"
+                                   OnClick="SaveCoterieAsync">Save Coterie Script</MudButton>
+
+                        <MudText Typo="Typo.subtitle2" Class="mt-3">Chronicle Tenet</MudText>
+                        <MudText Typo="Typo.body2" Class="power-text">
+                            @(string.IsNullOrWhiteSpace(_campaign.ChronicleTenet) ? "Not set yet." : _campaign.ChronicleTenet)
+                        </MudText>
+                    </MudPaper>
+                </MudItem>
+
+                @if (_campaign.IsStoryteller && _settings is not null)
+                {
+                    <MudItem xs="12" md="6">
+                        <MudPaper Class="pa-3" Elevation="1">
+                            <MudText Typo="Typo.subtitle1" Class="mb-2">Settings</MudText>
+                            <MudStack Spacing="2">
+                                <MudTextField T="string" @bind-Value="_settings.Name" Label="Name" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" />
+                                <MudTextField T="string" @bind-Value="_settings.Description" Label="Description" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                              Lines="2" Sizing="InputSizing.Auto" MaxLength="4000" />
+                                <MudTextField T="string" @bind-Value="_settings.ChronicleTenet" Label="Chronicle Tenet" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                              MaxLength="500" HelperText="The theme everyone plays to" />
+                                <div>
+                                    <MudText Typo="Typo.subtitle2">Players may build</MudText>
+                                    @foreach (var template in new[] { CharacterTemplates.Vampire, CharacterTemplates.Ghoul, CharacterTemplates.Mortal })
+                                    {
+                                        var t = template;
+                                        <MudCheckBox T="bool" Value="_settings.AllowedTemplates.HasFlag(t)" Label="@($"{t}s")" Color="Color.Primary"
+                                                     ValueChanged="on => _settings.AllowedTemplates = on ? _settings.AllowedTemplates | t : _settings.AllowedTemplates & ~t" />
+                                    }
+                                </div>
+                                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveSettingsAsync">Save settings</MudButton>
+                                    <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="ToggleArchivedAsync">
+                                        @(_campaign.ArchivedAt is null ? "Archive campaign" : "Restore campaign")
+                                    </MudButton>
+                                    <MudButton Variant="Variant.Text" Color="Color.Error" Disabled="_busy" OnClick="DeleteAsync">Delete</MudButton>
+                                </MudStack>
+                            </MudStack>
+                        </MudPaper>
+                    </MudItem>
+                }
+            </MudGrid>
+        </MudTabPanel>
+
+        <MudTabPanel Text="@($"Members ({_campaign.Members.Count})")" Icon="@Icons.Material.Outlined.Group">
+            <MudPaper Class="pa-3" Elevation="1">
+                @foreach (var member in _campaign.Members)
+                {
+                    <div class="play-row">
+                        <div style="flex:1; min-width:0">
+                            <div>@member.DisplayName</div>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                @(member.Role == CampaignRole.Storyteller ? "Storyteller" : "Player")@(member.Email is null ? "" : $" · {member.Email}")
+                                · joined @member.JoinedAt.ToLocalTime().ToString("d MMM yyyy")
+                            </MudText>
+                        </div>
+                        @if (member.IsMe)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveAsync(member, leaving: true)">Leave</MudButton>
+                        }
+                        else if (_campaign.IsStoryteller && member.Role == CampaignRole.Player)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveAsync(member, leaving: false)">Remove</MudButton>
+                        }
+                    </div>
+                }
+            </MudPaper>
+        </MudTabPanel>
+
+        @if (_campaign.IsStoryteller)
+        {
+            <MudTabPanel Text="Invites" Icon="@Icons.Material.Outlined.Link">
+                <MudPaper Class="pa-3 mb-3" Elevation="1">
+                    <MudText Typo="Typo.subtitle1">Invite players</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                        Make a link and send it however you like. Players make an account with it, or join with the one they have.
+                    </MudText>
+                    <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap">
+                        <MudNumericField T="int" @bind-Value="_invite.ExpiresInDays" Label="Valid for (days)" Min="1" Max="90"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:10rem" />
+                        <MudNumericField T="int?" @bind-Value="_invite.MaxUses" Label="Players (blank = any)" Min="1" Max="50"
+                                         Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:12rem" />
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Link" Class="mt-1"
+                                   Disabled="_busy || _campaign.ArchivedAt is not null" OnClick="CreateInviteAsync">Make link</MudButton>
+                    </MudStack>
+                    @if (_newLink is not null)
+                    {
+                        <MudAlert Severity="Severity.Success" Class="mt-3" NoIcon="true">
+                            <MudText Typo="Typo.body2" Class="mb-1">Copy it now: it's shown only once.</MudText>
+                            <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
+                                <code class="invite-link">@_newLink</code>
+                                <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.ContentCopy" OnClick="CopyAsync">Copy</MudButton>
+                            </MudStack>
+                        </MudAlert>
+                    }
+                </MudPaper>
+
+                <MudPaper Class="pa-3" Elevation="1">
+                    <MudText Typo="Typo.subtitle1" Class="mb-1">Links</MudText>
+                    @if (_campaign.Invites.Count == 0)
+                    {
+                        <MudText Typo="Typo.body2" Color="Color.Secondary">None yet.</MudText>
+                    }
+                    @foreach (var invite in _campaign.Invites)
+                    {
+                        var usable = invite.IsUsable(DateTimeOffset.UtcNow);
+                        <div class="play-row">
+                            <div style="flex:1">
+                                <div>Made @invite.CreatedAt.ToLocalTime().ToString("d MMM, HH:mm")</div>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@InviteStatus(invite)</MudText>
+                            </div>
+                            @if (usable)
+                            {
+                                <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RevokeAsync(invite)">Revoke</MudButton>
+                            }
+                        </div>
+                    }
+                </MudPaper>
+            </MudTabPanel>
+
+            <MudTabPanel Text="NPCs" Icon="@Icons.Material.Outlined.Groups">
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                               Href="@($"npcs/new?campaign={Id}")">New Supporting Cast</MudButton>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Description"
+                               Href="@($"sheets/new?campaign={Id}")">New full sheet</MudButton>
+                </MudStack>
+                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+                    <MudAutocomplete T="CharacterSummary" @bind-Value="_pick" Label="Bring in from your personal roster" Variant="Variant.Outlined"
+                                     Margin="Margin.Dense" SearchFunc="SearchPersonalAsync" ToStringFunc="@(c => c?.Name ?? string.Empty)"
+                                     Clearable="true" ResetValueOnEmptyText="true" Style="min-width:16rem" />
+                    <MudButton Variant="Variant.Outlined" Class="mt-1" Disabled="_pick is null || _busy" OnClick="BringInAsync">Bring in</MudButton>
+                </MudStack>
+                @if (_npcs is null)
+                {
+                    <MudProgressLinear Indeterminate="true" />
+                }
+                else if (_npcs.Count == 0)
+                {
+                    <MudText Color="Color.Secondary">No NPCs in this campaign yet.</MudText>
+                }
+                else
+                {
+                    <MudGrid Spacing="2">
+                        @foreach (var npc in _npcs)
+                        {
+                            <MudItem xs="12" sm="6" lg="4" @key="npc.Id">
+                                <a href="@(npc.Tier == CharacterTier.FullSheet ? $"sheets/{npc.Id}" : $"npcs/{npc.Id}")" class="npc-card-link">
+                                    <NpcCard Npc="npc" />
+                                </a>
+                                <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.Logout"
+                                           Disabled="_busy" OnClick="() => MoveOutAsync(npc)">Move to my personal roster</MudButton>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            </MudTabPanel>
+
+            <MudTabPanel Text="Scenes" Icon="@Icons.Material.Filled.Casino">
+                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+                    <MudTextField T="string" @bind-Value="_sceneName" Label="New scene" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                  MaxLength="200" Immediate="true" Style="min-width:16rem" />
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Class="mt-1"
+                               Disabled="string.IsNullOrWhiteSpace(_sceneName) || _busy" OnClick="CreateSceneAsync">Create</MudButton>
+                </MudStack>
+                @if (_scenes is { Count: 0 })
+                {
+                    <MudText Color="Color.Secondary">No scenes in this campaign yet.</MudText>
+                }
+                <MudGrid Spacing="2">
+                    @foreach (var scene in _scenes ?? [])
+                    {
+                        <MudItem xs="12" sm="6" md="4">
+                            <a href="@($"scenes/{scene.Id}")" class="npc-card-link">
+                                <MudPaper Class="pa-3" Elevation="1">
+                                    <MudText Typo="Typo.h6">@scene.Name</MudText>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@(scene.MemberCount == 1 ? "1 NPC" : $"{scene.MemberCount} NPCs")</MudText>
+                                </MudPaper>
+                            </a>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudTabPanel>
+        }
+    </MudTabs>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private CampaignView? _campaign;
+    private bool _notFound;
+    private bool _busy;
+    private int _tab;
+
+    private string? _coterie;
+    private CampaignForm? _settings;
+    private InviteForm _invite = new();
+    private string? _newLink;
+    private List<CharacterSummary>? _npcs;
+    private List<CharacterSummary> _personal = [];
+    private CharacterSummary? _pick;
+    private List<SceneSummary>? _scenes;
+    private string? _sceneName;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Show(await Api.GetCampaignAsync(Id));
+        if (_campaign?.IsStoryteller == true) await LoadStorytellerDataAsync();
+    }
+
+    private void Show(CampaignView? campaign)
+    {
+        _campaign = campaign;
+        _notFound = campaign is null;
+        if (campaign is null) return;
+        _coterie = campaign.CoterieScript;
+        _settings = new CampaignForm
+        {
+            Name = campaign.Name, Description = campaign.Description, ChronicleTenet = campaign.ChronicleTenet,
+            CoterieScript = campaign.CoterieScript, AllowedTemplates = campaign.AllowedTemplates,
+        };
+    }
+
+    private async Task LoadStorytellerDataAsync()
+    {
+        _npcs = await Api.ListCharactersAsync(new CharacterQuery(CampaignId: Id));
+        _personal = await Api.ListCharactersAsync(new CharacterQuery(PersonalOnly: true));
+        _scenes = await Api.ListCampaignScenesAsync(Id);
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        try { await action(); }
+        finally { _busy = false; }
+    }
+
+    private Task SaveCoterieAsync() => RunAsync(async () =>
+    {
+        var result = await Api.SaveCoterieScriptAsync(Id, _coterie);
+        if (result.Saved is { } saved) { Show(saved); Snackbar.Add("Coterie Script saved.", Severity.Success); }
+        else Snackbar.Add(result.Message ?? "It didn't save.", Severity.Error);
+    });
+
+    private Task SaveSettingsAsync() => RunAsync(async () =>
+    {
+        // The Coterie Script has its own button; keep whatever is saved.
+        _settings!.CoterieScript = _campaign!.CoterieScript;
+        var result = await Api.SaveCampaignAsync(Id, _settings);
+        if (result.Saved is { } saved) { Show(saved); Snackbar.Add("Settings saved.", Severity.Success); }
+        else Snackbar.Add(result.Errors is { Count: > 0 } e ? string.Join(" ", e.Values.SelectMany(v => v)) : result.Message ?? "It didn't save.", Severity.Error);
+    });
+
+    private Task ToggleArchivedAsync() => RunAsync(async () =>
+    {
+        var result = await Api.SetCampaignArchivedAsync(Id, _campaign!.ArchivedAt is null);
+        if (result.Saved is { } saved) Show(saved);
+        else Snackbar.Add(result.Message ?? "That didn't work.", Severity.Error);
+    });
+
+    private async Task DeleteAsync()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync("Delete campaign?",
+            $"{_campaign!.Name} will be deleted. Only an empty campaign can be; one with characters or scenes can be archived instead.",
+            yesText: "Delete", cancelText: "Cancel");
+        if (confirmed != true) return;
+        await RunAsync(async () =>
+        {
+            if (await Api.DeleteCampaignAsync(Id) is { } problem) Snackbar.Add(problem, Severity.Warning);
+            else Navigation.NavigateTo("campaigns");
+        });
+    }
+
+    private async Task RemoveAsync(CampaignMemberView member, bool leaving)
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync(leaving ? "Leave campaign?" : "Remove player?",
+            leaving ? $"You'll leave {_campaign!.Name}. You'd need a new invite link to come back."
+                    : $"{member.DisplayName} will be removed from {_campaign!.Name}.",
+            yesText: leaving ? "Leave" : "Remove", cancelText: "Cancel");
+        if (confirmed != true) return;
+        await RunAsync(async () =>
+        {
+            if (await Api.RemoveMemberAsync(Id, member.UserId) is { } problem) { Snackbar.Add(problem, Severity.Warning); return; }
+            if (leaving) Navigation.NavigateTo("campaigns");
+            else Show(await Api.GetCampaignAsync(Id));
+        });
+    }
+
+    private Task CreateInviteAsync() => RunAsync(async () =>
+    {
+        var result = await Api.CreateInviteAsync(Id, _invite);
+        if (result.Saved is { } created)
+        {
+            _newLink = Navigation.BaseUri + created.JoinPath;
+            Show(await Api.GetCampaignAsync(Id));
+        }
+        else Snackbar.Add(result.Errors is { Count: > 0 } e ? string.Join(" ", e.Values.SelectMany(v => v)) : result.Message ?? "No link was made.", Severity.Error);
+    });
+
+    private async Task CopyAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _newLink);
+            Snackbar.Add("Link copied.", Severity.Success);
+        }
+        catch (JSException)
+        {
+            Snackbar.Add("Couldn't copy it; select the link and copy it by hand.", Severity.Warning);
+        }
+    }
+
+    private Task RevokeAsync(CampaignInviteView invite) => RunAsync(async () =>
+    {
+        await Api.RevokeInviteAsync(Id, invite.Id);
+        Show(await Api.GetCampaignAsync(Id));
+    });
+
+    private static string InviteStatus(CampaignInviteView invite)
+    {
+        var now = DateTimeOffset.UtcNow;
+        if (invite.RevokedAt is not null) return "Revoked";
+        if (invite.ExpiresAt <= now) return "Expired";
+        if (invite.UsesLeft == 0) return "Used up";
+        var uses = invite.UsesLeft is { } left ? $"{left} use{(left == 1 ? "" : "s")} left" : "Any number of players";
+        return $"{uses} · until {invite.ExpiresAt.ToLocalTime():d MMM}";
+    }
+
+    private Task<IEnumerable<CharacterSummary>> SearchPersonalAsync(string? text, CancellationToken cancellationToken)
+    {
+        var search = text?.Trim();
+        return Task.FromResult<IEnumerable<CharacterSummary>>(_personal
+            .Where(c => string.IsNullOrEmpty(search) || c.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(c => c.Name).ToList());
+    }
+
+    private Task BringInAsync() => RunAsync(async () =>
+    {
+        if (_pick is null) return;
+        if (await Api.MoveCharacterAsync(_pick.Id, Id) is { } problem) Snackbar.Add(problem, Severity.Warning);
+        _pick = null;
+        await LoadStorytellerDataAsync();
+    });
+
+    private Task MoveOutAsync(CharacterSummary npc) => RunAsync(async () =>
+    {
+        if (await Api.MoveCharacterAsync(npc.Id, null) is { } problem) Snackbar.Add(problem, Severity.Warning);
+        await LoadStorytellerDataAsync();
+    });
+
+    private Task CreateSceneAsync() => RunAsync(async () =>
+    {
+        var result = await Api.SaveSceneAsync(null, new SceneForm { Name = _sceneName!.Trim(), CampaignId = Id });
+        if (result.Saved is { } scene) Navigation.NavigateTo($"scenes/{scene.Id}");
+        else Snackbar.Add(result.Message ?? "The scene wasn't created.", Severity.Error);
+    });
+}

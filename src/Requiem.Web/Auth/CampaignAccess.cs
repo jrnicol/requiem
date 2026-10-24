@@ -57,6 +57,19 @@ public sealed class CampaignAccess(RequiemDbContext db, IHttpContextAccessor htt
             || (s.CampaignId != null && storyteller.Contains(s.CampaignId.Value)));
     }
 
+    /// <summary>The user's role in a campaign, or null when they aren't a member (or it doesn't exist).</summary>
+    public async Task<CampaignRole?> RoleInAsync(Guid campaignId, CancellationToken ct)
+    {
+        var userId = UserId;
+        return await db.CampaignMembers
+            .Where(m => m.CampaignId == campaignId && m.UserId == userId)
+            .Select(m => (CampaignRole?)m.Role)
+            .SingleOrDefaultAsync(ct);
+    }
+
+    public async Task<bool> IsStorytellerAsync(Guid campaignId, CancellationToken ct) =>
+        await RoleInAsync(campaignId, ct) == CampaignRole.Storyteller;
+
     public Task<bool> CanManageCharacterAsync(Guid id, CancellationToken ct) =>
         ManagedCharacters().AnyAsync(c => c.Id == id, ct);
 

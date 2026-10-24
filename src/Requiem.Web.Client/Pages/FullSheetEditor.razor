@@ -239,6 +239,9 @@ else
 
     private bool IsNew => Id is null;
 
+    /// <summary>New characters made from a campaign's page go straight into it.</summary>
+    [SupplyParameterFromQuery(Name = "campaign")] public Guid? Campaign { get; set; }
+
     private BloodlineOption? SelectedBloodline => _bloodlines.FirstOrDefault(b => b.Id == _form?.BloodlineId);
     private PredatorTypeOption? SelectedPredator => _predatorTypes.FirstOrDefault(p => p.Id == _form?.PredatorTypeId);
 
@@ -264,7 +267,7 @@ else
             _powers = await Api.GetPowersAsync();
             _roster = await Api.ListCharactersAsync(new CharacterQuery(IncludeArchived: true));
 
-            var form = Id is { } id ? await Api.GetFullSheetAsync(id) : new FullSheetForm();
+            var form = Id is { } id ? await Api.GetFullSheetAsync(id) : new FullSheetForm { CampaignId = Campaign };
             if (form is null)
             {
                 _notFound = true;
