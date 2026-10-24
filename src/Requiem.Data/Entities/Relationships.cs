@@ -1,3 +1,5 @@
+using Requiem.Shared.Characters;
+
 namespace Requiem.Data.Entities;
 
 // Links between characters. Deleting a character removes its links (see RequiemDbContext).
@@ -17,6 +19,8 @@ public class CharacterRelationship
     public Character? ToCharacter { get; set; }
     public string? ToName { get; set; }
     public RelationshipKind Kind { get; set; }
+    /// <summary>Which of the three starting relationships this is (WoD Core p.65), or Other.</summary>
+    public RelationshipRole Role { get; set; } = RelationshipRole.Other;
     public string? Description { get; set; }
 }
 

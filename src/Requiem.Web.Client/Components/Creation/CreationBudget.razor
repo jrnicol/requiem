@@ -1,0 +1,60 @@
+@* The creation budget panel: every pool spent against its allowance, and what still needs doing.
+   The player sees it while building; the Storyteller sees the same numbers when approving. *@
+
+<MudPaper Outlined="true" Class="pa-3">
+    <MudText Typo="Typo.subtitle1" Class="mb-1">Creation budget</MudText>
+    @foreach (var line in Report.Budget)
+    {
+        <div class="budget-line">
+            <MudStack Row="true" Justify="Justify.SpaceBetween" AlignItems="AlignItems.Center">
+                <MudText Typo="Typo.body2">@line.Name</MudText>
+                <MudText Typo="Typo.body2" Color="@(line.IsOver ? Color.Warning : line.Spent == line.Allowed ? Color.Success : Color.Default)">
+                    <b>@line.Spent</b>@(line.Allowed is { } allowed ? $" / {allowed}" : "")
+                </MudText>
+            </MudStack>
+            @if (line.Allowed is { } max && max > 0)
+            {
+                <MudProgressLinear Value="Math.Min(100, 100.0 * line.Spent / max)" Size="Size.Small" Rounded="true"
+                                   Color="@(line.IsOver ? Color.Warning : Color.Primary)" aria-label="@($"{line.Name}: {line.Spent} of {max}")" />
+            }
+            @if (line.Detail is { } detail)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display:block">@detail</MudText>
+            }
+        </div>
+    }
+
+    @if (ShowIssues)
+    {
+        var shown = Report.Issues.Where(i => Step is null || i.Step == Step).OrderBy(i => i.Level).ToList();
+        @if (shown.Count > 0)
+        {
+            <MudDivider Class="my-2" />
+            @foreach (var issue in shown)
+            {
+                <MudAlert Severity="@SeverityOf(issue.Level)" Dense="true" Class="mb-1" NoIcon="@(issue.Level == CreationIssueLevel.Note)">
+                    @issue.Message
+                </MudAlert>
+            }
+        }
+        else if (Step is null && Report.IsComplete)
+        {
+            <MudAlert Severity="Severity.Success" Dense="true" Class="mt-2">Everything the book asks for is here.</MudAlert>
+        }
+    }
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public CreationReport Report { get; set; } = null!;
+    /// <summary>Show the issues as well as the numbers.</summary>
+    [Parameter] public bool ShowIssues { get; set; } = true;
+    /// <summary>Only this step's issues; null for all of them.</summary>
+    [Parameter] public CreationStep? Step { get; set; }
+
+    public static Severity SeverityOf(CreationIssueLevel level) => level switch
+    {
+        CreationIssueLevel.Missing => Severity.Error,
+        CreationIssueLevel.Warning => Severity.Warning,
+        _ => Severity.Info,
+    };
+}

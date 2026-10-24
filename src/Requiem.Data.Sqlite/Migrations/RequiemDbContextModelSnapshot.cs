@@ -565,6 +565,10 @@ namespace Requiem.Data.Sqlite.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("SireId")
                         .HasColumnType("TEXT");
 
@@ -941,6 +945,11 @@ namespace Requiem.Data.Sqlite.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid?>("ToCharacterId")
                         .HasColumnType("TEXT");
 
@@ -1158,6 +1167,36 @@ namespace Requiem.Data.Sqlite.Migrations
                         {
                             t.HasCheckConstraint("CK_CompelDefinition_Roll", "Roll IS NULL OR Roll BETWEEN 1 AND 10");
                         });
+                });
+
+            modelBuilder.Entity("Requiem.Data.Entities.ConceptDefinition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("SourcePage")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("WillpowerTrigger")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ConceptDefinitions");
                 });
 
             modelBuilder.Entity("Requiem.Data.Entities.CorruptionMark", b =>
@@ -1914,7 +1953,7 @@ namespace Requiem.Data.Sqlite.Migrations
             modelBuilder.Entity("Requiem.Data.Entities.CharacterRelationship", b =>
                 {
                     b.HasOne("Requiem.Data.Entities.Character", "FromCharacter")
-                        .WithMany()
+                        .WithMany("Relationships")
                         .HasForeignKey("FromCharacterId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
@@ -2087,6 +2126,8 @@ namespace Requiem.Data.Sqlite.Migrations
                     b.Navigation("Merits");
 
                     b.Navigation("Milestones");
+
+                    b.Navigation("Relationships");
 
                     b.Navigation("Scripts");
 

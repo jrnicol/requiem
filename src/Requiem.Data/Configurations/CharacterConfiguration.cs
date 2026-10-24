@@ -41,6 +41,7 @@ internal sealed class CharacterConfiguration : IEntityTypeConfiguration<Characte
         // Same for a ghoul's domitor.
         b.HasOne(x => x.Domitor).WithMany().HasForeignKey(x => x.DomitorId).OnDelete(DeleteBehavior.ClientSetNull);
         b.Property(x => x.DomitorName).HasMaxLength(Lengths.Name);
+        b.Property(x => x.ReviewNote).HasMaxLength(2000);
         b.Property(x => x.PublicDescription).HasMaxLength(Lengths.Short);
         // A campaign with characters can't be deleted, only archived.
         b.HasOne(x => x.Campaign).WithMany().HasForeignKey(x => x.CampaignId).OnDelete(DeleteBehavior.Restrict);

@@ -28,9 +28,11 @@ public sealed record CharacterSummary(
     Guid? CampaignId = null);
 
 /// <param name="CampaignId">Only that campaign's characters; otherwise those of every campaign the user tells.</param>
+/// <param name="PlayerCharacters">Players' characters instead of NPCs.</param>
 public sealed record CharacterQuery(
     string? Search = null,
     CharacterTier? Tier = null,
     CharacterKind? Kind = null,
     bool IncludeArchived = false,
-    Guid? CampaignId = null);
+    Guid? CampaignId = null,
+    bool PlayerCharacters = false);

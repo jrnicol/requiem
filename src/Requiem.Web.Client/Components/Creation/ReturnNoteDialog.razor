@@ -1,0 +1,19 @@
+@* The Storyteller's note when returning a submitted character to its player. *@
+
+<MudDialog>
+    <DialogContent>
+        <MudText Class="mb-2">The character goes back to a draft. Say what to change; the player sees this note.</MudText>
+        <MudTextField T="string" @bind-Value="_note" Label="Note to the player" Variant="Variant.Outlined" Lines="4"
+                      MaxLength="2000" AutoFocus="true" Immediate="true" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="() => Dialog.Cancel()">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="() => Dialog.Close(DialogResult.Ok(_note ?? string.Empty))">Return it</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
+
+    private string? _note;
+}

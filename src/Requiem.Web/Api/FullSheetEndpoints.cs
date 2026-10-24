@@ -95,14 +95,18 @@ public static class FullSheetEndpoints
         return TypedResults.Ok(FullSheetMapper.ToForm(character));
     }
 
-    private static Task<Character?> LoadAsync(CampaignAccess access, Guid id, CharacterTier tier, bool tracked, CancellationToken ct)
+    private static Task<Character?> LoadAsync(CampaignAccess access, Guid id, CharacterTier tier, bool tracked, CancellationToken ct) =>
+        LoadAsync(access.ManagedCharacters(), id, tier, tracked, ct);
+
+    /// <summary>A character with every part of the full sheet loaded.</summary>
+    internal static Task<Character?> LoadAsync(IQueryable<Character> source, Guid id, CharacterTier tier, bool tracked, CancellationToken ct)
     {
-        var query = access.ManagedCharacters()
+        var query = source
             .Include(c => c.Attributes).Include(c => c.Skills).Include(c => c.Specialties)
             .Include(c => c.Disciplines).Include(c => c.LearnedPowers).Include(c => c.Merits).Include(c => c.Wounds)
             .Include(c => c.Stains).Include(c => c.Compels).Include(c => c.Conditions).Include(c => c.Scripts)
             .Include(c => c.Milestones).Include(c => c.CorruptionMarks).Include(c => c.Items)
-            .Include(c => c.XpLedger)
+            .Include(c => c.XpLedger).Include(c => c.Relationships)
             .AsSplitQuery();
         if (!tracked) query = query.AsNoTracking();
         return query.SingleOrDefaultAsync(c => c.Id == id && c.Tier == tier, ct);
@@ -150,8 +154,12 @@ public static class FullSheetEndpoints
     }
 
     /// <returns>Errors keyed by form property name, or null when valid.</returns>
-    private static async Task<Dictionary<string, string[]>?> ValidateAsync(
-        FullSheetForm form, Guid? id, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
+    /// <param name="checkLinks">
+    /// Check the sire and domitor against the campaign's characters. Off for players, who can't set them
+    /// (the Storyteller links them).
+    /// </param>
+    internal static async Task<Dictionary<string, string[]>?> ValidateAsync(
+        FullSheetForm form, Guid? id, RequiemDbContext db, CampaignAccess access, CancellationToken ct, bool checkLinks = true)
     {
         // Tidy the form for its kind first (e.g. a ghoul keeps at most 8 Vitae), as saving would.
         form.NormalizeForKind();
@@ -180,16 +188,20 @@ public static class FullSheetEndpoints
         if (meritIds.Count > 0 && await db.MeritDefinitions.CountAsync(m => meritIds.Contains(m.Id), ct) != meritIds.Count)
             results.Add(new ValidationResult("Unknown merit or flaw.", [nameof(form.Merits)]));
 
-        if (form.SireId is { } sireId)
+        if (checkLinks && (form.SireId ?? form.DomitorId) is not null)
         {
-            // The sire must be in the same campaign: the form's for a new character, its own otherwise.
+            // A sire or domitor must be in the same campaign: the form's for a new character, its own otherwise.
             var campaignId = id is null
                 ? form.CampaignId
                 : await access.ManagedCharacters().Where(c => c.Id == id).Select(c => c.CampaignId).FirstOrDefaultAsync(ct);
-            if (sireId == id)
-                results.Add(new ValidationResult("A character can't be their own sire.", [nameof(form.SireId)]));
-            else if (!await access.AllInCampaignAsync(campaignId, [sireId], ct))
-                results.Add(new ValidationResult("Unknown sire.", [nameof(form.SireId)]));
+            foreach (var (linked, member, label) in new[] { (form.SireId, nameof(form.SireId), "sire"), (form.DomitorId, nameof(form.DomitorId), "domitor") })
+            {
+                if (linked is not { } linkedId) continue;
+                if (linkedId == id)
+                    results.Add(new ValidationResult($"A character can't be their own {label}.", [member]));
+                else if (!await access.AllInCampaignAsync(campaignId, [linkedId], ct))
+                    results.Add(new ValidationResult($"Unknown {label}.", [member]));
+            }
         }
 
         if (results.Count == 0) return null;

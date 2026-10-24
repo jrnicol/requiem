@@ -49,6 +49,16 @@ internal sealed class CompelDefinitionConfiguration : IEntityTypeConfiguration<C
     }
 }
 
+internal sealed class ConceptDefinitionConfiguration : IEntityTypeConfiguration<ConceptDefinition>
+{
+    public void Configure(EntityTypeBuilder<ConceptDefinition> b)
+    {
+        b.Property(x => x.Name).HaveNameLength();
+        b.HasIndex(x => x.Name).IsUnique();
+        b.Property(x => x.WillpowerTrigger).HasMaxLength(Lengths.Short);
+    }
+}
+
 internal sealed class EdgeDefinitionConfiguration : IEntityTypeConfiguration<EdgeDefinition>
 {
     public void Configure(EntityTypeBuilder<EdgeDefinition> b)

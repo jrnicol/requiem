@@ -73,7 +73,7 @@ The printed sheet shows 20 Vitae boxes, but with BP 10 the pool can reach 50. Th
 
 ### Constraints (warnings, GM can override)
 - A single Discipline's dots can't exceed Blood Potency.
-- Number of Disciplines can't exceed Blood Potency.
+- ~~Number of Disciplines can't exceed Blood Potency.~~ Not a rule (house ruling 2026-10-24): Blood Potency limits dots, not how many Disciplines. A vampire has their Caitiff Discipline and, in a Bloodline, its Discipline; more come only through diablerie.
 - Humanity + BP ≤ Generation Strength. If over, **Humanity** drops (never BP).
 
 **Generation chart (VtR p.15)**

@@ -41,6 +41,40 @@ public sealed class CampaignAccess(RequiemDbContext db, IHttpContextAccessor htt
         return (source ?? db.Characters).Where(c => c.CampaignId != null && storyteller.Contains(c.CampaignId.Value));
     }
 
+    /// <summary>The user's own player characters, in campaigns they still belong to.</summary>
+    public IQueryable<Character> OwnCharacters(IQueryable<Character>? source = null)
+    {
+        var userId = UserId;
+        var memberOf = db.CampaignMembers.Where(m => m.UserId == userId).Select(m => m.CampaignId);
+        return (source ?? db.Characters).Where(c =>
+            c.IsPlayerCharacter && c.OwnerUserId == userId && c.CampaignId != null && memberOf.Contains(c.CampaignId.Value));
+    }
+
+    /// <summary>Player characters the user may open: their own, and every PC in a campaign they tell.</summary>
+    public IQueryable<Character> VisiblePlayerCharacters(IQueryable<Character>? source = null)
+    {
+        var userId = UserId;
+        var storyteller = StorytellerCampaignIds();
+        var memberOf = db.CampaignMembers.Where(m => m.UserId == userId).Select(m => m.CampaignId);
+        return (source ?? db.Characters).Where(c => c.IsPlayerCharacter && c.CampaignId != null && (
+            storyteller.Contains(c.CampaignId.Value)
+            || (c.OwnerUserId == userId && memberOf.Contains(c.CampaignId.Value))));
+    }
+
+    /// <summary>
+    /// Characters the user can track at the table: everything they run as Storyteller, plus their own
+    /// approved (Active) player characters.
+    /// </summary>
+    public IQueryable<Character> PlayableCharacters(IQueryable<Character>? source = null)
+    {
+        var userId = UserId;
+        var storyteller = StorytellerCampaignIds();
+        var memberOf = db.CampaignMembers.Where(m => m.UserId == userId).Select(m => m.CampaignId);
+        return (source ?? db.Characters).Where(c => c.CampaignId != null && (
+            storyteller.Contains(c.CampaignId.Value)
+            || (c.IsPlayerCharacter && c.OwnerUserId == userId && c.Status == CharacterStatus.Active && memberOf.Contains(c.CampaignId.Value))));
+    }
+
     /// <summary>Scenes the user runs: those of the campaigns they tell.</summary>
     public IQueryable<Scene> ManagedScenes(IQueryable<Scene>? source = null)
     {

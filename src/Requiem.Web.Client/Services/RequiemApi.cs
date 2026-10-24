@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Requiem.Shared.Contracts;
+using Requiem.Shared.Rules;
 
 namespace Requiem.Web.Client.Services;
 
@@ -26,6 +27,7 @@ public sealed class RequiemApi(HttpClient http)
     private IReadOnlyList<MeritOption>? _merits;
     private IReadOnlyList<CompelOption>? _compels;
     private IReadOnlyList<PowerOption>? _powers;
+    private IReadOnlyList<ConceptOption>? _concepts;
 
     // ---------- Catalog ----------
 
@@ -50,7 +52,17 @@ public sealed class RequiemApi(HttpClient http)
     public async Task<IReadOnlyList<PowerOption>> GetPowersAsync() =>
         _powers ??= await GetAsync<List<PowerOption>>("api/catalog/powers");
 
-    /// <summary>Saves the GM's review of an imported power and refreshes the cached catalog entry.</summary>
+    public async Task<IReadOnlyList<ConceptOption>> GetConceptsAsync() =>
+        _concepts ??= await GetAsync<List<ConceptOption>>("api/catalog/concepts");
+
+    /// <summary>The catalog entries <see cref="CreationRules"/> needs, from the cached lists.</summary>
+    public async Task<CreationCatalog> GetCreationCatalogAsync() => new(
+        await GetBloodlinesAsync(),
+        await GetDisciplinesAsync(),
+        (await GetPowersAsync()).ToDictionary(p => p.Id, p => p.PowerGroupId),
+        await GetMeritsAsync());
+
+    /// <summary>Saves the site admin's review of an imported power and refreshes the cached catalog entry.</summary>
     public async Task<SaveResult<PowerOption>> SavePowerAsync(int id, PowerEditForm form)
     {
         using var response = await http.PutAsJsonAsync($"api/catalog/powers/{id}", form, RequiemJson.Options);
@@ -70,6 +82,7 @@ public sealed class RequiemApi(HttpClient http)
         if (query.Kind is { } kind) parameters.Add($"kind={kind}");
         if (query.IncludeArchived) parameters.Add("includeArchived=true");
         if (query.CampaignId is { } campaignId) parameters.Add($"campaignId={campaignId}");
+        if (query.PlayerCharacters) parameters.Add("playerCharacters=true");
         var url = parameters.Count == 0 ? "api/characters" : $"api/characters?{string.Join('&', parameters)}";
         return GetAsync<List<CharacterSummary>>(url);
     }
@@ -266,6 +279,50 @@ public sealed class RequiemApi(HttpClient http)
 
     public Task<List<SceneSummary>> ListCampaignScenesAsync(Guid campaignId) =>
         GetAsync<List<SceneSummary>>($"api/scenes?campaignId={campaignId}");
+
+    // ---------- Player characters ----------
+
+    /// <summary>A Storyteller gets every PC in the campaign; a player gets their own.</summary>
+    public Task<List<PlayerCharacterSummary>> ListPlayerCharactersAsync(Guid campaignId) =>
+        GetAsync<List<PlayerCharacterSummary>>($"api/campaigns/{campaignId}/player-characters");
+
+    /// <returns>Null when it doesn't exist or isn't the user's to see.</returns>
+    public async Task<PlayerCharacterView?> GetPlayerCharacterAsync(Guid id)
+    {
+        using var response = await http.GetAsync($"api/player-characters/{id}");
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<PlayerCharacterView>(RequiemJson.Options);
+    }
+
+    /// <summary>Creates the player's draft in <paramref name="campaignId"/> (no Id yet) or saves it.</summary>
+    public async Task<SaveResult<PlayerCharacterView>> SavePlayerCharacterAsync(Guid campaignId, FullSheetForm form)
+    {
+        using var response = form.Id is { } id
+            ? await http.PutAsJsonAsync($"api/player-characters/{id}", form, RequiemJson.Options)
+            : await http.PostAsJsonAsync($"api/campaigns/{campaignId}/player-characters", form, RequiemJson.Options);
+        return await ReadSaveResultAsync<PlayerCharacterView>(response);
+    }
+
+    /// <summary>
+    /// submit, withdraw, approve, return (body: <see cref="ReturnCharacterRequest"/>) or status
+    /// (body: <see cref="CharacterStatusRequest"/>).
+    /// </summary>
+    public async Task<SaveResult<PlayerCharacterView>> PlayerCharacterActionAsync(Guid id, string action, object? body = null)
+    {
+        using var response = await http.PostAsync($"api/player-characters/{id}/{action}",
+            body is null ? null : JsonContent.Create(body, body.GetType(), options: RequiemJson.Options));
+        return await ReadSaveResultAsync<PlayerCharacterView>(response);
+    }
+
+    /// <returns>Null when deleted; otherwise why not.</returns>
+    public async Task<string?> DeletePlayerCharacterAsync(Guid id)
+    {
+        using var response = await http.DeleteAsync($"api/player-characters/{id}");
+        return response.IsSuccessStatusCode || response.StatusCode == HttpStatusCode.NotFound
+            ? null
+            : await ReadDetailAsync(response) ?? $"Couldn't delete it ({(int)response.StatusCode}).";
+    }
 
     /// <summary>Like <see cref="ReadSaveResultAsync{T}"/>, with campaign wording and 403/410 handled.</summary>
     private static async Task<SaveResult<T>> ReadCampaignResultAsync<T>(HttpResponseMessage response) where T : class

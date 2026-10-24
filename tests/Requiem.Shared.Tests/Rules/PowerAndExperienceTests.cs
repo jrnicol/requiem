@@ -41,10 +41,10 @@ public class PowerAndExperienceTests
     }
 
     [Fact]
-    public void More_disciplines_than_blood_potency_is_flagged()
+    public void Blood_potency_limits_dots_not_how_many_disciplines()
     {
-        var violations = PowerRules.Validate(1, [new("Auspex", 1), new("Furor", 1)]);
-        Assert.Contains(violations, v => v.Code == "discipline.count-exceeds-bp");
+        // A new Bloodline vampire: a Caitiff dot and a Bloodline dot at Blood Potency 1 (house ruling 2026-10-24).
+        Assert.Empty(PowerRules.Validate(1, [new("Auspex", 1), new("Dominate", 1)]));
     }
 
     [Theory]

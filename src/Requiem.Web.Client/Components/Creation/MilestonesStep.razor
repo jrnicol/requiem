@@ -1,0 +1,49 @@
+@* The character's first Milestones (WoD Core p.67): what they reach for, and the trouble it brings. *@
+
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+    A Milestone tells the Storyteller what darkness you want to be pulled into: answers, revenge, absolution, love…
+    It runs Opportunity → Risk → Choice and ends with a Benefit. Write at least one; sketch the parts you can.
+</MudText>
+
+@foreach (var milestone in Form.Milestones.ToList())
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-2">
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+            <MudTextField T="string" Value="milestone.Title" ValueChanged="v => Update(() => milestone.Title = v ?? string.Empty)"
+                          Label="What they want" Placeholder="e.g. Find who burned the shop" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          MaxLength="200" Style="flex:1" />
+            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="Remove Milestone"
+                           OnClick="() => Update(() => Form.Milestones.Remove(milestone))" />
+        </MudStack>
+        <MudGrid Spacing="1">
+            @foreach (var (label, help, get, set) in Parts(milestone))
+            {
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Value="get()" ValueChanged="v => Update(() => set(v))" Label="@label" HelperText="@help"
+                                  Variant="Variant.Text" Margin="Margin.Dense" Lines="2" Sizing="InputSizing.Auto" MaxLength="2000" />
+                </MudItem>
+            }
+        </MudGrid>
+    </MudPaper>
+}
+<MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
+           OnClick="() => Update(() => Form.Milestones.Add(new MilestoneEntry()))">Add a Milestone</MudButton>
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private static (string Label, string Help, Func<string?> Get, Action<string?> Set)[] Parts(MilestoneEntry m) =>
+    [
+        ("Opportunity", "Where it starts: what they become aware of", () => m.Opportunity, v => m.Opportunity = v),
+        ("Risk", "The first major challenge", () => m.Risk, v => m.Risk = v),
+        ("Choice", "The decision that resolves it", () => m.Choice, v => m.Choice = v),
+        ("Benefit", "What they gain, e.g. a Specialty or Merit", () => m.Benefit, v => m.Benefit = v),
+    ];
+
+    private async Task Update(Action change)
+    {
+        change();
+        await Changed.InvokeAsync();
+    }
+}

@@ -21,9 +21,12 @@ else
                     @KindLabel(option)@(option?.SourcePage is { } page ? $" · VtR p.{page}" : "")
                 </MudText>
             </div>
-            <DotRating Value="entry.Dots" ValueChanged="v => SetAsync(entry, v)" />
-            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="@($"Remove {option?.Name}")"
-                           OnClick="() => RemoveAsync(entry)" />
+            <DotRating Value="entry.Dots" ValueChanged="v => SetAsync(entry, v)" Min="@(AllowAdd ? 0 : 1)" />
+            @if (AllowAdd)
+            {
+                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="@($"Remove {option?.Name}")"
+                               OnClick="() => RemoveAsync(entry)" />
+            }
         </MudStack>
 
         var powers = Powers.Where(p => p.PowerGroupId == entry.PowerGroupId).OrderBy(p => p.Level).ThenBy(p => p.Name).ToList();
@@ -77,6 +80,8 @@ else
         <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1">@warning</MudAlert>
     }
 
+    @if (AllowAdd)
+    {
     <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mt-3">
         <MudSelect T="int?" @bind-Value="_pick" Label="Add a Discipline" Variant="Variant.Outlined" Margin="Margin.Dense"
                    Style="min-width:14rem" ToStringFunc="NameOf">
@@ -91,6 +96,7 @@ else
         <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                    OnClick="AddAsync" Disabled="_pick is null" Class="mt-1">Add</MudButton>
     </MudStack>
+    }
     <ValidationMessage For="() => Form.Disciplines" class="mud-error-text mud-typography-caption" />
     <ValidationMessage For="() => Form.LearnedPowerIds" class="mud-error-text mud-typography-caption" />
 }
@@ -101,6 +107,8 @@ else
     /// <summary>The powers catalog; dot N of a Discipline grants its powers of level 1..N.</summary>
     [Parameter] public IReadOnlyList<PowerOption> Powers { get; set; } = [];
     [Parameter] public EventCallback Changed { get; set; }
+    /// <summary>Show the "Add a Discipline" picker and remove buttons; off in the creation wizard, which picks its own.</summary>
+    [Parameter] public bool AllowAdd { get; set; } = true;
 
     private int? _pick;
 

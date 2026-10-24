@@ -1,0 +1,56 @@
+@* Step 1: what kind of character, from the templates the campaign allows. *@
+
+<MudText Class="mb-3">Every character starts as a mortal (WoD Core p.55). Vampires and ghouls add their template at the end.</MudText>
+<MudGrid Spacing="2">
+    @foreach (var (kind, template, title, blurb) in Options)
+    {
+        var allowed = Allowed.HasFlag(template);
+        var selected = Form.Kind == kind;
+        <MudItem xs="12" sm="4">
+            <MudPaper Outlined="true" Class="@($"pa-3 template-card {(selected ? "template-card-selected" : "")} {(allowed ? "" : "template-card-disabled")}")"
+                      @onclick="() => PickAsync(kind, allowed)" role="radio" aria-checked="@(selected ? "true" : "false")" aria-disabled="@(allowed ? "false" : "true")"
+                      tabindex="@(allowed ? 0 : -1)" @onkeydown="e => KeyAsync(e, kind, allowed)">
+                <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
+                    <MudIcon Icon="@(selected ? Icons.Material.Filled.RadioButtonChecked : Icons.Material.Filled.RadioButtonUnchecked)"
+                             Color="@(selected ? Color.Primary : Color.Default)" Size="Size.Small" />
+                    <MudText Typo="Typo.h6">@title</MudText>
+                </MudStack>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@blurb</MudText>
+                @if (!allowed)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Warning">Not allowed in this campaign.</MudText>
+                }
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public CharacterTemplates Allowed { get; set; } = CharacterTemplates.All;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private static readonly (CharacterKind Kind, CharacterTemplates Template, string Title, string Blurb)[] Options =
+    [
+        (CharacterKind.Vampire, CharacterTemplates.Vampire, "Vampire", "One of the Damned: a Bloodline, Disciplines and the Beast within."),
+        (CharacterKind.Ghoul, CharacterTemplates.Ghoul, "Ghoul", "A living servant fed a vampire's Vitae: ageless while it lasts, and bound to their domitor."),
+        (CharacterKind.Mortal, CharacterTemplates.Mortal, "Mortal", "An ordinary person who has seen too much of the dark."),
+    ];
+
+    private async Task PickAsync(CharacterKind kind, bool allowed)
+    {
+        if (!allowed || Form.Kind == kind) return;
+        Form.Kind = kind;
+        // Mortals and ghouls use a Quirk and a Personal Script; vampires Humanity and the Beast. Keep what was written.
+        var texts = Form.Scripts.ToDictionary(s => s.Slot, s => s.Text);
+        Form.Scripts = FullSheetForm.DefaultScripts(kind);
+        foreach (var script in Form.Scripts) script.Text = texts.GetValueOrDefault(script.Slot, "");
+        Form.NormalizeForKind();
+        await Changed.InvokeAsync();
+    }
+
+    private async Task KeyAsync(KeyboardEventArgs e, CharacterKind kind, bool allowed)
+    {
+        if (e.Key is "Enter" or " ") await PickAsync(kind, allowed);
+    }
+}

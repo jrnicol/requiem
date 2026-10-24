@@ -1,0 +1,581 @@
+@page "/campaigns/{CampaignId:guid}/characters/new"
+@page "/characters/{Id:guid}"
+@attribute [Authorize(Policy = Policies.Member)]
+@inject RequiemApi Api
+@inject NavigationManager Navigation
+@inject ISnackbar Snackbar
+@inject IDialogService Dialogs
+
+@* A player character. Its player builds it here with the creation wizard while it's a Draft, then sees
+   the finished sheet; a Storyteller reviews it here and approves or returns it (PHASE2.md §5). *@
+
+<PageTitle>@(string.IsNullOrWhiteSpace(_form?.Name) ? "New character" : _form.Name) · Requiem</PageTitle>
+
+@if (_notFound)
+{
+    <MudAlert Severity="Severity.Warning" Class="mt-4">
+        This character doesn't exist, or isn't yours to see. <MudLink Href="campaigns">Your campaigns</MudLink>
+    </MudAlert>
+}
+else if (_loadFailed)
+{
+    <MudAlert Severity="Severity.Error" Class="mt-4">
+        Couldn't load the character. <MudButton Variant="Variant.Text" OnClick="LoadAsync">Try again</MudButton>
+    </MudAlert>
+}
+else if (_form is null || _report is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap" Class="mb-3">
+        <BackButton Fallback="@CampaignUrl" Label="Back" />
+        <div style="flex:1; min-width:10rem">
+            <MudText Typo="Typo.h4" Class="brand-font">@(string.IsNullOrWhiteSpace(_form.Name) ? "New character" : _form.Name)</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                @CampaignName@(_view is { IsMine: false } v ? $" · played by {v.OwnerName}" : "")
+            </MudText>
+        </div>
+        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@StatusColor(Status)">@StatusLabel(Status)</MudChip>
+        @if (IsWizard)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"
+                       Disabled="_busy || !IsDirty" OnClick="() => SaveAsync()">Save draft</MudButton>
+            @if (_view is not null)
+            {
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight" aria-label="More">
+                    <MudMenuItem Icon="@Icons.Material.Outlined.Delete" OnClick="DeleteAsync">Delete draft</MudMenuItem>
+                </MudMenu>
+            }
+        }
+    </MudStack>
+
+    @if (_view?.ReviewNote is { } note && Status == CharacterStatus.Draft)
+    {
+        <MudAlert Severity="Severity.Warning" Class="mb-3" Icon="@Icons.Material.Filled.RateReview">
+            <b>Returned by the Storyteller:</b> @note
+        </MudAlert>
+    }
+
+    @if (IsWizard)
+    {
+        @* ---------- The creation wizard ---------- *@
+        <div class="wizard-steps mb-3" role="tablist" aria-label="Creation steps">
+            @foreach (var (step, index) in Steps.Select((s, i) => (s, i)))
+            {
+                var state = StepState(step);
+                <button type="button" role="tab" aria-selected="@(step == _step ? "true" : "false")"
+                        class="@($"wizard-step {(step == _step ? "wizard-step-active" : "")} wizard-step-{state}")"
+                        @onclick="() => GoToAsync(step)">
+                    <span class="wizard-step-number">@(state == "done" ? "✓" : (index + 1).ToString())</span>
+                    <span>@StepTitle(step)</span>
+                </button>
+            }
+        </div>
+
+        @* The sheet panels show their field errors, which need an edit context. *@
+        <CascadingValue Value="_editContext">
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="8">
+                <MudPaper Class="pa-3 pa-sm-4" Elevation="1">
+                    <MudText Typo="Typo.h6" Class="mb-2">@StepTitle(_step)</MudText>
+                    @switch (_step)
+                    {
+                        case CreationStep.Template:
+                            <TemplateStep Form="_form" Allowed="Allowed" Changed="OnChangedAsync" />
+                            break;
+                        case CreationStep.Concept:
+                            <ConceptStep Form="_form" Concepts="_concepts" Changed="OnChangedAsync" />
+                            break;
+                        case CreationStep.VirtueAndVice:
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                                Concept is who they are; Virtue and Vice are how they go about it. Acting on either, for real, regains Willpower.
+                            </MudText>
+                            <VirtueViceStep Form="_form" Changed="OnChangedAsync" />
+                            break;
+                        case CreationStep.Relationships:
+                            <RelationshipsStep Form="_form" Changed="OnChangedAsync" />
+                            break;
+                        case CreationStep.Scripts:
+                            <ScriptsStep Form="_form" Changed="OnChangedAsync" />
+                            break;
+                        case CreationStep.Milestones:
+                            <MilestonesStep Form="_form" Changed="OnChangedAsync" />
+                            break;
+                        case CreationStep.Attributes:
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                                Every Attribute starts with 1 free dot. Put 5 more into one group, 4 into another and 3 into the last;
+                                the app works out which is which. Attributes left at 1 can't be raised with XP later.
+                                Willpower is Wits + Resolve: @_form.WillpowerDots.
+                            </MudText>
+                            <AttributesPanel Form="_form" Changed="OnChangedAsync" ShowBoosts="false" />
+                            break;
+                        case CreationStep.Skills:
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                                Put 11 dots into one group of Skills, 7 into another and 5 into the last. At most 3 in any Skill
+                                (a 4th needs the Storyteller's approval). Then choose 3 Specialties on Skills you have.
+                            </MudText>
+                            <SkillsPanel Form="_form" Changed="OnChangedAsync" />
+                            break;
+                        case CreationStep.Merits:
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                                10 Merit points: Merits cost their dots. Points also buy a Skill dot or Specialty (1) or an Attribute dot (3).
+                                Up to 7 points of Flaws; they earn XP in play rather than points.
+                            </MudText>
+                            <MudText Typo="Typo.subtitle1">Merits</MudText>
+                            <MeritsPanel Form="_form" Options="_merits" Kind="MeritKind.Merit" Changed="OnChangedAsync" />
+                            <MudText Typo="Typo.subtitle1" Class="mt-4">Flaws</MudText>
+                            <MeritsPanel Form="_form" Options="_merits" Kind="MeritKind.Flaw" Changed="OnChangedAsync" />
+                            break;
+                        case CreationStep.Blood:
+                            <BloodStep Form="_form" Bloodlines="_bloodlines" PredatorTypes="_predatorTypes" Disciplines="_disciplines"
+                                       Powers="_powers" Merits="_merits" Changed="OnChangedAsync" />
+                            break;
+                        case CreationStep.Review:
+                            <SheetOverview Form="_form" Concepts="_concepts" Bloodlines="_bloodlines" PredatorTypes="_predatorTypes"
+                                           Disciplines="_disciplines" Powers="_powers" />
+                            <MudDivider Class="my-3" />
+                            <CreationBudget Report="_report" />
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-3">
+                                Submitting sends the character to the Storyteller. Anything over budget is fine to submit; they'll see it and decide.
+                            </MudText>
+                            break;
+                    }
+
+                    @if (_step != CreationStep.Review && _report.For(_step).Any())
+                    {
+                        <MudDivider Class="my-3" />
+                        @foreach (var issue in _report.For(_step).OrderBy(i => i.Level))
+                        {
+                            <MudAlert Severity="CreationBudget.SeverityOf(issue.Level)" Dense="true" Class="mb-1"
+                                      NoIcon="@(issue.Level == CreationIssueLevel.Note)">@issue.Message</MudAlert>
+                        }
+                    }
+
+                    <MudStack Row="true" Justify="Justify.SpaceBetween" Class="mt-4">
+                        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ChevronLeft"
+                                   Disabled="_step == Steps[0]" OnClick="() => MoveAsync(-1)">Back</MudButton>
+                        @if (_step == CreationStep.Review)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Send"
+                                       Disabled="_busy || !_report.IsComplete" OnClick="SubmitAsync">Submit for approval</MudButton>
+                        }
+                        else
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ChevronRight"
+                                       Disabled="_busy" OnClick="() => MoveAsync(1)">Next</MudButton>
+                        }
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+            @* The Review step shows the full budget itself. *@
+            @if (_step != CreationStep.Review)
+            {
+                <MudItem xs="12" md="4">
+                    <div class="sticky-summary">
+                        <CreationBudget Report="_report" ShowIssues="false" />
+                    </div>
+                </MudItem>
+            }
+        </MudGrid>
+        </CascadingValue>
+    }
+    else
+    {
+        @* ---------- The finished sheet, for its player or the Storyteller ---------- *@
+        @switch (Status)
+        {
+            case CharacterStatus.Submitted when _view!.IsMine:
+                <MudAlert Severity="Severity.Info" Class="mb-3">
+                    Waiting for the Storyteller to approve. Need to change something?
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" Disabled="_busy" OnClick="@(() => ActAsync("withdraw"))">Withdraw it</MudButton>
+                </MudAlert>
+                break;
+            case CharacterStatus.Active when _view!.IsMine:
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Casino" Href="@($"play/{Id}")">
+                        At the table
+                    </MudButton>
+                </MudStack>
+                break;
+            case CharacterStatus.Retired or CharacterStatus.Dead when _view!.IsMine:
+                <MudAlert Severity="Severity.Info" Class="mb-3">
+                    @(Status == CharacterStatus.Dead ? "This character has died." : "This character has retired.") You can start a new one from the campaign page.
+                </MudAlert>
+                break;
+        }
+
+        @if (_view!.IsStoryteller)
+        {
+            <MudPaper Outlined="true" Class="pa-3 mb-3">
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center">
+                    @if (Status == CharacterStatus.Submitted)
+                    {
+                        <MudText Style="flex:1; min-width:12rem">Submitted for your approval.</MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Check" Disabled="_busy"
+                                   OnClick="@(() => ActAsync("approve"))">Approve</MudButton>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Undo" Disabled="_busy" OnClick="ReturnAsync">Return with a note</MudButton>
+                    }
+                    else if (Status == CharacterStatus.Draft)
+                    {
+                        <MudText Style="flex:1; min-width:12rem">Their player is still building this character.</MudText>
+                    }
+                    else if (Status == CharacterStatus.Active)
+                    {
+                        <MudText Style="flex:1; min-width:12rem">In play.</MudText>
+                        <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Casino" Href="@($"play/{Id}")">At the table</MudButton>
+                        <MudMenu Label="Change status" Variant="Variant.Outlined" EndIcon="@Icons.Material.Filled.ArrowDropDown">
+                            <MudMenuItem OnClick="@(() => SetStatusAsync(CharacterStatus.Retired))">Retire</MudMenuItem>
+                            <MudMenuItem OnClick="@(() => SetStatusAsync(CharacterStatus.Dead))">Mark dead</MudMenuItem>
+                        </MudMenu>
+                    }
+                    else
+                    {
+                        <MudText Style="flex:1; min-width:12rem">@StatusLabel(Status).</MudText>
+                        <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="@(() => SetStatusAsync(CharacterStatus.Active))">Back in play</MudButton>
+                    }
+                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.Edit" Href="@($"sheets/{Id}")">Edit sheet</MudButton>
+                </MudStack>
+            </MudPaper>
+        }
+
+        <MudGrid Spacing="3">
+            <MudItem xs="12" md="8">
+                <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3">
+                    <MudTabPanel Text="Sheet">
+                        <SheetOverview Form="_form" Concepts="_concepts" Bloodlines="_bloodlines" PredatorTypes="_predatorTypes"
+                                       Disciplines="_disciplines" Powers="_powers" />
+                    </MudTabPanel>
+                    <MudTabPanel Text="Story">
+                        @{ var editable = _view.CanEdit && Status == CharacterStatus.Active; }
+                        @if (editable)
+                        {
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                                Once in play, stats change through experience; the story is yours to keep up to date.
+                            </MudText>
+                        }
+                        <MudText Typo="Typo.subtitle1">Relationships</MudText>
+                        <RelationshipsStep Form="_form" Changed="OnChangedAsync" ReadOnly="!editable" />
+                        <MudText Typo="Typo.subtitle1" Class="mt-4">Scripts</MudText>
+                        <ScriptsStep Form="_form" Changed="OnChangedAsync" ReadOnly="!editable" />
+                        <MudText Typo="Typo.subtitle1" Class="mt-4">Milestones</MudText>
+                        @foreach (var milestone in _form.Milestones)
+                        {
+                            <MudText Typo="Typo.body2"><b>@milestone.Title</b> · @milestone.Stage</MudText>
+                        }
+                        <MudTextField T="string" Value="_form.Notes" ValueChanged="v => ChangeAsync(() => _form.Notes = v)" Label="Notes"
+                                      Variant="Variant.Outlined" Lines="3" Sizing="InputSizing.Auto" MaxLength="4000" Class="mt-4" ReadOnly="!editable" />
+                        @if (editable)
+                        {
+                            <MudButton Variant="Variant.Filled" Color="Color.Primary" Class="mt-3" Disabled="_busy || !IsDirty"
+                                       OnClick="() => SaveAsync()">Save</MudButton>
+                        }
+                    </MudTabPanel>
+                    @if (_view.IsStoryteller)
+                    {
+                        <MudTabPanel Text="Creation budget">
+                            <CreationBudget Report="_report" />
+                        </MudTabPanel>
+                    }
+                </MudTabs>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <SheetSummary Form="_form" Bloodline="_bloodlines.FirstOrDefault(b => b.Id == _form.BloodlineId)" Disciplines="_disciplines" />
+            </MudItem>
+        </MudGrid>
+    }
+}
+
+@code {
+    [Parameter] public Guid? CampaignId { get; set; }
+    [Parameter] public Guid? Id { get; set; }
+
+    private PlayerCharacterView? _view;
+    private CampaignView? _campaign;
+    private FullSheetForm? _form;
+    private EditContext? _editContext;
+    private CreationReport? _report;
+    private CreationCatalog? _catalog;
+    private string _saved = "";
+    private CreationStep _step = CreationStep.Template;
+    private bool _busy;
+    private bool _notFound;
+    private bool _loadFailed;
+
+    private IReadOnlyList<ConceptOption> _concepts = [];
+    private IReadOnlyList<BloodlineOption> _bloodlines = [];
+    private IReadOnlyList<PredatorTypeOption> _predatorTypes = [];
+    private IReadOnlyList<DisciplineOption> _disciplines = [];
+    private IReadOnlyList<PowerOption> _powers = [];
+    private IReadOnlyList<MeritOption> _merits = [];
+
+    private CharacterStatus Status => _view?.Status ?? CharacterStatus.Draft;
+    private bool IsWizard => _view is null || (_view.IsMine && Status == CharacterStatus.Draft);
+    private Guid? CampaignOf => _form?.CampaignId ?? CampaignId;
+    private string CampaignUrl => CampaignOf is { } c ? $"campaigns/{c}" : "campaigns";
+    private string CampaignName => _view?.CampaignName ?? _campaign?.Name ?? "";
+    private CharacterTemplates Allowed => _view?.AllowedTemplates ?? _campaign?.AllowedTemplates ?? CharacterTemplates.All;
+    private bool IsDirty => _form is not null && Snapshot(_form) != _saved;
+
+    /// <summary>The wizard's steps; mortals have no template to add.</summary>
+    private IReadOnlyList<CreationStep> Steps => Enum.GetValues<CreationStep>()
+        .Where(s => s != CreationStep.Blood || _form?.Kind != CharacterKind.Mortal).ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // A new draft's first save moves to its own address; it's already on screen, so don't reload it.
+        if (Id is { } id && _view?.Sheet.Id == id) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _notFound = _loadFailed = false;
+        _form = null;
+        try
+        {
+            _concepts = await Api.GetConceptsAsync();
+            _bloodlines = await Api.GetBloodlinesAsync();
+            _predatorTypes = await Api.GetPredatorTypesAsync();
+            _disciplines = await Api.GetDisciplinesAsync();
+            _powers = await Api.GetPowersAsync();
+            _merits = await Api.GetMeritsAsync();
+            _catalog = await Api.GetCreationCatalogAsync();
+
+            if (Id is { } id)
+            {
+                _view = await Api.GetPlayerCharacterAsync(id);
+                if (_view is null)
+                {
+                    _notFound = true;
+                    return;
+                }
+                Show(_view.Sheet);
+                // Pick up a draft where its gaps are.
+                if (IsWizard) _step = Steps.FirstOrDefault(s => _report!.For(s).Any(i => i.Level == CreationIssueLevel.Missing), CreationStep.Review);
+            }
+            else
+            {
+                _view = null;
+                _campaign = CampaignId is { } campaignId ? await Api.GetCampaignAsync(campaignId) : null;
+                if (_campaign is null || _campaign.IsStoryteller)
+                {
+                    _notFound = _campaign is null;
+                    if (_campaign is not null) Navigation.NavigateTo($"campaigns/{_campaign.Id}", replace: true);
+                    return;
+                }
+                var kind = Allowed.HasFlag(CharacterTemplates.Vampire) ? CharacterKind.Vampire
+                    : Allowed.HasFlag(CharacterTemplates.Ghoul) ? CharacterKind.Ghoul : CharacterKind.Mortal;
+                var form = new FullSheetForm { CampaignId = _campaign.Id, Kind = kind, Scripts = FullSheetForm.DefaultScripts(kind) };
+                foreach (var script in form.Scripts)
+                {
+                    if (script.Kind == ScriptKind.Coterie) script.Text = _campaign.CoterieScript ?? "";
+                    if (script.Kind == ScriptKind.ChronicleTenet) script.Text = _campaign.ChronicleTenet ?? "";
+                }
+                form.NormalizeForKind();
+                Derive(form);
+                _form = form;
+                _editContext = new EditContext(form);
+                _saved = "";
+                Evaluate();
+                _step = CreationStep.Template;
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _loadFailed = true;
+        }
+    }
+
+    private void Show(FullSheetForm sheet)
+    {
+        _form = sheet;
+        _editContext = new EditContext(sheet);
+        _saved = Snapshot(sheet);
+        Evaluate();
+    }
+
+    private void Evaluate() => _report = CreationRules.Evaluate(_form!, _catalog!, Allowed);
+
+    /// <summary>
+    /// Values that follow from the rest during creation, so the player never has to work them out:
+    /// Willpower is Wits + Resolve, trackers start full, Humanity 6 within Generation's limit.
+    /// </summary>
+    private static void Derive(FullSheetForm form)
+    {
+        form.WillpowerDots = form.WillpowerCurrent =
+            DerivedStats.StartingWillpower(form.Attribute(CharacterAttribute.Wits), form.Attribute(CharacterAttribute.Resolve));
+        if (form.IsVampire)
+        {
+            var bloodPotency = form.BloodPotency ??= BloodRules.MinBloodPotency;
+            if (form.IsThinblood) form.Generation = GenerationRules.ThinbloodGeneration;
+            var generation = form.Generation ??= GenerationRules.StartingGeneration;
+            form.Humanity = HumanityRules.ClampToGeneration(DerivedStats.StartingHumanity(), bloodPotency, generation);
+            form.VitaeCurrent = BloodRules.MaxVitae(bloodPotency, form.IsThinblood);
+        }
+        else
+        {
+            form.Morality ??= DerivedStats.StartingMorality;
+            form.VitaeCurrent = form.IsGhoul ? GhoulRules.MaxVitae : null;
+        }
+    }
+
+    private Task OnChangedAsync()
+    {
+        if (IsWizard) Derive(_form!);
+        Evaluate();
+        return Task.CompletedTask;
+    }
+
+    private async Task ChangeAsync(Action change)
+    {
+        change();
+        await OnChangedAsync();
+    }
+
+    private string StepState(CreationStep step)
+    {
+        var issues = _report!.For(step).ToList();
+        if (issues.Any(i => i.Level == CreationIssueLevel.Missing)) return "missing";
+        if (issues.Any(i => i.Level == CreationIssueLevel.Warning)) return "warning";
+        return step == CreationStep.Review ? (_report.IsComplete ? "done" : "todo") : "done";
+    }
+
+    private async Task MoveAsync(int by)
+    {
+        var index = Steps.ToList().IndexOf(_step) + by;
+        if (index >= 0 && index < Steps.Count) await GoToAsync(Steps[index]);
+    }
+
+    /// <summary>Changing step saves the draft once it has a name, so nothing is lost.</summary>
+    private async Task GoToAsync(CreationStep step)
+    {
+        if (IsDirty && !string.IsNullOrWhiteSpace(_form!.Name) && !await SaveAsync(quiet: true)) return;
+        _step = step;
+    }
+
+    private async Task<bool> SaveAsync(bool quiet = false)
+    {
+        if (_form is null || CampaignOf is not { } campaignId) return false;
+        if (string.IsNullOrWhiteSpace(_form.Name))
+        {
+            Snackbar.Add("Give your character a name first (the Concept step).", Severity.Warning);
+            return false;
+        }
+
+        _busy = true;
+        try
+        {
+            var isNew = _form.Id is null;
+            var result = await Api.SavePlayerCharacterAsync(campaignId, _form);
+            if (result.Saved is not { } saved)
+            {
+                var errors = result.Errors?.Values.SelectMany(v => v).ToList() ?? [];
+                Snackbar.Add(errors.Count > 0 ? string.Join(" ", errors) : result.Message ?? "It didn't save.", Severity.Error);
+                return false;
+            }
+            _view = saved;
+            Show(saved.Sheet);
+            if (!quiet) Snackbar.Add("Saved.", Severity.Success);
+            // A new draft now has a page of its own.
+            if (isNew) Navigation.NavigateTo($"characters/{saved.Sheet.Id}", replace: true);
+            return true;
+        }
+        catch (HttpRequestException)
+        {
+            Snackbar.Add("Couldn't reach the server. Your changes are still here; try again.", Severity.Error);
+            return false;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (IsDirty && !await SaveAsync(quiet: true)) return;
+        await ActAsync("submit", success: "Sent to the Storyteller.");
+    }
+
+    private async Task ReturnAsync()
+    {
+        var parameters = new DialogParameters<ReturnNoteDialog>();
+        var dialog = await Dialogs.ShowAsync<ReturnNoteDialog>("Return to the player", parameters);
+        if (await dialog.Result is not { Canceled: false, Data: string note }) return;
+        await ActAsync("return", new ReturnCharacterRequest(note), "Returned to the player.");
+    }
+
+    private Task SetStatusAsync(CharacterStatus status) =>
+        ActAsync("status", new CharacterStatusRequest(status), $"{_form?.Name}: {StatusLabel(status).ToLowerInvariant()}.");
+
+    private async Task ActAsync(string action, object? body = null, string? success = null)
+    {
+        if ((Id ?? _view?.Sheet.Id) is not { } id) return;
+        _busy = true;
+        try
+        {
+            var result = await Api.PlayerCharacterActionAsync(id, action, body);
+            if (result.Saved is { } saved)
+            {
+                _view = saved;
+                Show(saved.Sheet);
+                if (success is not null) Snackbar.Add(success, Severity.Success);
+            }
+            else
+            {
+                var errors = result.Errors?.Values.SelectMany(v => v).ToList() ?? [];
+                Snackbar.Add(errors.Count > 0 ? string.Join(" ", errors) : result.Message ?? "That didn't work.", Severity.Warning);
+            }
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        var confirmed = await Dialogs.ShowMessageBoxAsync("Delete this draft?",
+            $"{(string.IsNullOrWhiteSpace(_form?.Name) ? "This character" : _form.Name)} will be deleted for good.",
+            yesText: "Delete", cancelText: "Keep it");
+        if (confirmed != true || _view?.Sheet.Id is not { } id) return;
+        if (await Api.DeletePlayerCharacterAsync(id) is { } problem) Snackbar.Add(problem, Severity.Warning);
+        else Navigation.NavigateTo(CampaignUrl);
+    }
+
+    private static string Snapshot(FullSheetForm form) => System.Text.Json.JsonSerializer.Serialize(form, RequiemJson.Options);
+
+    public static string StepTitle(CreationStep step) => step switch
+    {
+        CreationStep.Template => "Template",
+        CreationStep.Concept => "Concept",
+        CreationStep.VirtueAndVice => "Virtue & Vice",
+        CreationStep.Relationships => "Relationships",
+        CreationStep.Scripts => "Scripts",
+        CreationStep.Milestones => "Milestones",
+        CreationStep.Attributes => "Attributes",
+        CreationStep.Skills => "Skills",
+        CreationStep.Merits => "Merits & Flaws",
+        CreationStep.Blood => "The Blood",
+        _ => "Review",
+    };
+
+    public static string StatusLabel(CharacterStatus status) => status switch
+    {
+        CharacterStatus.Draft => "Draft",
+        CharacterStatus.Submitted => "Waiting for approval",
+        CharacterStatus.Active => "In play",
+        CharacterStatus.Retired => "Retired",
+        _ => "Dead",
+    };
+
+    public static Color StatusColor(CharacterStatus status) => status switch
+    {
+        CharacterStatus.Submitted => Color.Warning,
+        CharacterStatus.Active => Color.Success,
+        CharacterStatus.Draft => Color.Info,
+        _ => Color.Default,
+    };
+}

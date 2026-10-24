@@ -45,8 +45,9 @@ public static class PowerRules
         Enumerable.Range(1, Math.Clamp(dots, 0, MaxDisciplineDots)).ToArray();
 
     /// <summary>
-    /// No single Discipline may exceed Blood Potency, and a character may never have more
-    /// Disciplines than Blood Potency dots.
+    /// No single Discipline may exceed Blood Potency. The limit is on dots, not on how many Disciplines
+    /// a vampire has: they always have their Caitiff Discipline and, in a Bloodline, its Discipline, and
+    /// gain others only through diablerie (house ruling 2026-10-24).
     /// </summary>
     public static IReadOnlyList<RuleViolation> Validate(int bloodPotency, IEnumerable<DisciplineRating> disciplines)
     {
@@ -61,10 +62,6 @@ public static class PowerRules
         foreach (var d in owned.Where(d => d.Dots > MaxDisciplineDots))
             violations.Add(new("discipline.dots-exceed-max",
                 $"{d.Name} has {d.Dots} dots; the maximum is {MaxDisciplineDots}."));
-
-        if (owned.Count > bloodPotency)
-            violations.Add(new("discipline.count-exceeds-bp",
-                $"{owned.Count} Disciplines but Blood Potency is {bloodPotency}."));
 
         return violations;
     }

@@ -44,6 +44,25 @@
                           Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" />
         </MudItem>
     }
+    else if (Form.IsGhoul)
+    {
+        @* A player types the name; the Storyteller can link it to the vampire in the campaign. *@
+        <MudItem xs="12" sm="6">
+            <MudSelect T="Guid?" Value="Form.DomitorId" ValueChanged="v => Update(() => Form.DomitorId = v)" Label="Domitor"
+                       Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense"
+                       ToStringFunc="SireName" HelperText="The vampire whose blood they drink, if they're in this campaign">
+                @foreach (var candidate in SireCandidates)
+                {
+                    <MudSelectItem T="Guid?" Value="candidate.Id">@candidate.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudTextField T="string" Value="Form.DomitorName" ValueChanged="v => Update(() => Form.DomitorName = v)"
+                          Label="Domitor's name" Placeholder="Or just a name" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          MaxLength="FullSheetForm.MaxTextLength" />
+        </MudItem>
+    }
 </MudGrid>
 
 <MudDivider Class="my-3" />
@@ -191,6 +210,7 @@
         ScriptKind.Coterie => "Ties to the coterie",
         ScriptKind.ChronicleTenet => "Chronicle Tenet",
         ScriptKind.PlayerCharacter => "Player character tie",
+        ScriptKind.Quirk => "Quirk (personality or habit)",
         _ => "Personal",
     };
 

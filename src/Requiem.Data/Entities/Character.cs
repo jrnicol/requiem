@@ -83,6 +83,8 @@ public class Character
     public Guid? DomitorId { get; set; }
     public Character? Domitor { get; set; }
     public string? DomitorName { get; set; }
+    /// <summary>The Storyteller's note when they return a submitted character to its player.</summary>
+    public string? ReviewNote { get; set; }
     public bool IsArchived { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
@@ -105,5 +107,7 @@ public class Character
     public List<CharacterItem> Items { get; set; } = [];
     public List<XpEntry> XpLedger { get; set; } = [];
     public List<CharacterLink> Links { get; set; } = [];
+    /// <summary>The people in the character's life, starting with the three every PC begins with.</summary>
+    public List<CharacterRelationship> Relationships { get; set; } = [];
     public List<Tag> Tags { get; set; } = [];
 }

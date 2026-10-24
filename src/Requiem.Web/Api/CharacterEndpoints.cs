@@ -55,7 +55,8 @@ public static class CharacterEndpoints
     private static async Task<List<CharacterSummary>> ListAsync(
         [AsParameters] CharacterQuery query, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
-        var characters = access.ManagedCharacters(db.Characters.AsNoTracking());
+        var characters = access.ManagedCharacters(db.Characters.AsNoTracking())
+            .Where(c => c.IsPlayerCharacter == query.PlayerCharacters);
         if (!query.IncludeArchived) characters = characters.Where(c => !c.IsArchived);
         if (query.Tier is { } tier) characters = characters.Where(c => c.Tier == tier);
         if (query.Kind is { } kind) characters = characters.Where(c => c.Kind == kind);

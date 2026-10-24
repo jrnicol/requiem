@@ -13,7 +13,8 @@ public sealed record CatalogSeedData(
     IReadOnlyList<CompelDefinition> Compels,
     IReadOnlyList<EdgeDefinition> Edges,
     IReadOnlyList<PowerGroupSeed> PowerGroups,
-    IReadOnlyList<PowerSeed> Powers);
+    IReadOnlyList<PowerSeed> Powers,
+    IReadOnlyList<ConceptDefinition> Concepts);
 
 /// <summary>A power group as written in disciplines.json; <see cref="Bloodline"/> is a catalog name.</summary>
 public sealed record PowerGroupSeed(
@@ -53,9 +54,9 @@ public sealed record PowerSeed
 
 public sealed record PowerBonusSeed(int SuccessCost, string Effect);
 
-public sealed record CatalogSeedResult(int Bloodlines, int PredatorTypes, int Merits, int Compels, int Edges, int PowerGroups, int Powers = 0)
+public sealed record CatalogSeedResult(int Bloodlines, int PredatorTypes, int Merits, int Compels, int Edges, int PowerGroups, int Powers = 0, int Concepts = 0)
 {
-    public int Total => Bloodlines + PredatorTypes + Merits + Compels + Edges + PowerGroups + Powers;
+    public int Total => Bloodlines + PredatorTypes + Merits + Compels + Edges + PowerGroups + Powers + Concepts;
 }
 
 /// <summary>
@@ -84,7 +85,8 @@ public static class CatalogSeeder
             Read<CompelDefinition>("compels.json"),
             Read<EdgeDefinition>("edges.json"),
             Read<PowerGroupSeed>("disciplines.json"),
-            Read<PowerSeed>("powers.json"));
+            Read<PowerSeed>("powers.json"),
+            Read<ConceptDefinition>("concepts.json"));
 
         EnsureUnique(data.Bloodlines, b => b.Name, "bloodlines.json");
         EnsureUnique(data.PredatorTypes, p => p.Name, "predator-types.json");
@@ -92,6 +94,7 @@ public static class CatalogSeeder
         EnsureUnique(data.Compels, c => c.Name, "compels.json");
         EnsureUnique(data.Compels.Where(c => c.Roll is not null), c => c.Roll, "compels.json (roll)");
         EnsureUnique(data.Edges, e => e.Name, "edges.json");
+        EnsureUnique(data.Concepts, c => c.Name, "concepts.json");
         EnsureUnique(data.PowerGroups, g => g.Name, "disciplines.json");
 
         var unknown = data.PowerGroups.Where(g => g.Bloodline is not null && data.Bloodlines.All(b => b.Name != g.Bloodline))
@@ -120,8 +123,9 @@ public static class CatalogSeeder
         var merits = await AddMissingAsync(db.MeritDefinitions, data.Merits, m => (m.Name, m.Kind, m.Source), cancellationToken);
         var compels = await AddMissingAsync(db.CompelDefinitions, data.Compels, c => c.Name, cancellationToken);
         var edges = await AddMissingAsync(db.EdgeDefinitions, data.Edges, e => e.Name, cancellationToken);
+        var concepts = await AddMissingAsync(db.ConceptDefinitions, data.Concepts, c => c.Name, cancellationToken);
         // Power groups link to Bloodlines by id, so those must exist first.
-        if (bloodlines + predators + merits + compels + edges > 0) await db.SaveChangesAsync(cancellationToken);
+        if (bloodlines + predators + merits + compels + edges + concepts > 0) await db.SaveChangesAsync(cancellationToken);
 
         var bloodlineIds = await db.Bloodlines.AsNoTracking().ToDictionaryAsync(b => b.Name, b => b.Id, cancellationToken);
         var powerGroups = await AddMissingAsync(db.PowerGroups, data.PowerGroups.Select(g => new PowerGroup
@@ -142,7 +146,7 @@ public static class CatalogSeeder
             .Select(p => ToEntity(p, groupIds)).ToList(), p => (p.PowerGroupId, p.Name), cancellationToken);
         if (powers > 0) await db.SaveChangesAsync(cancellationToken);
 
-        return new CatalogSeedResult(bloodlines, predators, merits, compels, edges, powerGroups, powers);
+        return new CatalogSeedResult(bloodlines, predators, merits, compels, edges, powerGroups, powers, concepts);
     }
 
     private static Power ToEntity(PowerSeed p, IReadOnlyDictionary<string, int> groupIds) => new()

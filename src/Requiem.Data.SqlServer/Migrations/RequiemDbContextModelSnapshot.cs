@@ -585,6 +585,10 @@ namespace Requiem.Data.SqlServer.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
                     b.Property<Guid?>("SireId")
                         .HasColumnType("uniqueidentifier");
 
@@ -975,6 +979,11 @@ namespace Requiem.Data.SqlServer.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("nvarchar(16)");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
                     b.Property<Guid?>("ToCharacterId")
                         .HasColumnType("uniqueidentifier");
 
@@ -1203,6 +1212,38 @@ namespace Requiem.Data.SqlServer.Migrations
                         {
                             t.HasCheckConstraint("CK_CompelDefinition_Roll", "Roll IS NULL OR Roll BETWEEN 1 AND 10");
                         });
+                });
+
+            modelBuilder.Entity("Requiem.Data.Entities.ConceptDefinition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("SourcePage")
+                        .HasColumnType("int");
+
+                    b.Property<string>("WillpowerTrigger")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("ConceptDefinitions");
                 });
 
             modelBuilder.Entity("Requiem.Data.Entities.CorruptionMark", b =>
@@ -1978,7 +2019,7 @@ namespace Requiem.Data.SqlServer.Migrations
             modelBuilder.Entity("Requiem.Data.Entities.CharacterRelationship", b =>
                 {
                     b.HasOne("Requiem.Data.Entities.Character", "FromCharacter")
-                        .WithMany()
+                        .WithMany("Relationships")
                         .HasForeignKey("FromCharacterId")
                         .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired();
@@ -2151,6 +2192,8 @@ namespace Requiem.Data.SqlServer.Migrations
                     b.Navigation("Merits");
 
                     b.Navigation("Milestones");
+
+                    b.Navigation("Relationships");
 
                     b.Navigation("Scripts");
 

@@ -58,7 +58,8 @@ public sealed record PlayCharacter(
     IReadOnlyList<PlaySpecialty> Specialties,
     IReadOnlyList<string> Assets,
     string? Notes,
-    string? GmNotes)
+    string? GmNotes,
+    bool IsPlayerCharacter = false)
 {
     [JsonIgnore] public bool IsVampire => Kind == CharacterKind.Vampire;
     [JsonIgnore] public bool IsFullSheet => Tier == CharacterTier.FullSheet;

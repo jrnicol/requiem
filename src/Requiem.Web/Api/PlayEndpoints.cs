@@ -39,16 +39,21 @@ public static class PlayEndpoints
     private static async Task<Results<Ok<PlayCharacter>, NotFound>> GetAsync(
         Guid id, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
     {
-        var character = await LoadAsync(access, [id], tracked: false, ct);
+        // Players track their own approved characters; Storytellers everything in their campaigns.
+        var character = await LoadAsync(access.PlayableCharacters(), [id], tracked: false, ct);
         return character.Count == 0
             ? TypedResults.NotFound()
-            : TypedResults.Ok(PlayMapper.ToPlay(character[0], await CatalogAsync(db, ct)));
+            : TypedResults.Ok(await ForViewerAsync(PlayMapper.ToPlay(character[0], await CatalogAsync(db, ct)), character[0], access, ct));
     }
+
+    /// <summary>A player tracking their own character never sees the Storyteller's notes on it.</summary>
+    private static async Task<PlayCharacter> ForViewerAsync(PlayCharacter play, Character character, CampaignAccess access, CancellationToken ct) =>
+        character.CampaignId is { } campaignId && await access.IsStorytellerAsync(campaignId, ct) ? play : play with { GmNotes = null };
 
     private static async Task<Results<Ok<PlayCharacter>, NotFound, ValidationProblem>> ActAsync(
         Guid id, PlayAction action, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
-        var loaded = await LoadAsync(access, [id], tracked: true, ct);
+        var loaded = await LoadAsync(access.PlayableCharacters(), [id], tracked: true, ct);
         if (loaded.Count == 0) return TypedResults.NotFound();
         var character = loaded[0];
 
@@ -58,7 +63,7 @@ public static class PlayEndpoints
         // Touch the character itself so its version changes and an editor open elsewhere can't overwrite this.
         db.Entry(character).Property(c => c.UpdatedAt).IsModified = true;
         await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(PlayMapper.ToPlay(character, await CatalogAsync(db, ct)));
+        return TypedResults.Ok(await ForViewerAsync(PlayMapper.ToPlay(character, await CatalogAsync(db, ct)), character, access, ct));
     }
 
     /// <returns>An error message, or null when the action was applied.</returns>
@@ -282,7 +287,7 @@ public static class PlayEndpoints
     private static async Task<SceneView> ViewAsync(RequiemDbContext db, CampaignAccess access, Scene scene, CancellationToken ct)
     {
         var order = scene.Members.OrderBy(m => m.SortOrder).Select(m => m.CharacterId).ToList();
-        var characters = await LoadAsync(access, order, tracked: false, ct);
+        var characters = await LoadAsync(access.ManagedCharacters(), order, tracked: false, ct);
         var catalog = await CatalogAsync(db, ct);
         var members = order.Select(id => characters.FirstOrDefault(c => c.Id == id)).OfType<Character>()
             .Select(c => PlayMapper.ToPlay(c, catalog)).ToList();
@@ -291,9 +296,9 @@ public static class PlayEndpoints
 
     // ---------- Loading ----------
 
-    private static async Task<List<Character>> LoadAsync(CampaignAccess access, List<Guid> ids, bool tracked, CancellationToken ct)
+    private static async Task<List<Character>> LoadAsync(IQueryable<Character> source, List<Guid> ids, bool tracked, CancellationToken ct)
     {
-        var query = access.ManagedCharacters()
+        var query = source
             .Include(c => c.Bloodline)
             .Include(c => c.Attributes).Include(c => c.Skills).Include(c => c.Specialties)
             .Include(c => c.Disciplines).ThenInclude(d => d.PowerGroup)

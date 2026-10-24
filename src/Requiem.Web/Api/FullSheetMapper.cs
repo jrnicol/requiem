@@ -22,6 +22,10 @@ internal static class FullSheetMapper
         ViceDetail = c.ViceDetail,
         BeastDescription = c.BeastDescription,
         SireId = c.SireId,
+        DomitorId = c.DomitorId,
+        DomitorName = c.DomitorName,
+        Relationships = c.Relationships.OrderBy(r => r.Role).ThenBy(r => r.Id)
+            .Select(r => new RelationshipEntry { Role = r.Role, Name = r.ToName ?? "", Description = r.Description }).ToList(),
         Attributes = Enum.GetValues<CharacterAttribute>().ToDictionary(
             a => a, a => c.Attributes.FirstOrDefault(r => r.Attribute == a)?.Dots ?? Traits.MinAttribute),
         Skills = Enum.GetValues<Skill>().ToDictionary(
@@ -57,7 +61,7 @@ internal static class FullSheetMapper
             .Select(x => new CompelEntry { Name = x.Name, Rating = x.Rating, EndsWhen = x.EndsWhen }).ToList(),
         Conditions = c.Conditions.OrderBy(x => x.Id).Select(x => x.Name).ToList(),
         Scripts = c.Scripts.Count == 0
-            ? FullSheetForm.DefaultScripts()
+            ? FullSheetForm.DefaultScripts(c.Kind)
             : c.Scripts.OrderBy(s => s.Slot)
                 .Select(s => new ScriptEntry { Slot = s.Slot, Kind = s.Kind, Text = s.Text, IsMarked = s.IsMarked }).ToList(),
         Milestones = c.Milestones.OrderBy(m => m.Id).Select(m => new MilestoneEntry
@@ -91,6 +95,8 @@ internal static class FullSheetMapper
         c.ViceDetail = Clean(form.ViceDetail);
         c.BeastDescription = Clean(form.BeastDescription);
         c.SireId = form.SireId;
+        c.DomitorId = form.DomitorId;
+        c.DomitorName = Clean(form.DomitorName);
         c.Size = form.Size;
         c.WillpowerDots = form.WillpowerDots;
         c.WillpowerCurrent = form.WillpowerCurrent;
@@ -156,6 +162,13 @@ internal static class FullSheetMapper
                 MeritDefinitionId = m.MeritDefinitionId, Name = m.Name.Trim(), Kind = m.Kind, Dots = m.Dots,
                 Qualifier = Clean(m.Qualifier), Notes = Clean(m.Notes),
             }));
+
+        // Relationships to people outside the app; links to characters (ToCharacterId) aren't edited here.
+        Replace(c.Relationships, r => r.ToCharacterId is null,
+            c.Relationships.Where(r => r.ToCharacterId is null).OrderBy(r => r.Role).ThenBy(r => r.Id).Select(r => (r.Role, r.ToName, r.Description)),
+            form.Relationships.OrderBy(r => r.Role).Select(r => (r.Role, (string?)r.Name.Trim(), Clean(r.Description))),
+            () => form.Relationships.OrderBy(r => r.Role).Select(r => new CharacterRelationship
+                { Role = r.Role, Kind = RelationshipKind.Other, ToName = r.Name.Trim(), Description = Clean(r.Description) }));
 
         Replace(c.Wounds, _ => true,
             c.Wounds.OrderBy(w => w.Id).Select(w => (w.Description, w.Amount, w.Type)),

@@ -16,6 +16,9 @@ public sealed record BloodlineOption(
     string? CompelText,
     int? SourcePage);
 
+/// <summary>A character Concept and how acting it out regains Willpower (WoD Core p.55).</summary>
+public sealed record ConceptOption(int Id, string Name, string? Description, string WillpowerTrigger, int? SourcePage);
+
 public sealed record PredatorTypeOption(int Id, string Name, string? Description, string? Restrictions, int? SourcePage);
 
 public sealed record EdgeOption(int Id, string Name, NpcEdge? Edge, string? Description, int? SourcePage);

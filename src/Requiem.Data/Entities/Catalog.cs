@@ -65,6 +65,16 @@ public class CompelDefinition
     public int? SourcePage { get; set; }
 }
 
+/// <summary>A character Concept: who they are, and how acting it out regains Willpower (WoD Core p.55).</summary>
+public class ConceptDefinition
+{
+    public int Id { get; set; }
+    public required string Name { get; set; }
+    public string? Description { get; set; }
+    public required string WillpowerTrigger { get; set; }
+    public int? SourcePage { get; set; }
+}
+
 /// <summary>Supporting Cast Edges (WoD Core p.117).</summary>
 public class EdgeDefinition
 {

@@ -1,0 +1,62 @@
+@* The four Scripts (VtR p.136; WoD Core p.66). The player writes the first two; the Coterie Script and the
+   Chronicle Tenet come from the campaign. *@
+
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+    Script lines are things your character works into play almost every session. Keep them short: a word or a phrase.
+    Mark each one when it's played out; all four earn @ExperienceRules.ScriptsCompletionXp(Form.IsVampire) XP.
+</MudText>
+
+@foreach (var script in Form.Scripts.OrderBy(s => s.Slot))
+{
+    var shared = script.Kind is ScriptKind.Coterie or ScriptKind.ChronicleTenet;
+    <MudPaper Outlined="true" Class="pa-3 mb-2">
+        <MudText Typo="Typo.subtitle2">@Title(script.Kind)</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display:block" Class="mb-1">@Prompt(script.Kind)</MudText>
+        @if (shared)
+        {
+            <MudText Typo="Typo.body1">
+                @(string.IsNullOrWhiteSpace(script.Text) ? "Not set yet." : script.Text)
+            </MudText>
+        }
+        else
+        {
+            <MudTextField T="string" Value="script.Text" ValueChanged="v => Update(() => script.Text = v ?? string.Empty)"
+                          Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" ReadOnly="ReadOnly"
+                          aria-label="@Title(script.Kind)" />
+        }
+    </MudPaper>
+}
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public EventCallback Changed { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+
+    private static string Title(ScriptKind kind) => kind switch
+    {
+        ScriptKind.Humanity => "Humanity",
+        ScriptKind.Beast => "The Beast",
+        ScriptKind.Quirk => "Quirk",
+        ScriptKind.Personal => "Personal",
+        ScriptKind.Coterie => "Coterie Script",
+        ScriptKind.ChronicleTenet => "Chronicle Tenet",
+        _ => CreationRules.ScriptName(kind),
+    };
+
+    private static string Prompt(ScriptKind kind) => kind switch
+    {
+        ScriptKind.Humanity => "Your mortal goals: the part of you that still wants what your living self wanted.",
+        ScriptKind.Beast => "What the predator inside wants from its domain and its prey; it also says what you do under Dominion. Think of your Bloodline.",
+        ScriptKind.Quirk => "A personality trait, quirk or habit that brings them to life at the table: \"nervous smoker\", \"shameless flirt\".",
+        ScriptKind.Personal => "Tell the story that set them on this path, then take one thing from it they still do every night.",
+        ScriptKind.Coterie => "What ties your characters together, agreed by the group. Anyone can change it on the campaign page.",
+        ScriptKind.ChronicleTenet => "The theme the Storyteller sets for everyone.",
+        _ => "",
+    };
+
+    private async Task Update(Action change)
+    {
+        change();
+        await Changed.InvokeAsync();
+    }
+}

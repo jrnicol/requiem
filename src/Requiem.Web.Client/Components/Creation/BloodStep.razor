@@ -1,0 +1,187 @@
+@* The vampire template (VtR p.136) or the ghoul's (VtR p.62), applied to the finished mortal. *@
+
+@if (Form.IsGhoul)
+{
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+        A ghoul drinks a vampire's Vitae: they don't age while any remains, heal with it, and can spend it for a dot
+        of Potence, Celerity or Fortitude. They start with @GhoulRules.MaxVitae Vitae and lose 1 a day.
+    </MudText>
+    <MudTextField T="string" Value="Form.DomitorName" ValueChanged="v => Update(() => Form.DomitorName = v)"
+                  Label="Domitor" HelperText="The vampire whose blood you drink. The Storyteller links them if they're in the campaign."
+                  Variant="Variant.Outlined" MaxLength="200" />
+}
+else if (Form.IsVampire)
+{
+    <MudGrid Spacing="2">
+        <MudItem xs="12" md="6">
+            <MudSelect T="int?" Value="Form.BloodlineId" ValueChanged="SetBloodlineAsync" Label="Bloodline"
+                       Variant="Variant.Outlined" ToStringFunc="@(id => Bloodlines.FirstOrDefault(b => b.Id == id)?.Name)">
+                @foreach (var group in Bloodlines.GroupBy(b => b.Kind))
+                {
+                    @foreach (var bloodline in group)
+                    {
+                        <MudSelectItem T="int?" Value="bloodline.Id">
+                            @bloodline.Name <MudText Inline="true" Typo="Typo.caption" Color="Color.Secondary">· @KindLabel(bloodline.Kind)</MudText>
+                        </MudSelectItem>
+                    }
+                }
+            </MudSelect>
+            @if (Bloodline is { } chosen)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display:block" Class="mt-1">@FreeDots(chosen)</MudText>
+                @if (chosen.WeaknessName is { } weakness)
+                {
+                    <MudText Typo="Typo.caption" Style="display:block" Class="mt-1"><b>Weakness: @weakness.</b> @chosen.WeaknessText</MudText>
+                }
+            }
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudSelect T="int?" Value="Form.PredatorTypeId" ValueChanged="v => Update(() => Form.PredatorTypeId = v)" Label="Predator type"
+                       Variant="Variant.Outlined" ToStringFunc="@(id => PredatorTypes.FirstOrDefault(p => p.Id == id)?.Name)">
+                @foreach (var predator in PredatorTypes)
+                {
+                    <MudSelectItem T="int?" Value="predator.Id">@predator.Name</MudSelectItem>
+                }
+            </MudSelect>
+            @if (PredatorTypes.FirstOrDefault(p => p.Id == Form.PredatorTypeId) is { } predatorType)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display:block" Class="mt-1">@predatorType.Description</MudText>
+                @if (predatorType.Restrictions is { } restrictions)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Warning" Style="display:block">@restrictions</MudText>
+                }
+            }
+        </MudItem>
+    </MudGrid>
+
+    <MudDivider Class="my-3" />
+    <MudText Typo="Typo.subtitle1">Disciplines</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+        Every vampire has one Caitiff Discipline, picked here, and a Bloodline vampire also has their Bloodline's.
+        Others come only through diablerie. No Discipline can have more dots than Blood Potency.
+    </MudText>
+    <MudSelect T="int?" Value="CaitiffId" ValueChanged="SetCaitiffAsync" Label="Caitiff Discipline" Variant="Variant.Outlined" Class="mb-3"
+               Style="max-width:24rem" ToStringFunc="@(id => Disciplines.FirstOrDefault(d => d.Id == id)?.Name)">
+        @foreach (var discipline in Disciplines.Where(d => d.Kind == PowerGroupKind.CaitiffDiscipline))
+        {
+            <MudSelectItem T="int?" Value="discipline.Id">@discipline.Name</MudSelectItem>
+        }
+    </MudSelect>
+    @if (Form.Disciplines.Count > 0)
+    {
+        <DisciplinesPanel Form="Form" Options="Disciplines" Powers="Powers" Changed="Changed" AllowAdd="false" />
+    }
+
+    @if (Bloodline?.Kind == "MagiHouse")
+    {
+        <MudDivider Class="my-3" />
+        <MudText Typo="Typo.subtitle1">Rituals</MudText>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Your house teaches you one Ritual to start; more cost 3 Merit points each.</MudText>
+        <RitualsPanel Form="Form" Options="Disciplines" Powers="Powers" Changed="Changed" />
+    }
+
+    <MudDivider Class="my-3" />
+    <MudText Typo="Typo.subtitle1">The Blood</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+        Neonates start at Blood Potency 1 and Generation 12. Each extra dot of Blood Potency, or each Generation lower, costs 3 Merit points.
+    </MudText>
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="6">
+            <DotRating Label="Blood Potency" Value="Form.BloodPotency ?? BloodRules.MinBloodPotency" Min="BloodRules.MinBloodPotency" Max="5"
+                       Stacked="true" Size="Size.Medium" ValueChanged="v => Update(() => Form.BloodPotency = v)" />
+        </MudItem>
+        <MudItem xs="12" sm="6">
+            <MudSelect T="int" Value="Form.Generation ?? GenerationRules.StartingGeneration" ValueChanged="v => Update(() => Form.Generation = v)"
+                       Label="Generation" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="Form.IsThinblood" Style="max-width:12rem">
+                @for (var generation = GenerationRules.StartingGeneration; generation >= 8; generation--)
+                {
+                    var g = generation;
+                    <MudSelectItem T="int" Value="g">@Ordinal(g)@(g < GenerationRules.StartingGeneration ? $" ({(GenerationRules.StartingGeneration - g) * 3} points)" : "")</MudSelectItem>
+                }
+                @if (Form.IsThinblood)
+                {
+                    <MudSelectItem T="int" Value="GenerationRules.ThinbloodGeneration">@Ordinal(GenerationRules.ThinbloodGeneration)</MudSelectItem>
+                }
+            </MudSelect>
+            <MudCheckBox T="bool" Value="Form.IsThinblood" ValueChanged="SetThinbloodAsync" Label="Thin-blooded (a 1-point Flaw, VtR p.138)" Color="Color.Primary" Dense="true" />
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public IReadOnlyList<BloodlineOption> Bloodlines { get; set; } = [];
+    [Parameter] public IReadOnlyList<PredatorTypeOption> PredatorTypes { get; set; } = [];
+    [Parameter] public IReadOnlyList<DisciplineOption> Disciplines { get; set; } = [];
+    [Parameter] public IReadOnlyList<PowerOption> Powers { get; set; } = [];
+    [Parameter] public IReadOnlyList<MeritOption> Merits { get; set; } = [];
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private BloodlineOption? Bloodline => Bloodlines.FirstOrDefault(b => b.Id == Form.BloodlineId);
+
+    private int? CaitiffId => Form.Disciplines
+        .FirstOrDefault(d => Disciplines.FirstOrDefault(o => o.Id == d.PowerGroupId)?.Kind == PowerGroupKind.CaitiffDiscipline)?.PowerGroupId;
+
+    private static string KindLabel(string kind) => kind switch
+    {
+        "MagiHouse" => "Magi House",
+        "Caitiff" => "no Bloodline",
+        _ => kind,
+    };
+
+    private string FreeDots(BloodlineOption bloodline) => bloodline.Kind switch
+    {
+        "Bloodline" => $"Free: 1 dot in your Caitiff Discipline and 1 in {Disciplines.FirstOrDefault(d => d.BloodlineId == bloodline.Id && d.Kind == PowerGroupKind.BloodlineDiscipline)?.Name ?? "your Bloodline's Discipline"}.",
+        "MagiHouse" => "Free: 1 dot in your Caitiff Discipline and 1 Ritual of your house's sorcery.",
+        _ => "Free: 2 dots in your Caitiff Discipline.",
+    };
+
+    private static string Ordinal(int n) => n switch { 1 => "1st", 2 => "2nd", 3 => "3rd", _ => $"{n}th" };
+
+    /// <summary>Picking a Bloodline brings its Discipline along and drops another Bloodline's.</summary>
+    private async Task SetBloodlineAsync(int? id)
+    {
+        Form.BloodlineId = id;
+        var own = Disciplines.FirstOrDefault(d => d.Kind == PowerGroupKind.BloodlineDiscipline && d.BloodlineId == id && id is not null);
+        var others = Disciplines.Where(d => d.Kind == PowerGroupKind.BloodlineDiscipline && d.Id != own?.Id).Select(d => d.Id).ToHashSet();
+        Form.Disciplines.RemoveAll(d => others.Contains(d.PowerGroupId));
+        if (own is not null && Form.Disciplines.All(d => d.PowerGroupId != own.Id))
+            Form.Disciplines.Add(new DisciplineEntry { PowerGroupId = own.Id, Dots = 1 });
+        // With no Bloodline the Caitiff Discipline gets both free dots.
+        if (CaitiffId is { } caitiff && Bloodline?.Kind == "Caitiff")
+            Form.Disciplines.First(d => d.PowerGroupId == caitiff).Dots = Math.Max(2, Form.Disciplines.First(d => d.PowerGroupId == caitiff).Dots);
+        await Changed.InvokeAsync();
+    }
+
+    /// <summary>Swaps the Caitiff Discipline, keeping its dots; the old one's picks go with it.</summary>
+    private async Task SetCaitiffAsync(int? id)
+    {
+        var dots = Bloodline?.Kind == "Caitiff" ? 2 : 1;
+        if (CaitiffId is { } old)
+        {
+            dots = Form.Disciplines.First(d => d.PowerGroupId == old).Dots;
+            Form.Disciplines.RemoveAll(d => d.PowerGroupId == old);
+            var oldPicks = Powers.Where(p => p.PowerGroupId == old).Select(p => p.Id).ToHashSet();
+            Form.LearnedPowerIds.RemoveAll(oldPicks.Contains);
+        }
+        if (id is { } groupId) Form.Disciplines.Insert(0, new DisciplineEntry { PowerGroupId = groupId, Dots = dots });
+        await Changed.InvokeAsync();
+    }
+
+    /// <summary>Thin-blooded vampires start at Generation 13 and take the Thinblood Flaw.</summary>
+    private async Task SetThinbloodAsync(bool on)
+    {
+        Form.IsThinblood = on;
+        Form.Generation = on ? GenerationRules.ThinbloodGeneration : GenerationRules.StartingGeneration;
+        var flaw = Merits.FirstOrDefault(m => m.Kind == MeritKind.Flaw && string.Equals(m.Name, "Thinblood", StringComparison.OrdinalIgnoreCase));
+        Form.Merits.RemoveAll(m => m.Kind == MeritKind.Flaw && string.Equals(m.Name, "Thinblood", StringComparison.OrdinalIgnoreCase));
+        if (on) Form.Merits.Add(new MeritEntry { MeritDefinitionId = flaw?.Id, Name = flaw?.Name ?? "Thinblood", Kind = MeritKind.Flaw, Dots = 1 });
+        await Changed.InvokeAsync();
+    }
+
+    private async Task Update(Action change)
+    {
+        change();
+        await Changed.InvokeAsync();
+    }
+}

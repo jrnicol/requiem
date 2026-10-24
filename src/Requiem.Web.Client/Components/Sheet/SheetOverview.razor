@@ -1,0 +1,93 @@
+@* A read-only character sheet: who they are, their dots, merits and powers. For a player's submitted or
+   active character and the Storyteller's review. *@
+
+<MudPaper Outlined="true" Class="pa-3 mb-3">
+    <MudGrid Spacing="1">
+        <MudItem xs="12" sm="6"><b>Concept:</b> @(Form.Concept ?? "—")@(ConceptTrigger is { } trigger ? $" ({trigger})" : "")</MudItem>
+        <MudItem xs="12" sm="6"><b>Template:</b> @Form.Kind@(Bloodline is { } b ? $", {b.Name}" : "")@(PredatorType is { } p ? $", {p}" : "")</MudItem>
+        <MudItem xs="12" sm="6"><b>Virtue:</b> @(Form.Virtue ?? "—")@(Form.VirtueDetail is { Length: > 0 } vd ? $": {vd}" : "")</MudItem>
+        <MudItem xs="12" sm="6"><b>Vice:</b> @(Form.Vice ?? "—")@(Form.ViceDetail is { Length: > 0 } xd ? $": {xd}" : "")</MudItem>
+        @if (!string.IsNullOrWhiteSpace(Form.Faction))
+        {
+            <MudItem xs="12" sm="6"><b>Faction:</b> @Form.Faction</MudItem>
+        }
+        @if (Form.IsGhoul)
+        {
+            <MudItem xs="12" sm="6"><b>Domitor:</b> @(Form.DomitorName ?? (Form.DomitorId is null ? "—" : "linked by the Storyteller"))</MudItem>
+        }
+        @if (Form.IsVampire)
+        {
+            <MudItem xs="12" sm="6"><b>Blood Potency</b> @Form.BloodPotency · <b>Generation</b> @Form.Generation@(Form.IsThinblood ? " (thin-blooded)" : "")</MudItem>
+        }
+    </MudGrid>
+</MudPaper>
+
+<MudGrid Spacing="3">
+    @foreach (var (category, attributes) in Columns)
+    {
+        <MudItem xs="12" sm="4">
+            <MudText Typo="Typo.subtitle2" Color="Color.Secondary">@category</MudText>
+            @foreach (var attribute in attributes)
+            {
+                <DotRating Label="@(attribute.ToString())" Value="Form.Attribute(attribute)" ReadOnly="true" Size="Size.Small" Stacked="true" />
+            }
+            @foreach (var skill in Enum.GetValues<Skill>().Where(s => Traits.CategoryOf(s) == category && Form.SkillDots(s) > 0))
+            {
+                <DotRating Label="@(skill.ToString())" Value="Form.SkillDots(skill)" Min="0" ReadOnly="true" Size="Size.Small" Stacked="true" />
+                @foreach (var specialty in Form.Specialties.Where(s => s.Skill == skill))
+                {
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Tertiary" Class="ml-2">@specialty.Name</MudChip>
+                }
+            }
+        </MudItem>
+    }
+</MudGrid>
+
+@if (Form.Merits.Count > 0)
+{
+    <MudText Typo="Typo.subtitle2" Class="mt-3">Merits and Flaws</MudText>
+    @foreach (var merit in Form.Merits.OrderBy(m => m.Kind).ThenBy(m => m.Name))
+    {
+        <MudText Typo="Typo.body2">
+            @merit.Name@(merit.Qualifier is { Length: > 0 } q ? $" ({q})" : "") <span class="dots-inline">@(new string('●', merit.Dots))</span>
+            @if (merit.Kind == MeritKind.Flaw)
+            {
+                <MudText Inline="true" Typo="Typo.caption" Color="Color.Secondary">· Flaw</MudText>
+            }
+        </MudText>
+    }
+}
+
+@if (Form.IsVampire && Form.Disciplines.Count > 0)
+{
+    <MudText Typo="Typo.subtitle2" Class="mt-3">Disciplines</MudText>
+    @foreach (var entry in Form.Disciplines)
+    {
+        <MudText Typo="Typo.body2">@(Disciplines.FirstOrDefault(d => d.Id == entry.PowerGroupId)?.Name ?? "Discipline") <span class="dots-inline">@(new string('●', entry.Dots))</span></MudText>
+    }
+    @if (Learned.Count > 0)
+    {
+        <MudText Typo="Typo.body2" Class="mt-1"><b>Learned:</b> @string.Join(", ", Learned.Select(p => p.Name))</MudText>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public IReadOnlyList<ConceptOption> Concepts { get; set; } = [];
+    [Parameter] public IReadOnlyList<BloodlineOption> Bloodlines { get; set; } = [];
+    [Parameter] public IReadOnlyList<PredatorTypeOption> PredatorTypes { get; set; } = [];
+    [Parameter] public IReadOnlyList<DisciplineOption> Disciplines { get; set; } = [];
+    [Parameter] public IReadOnlyList<PowerOption> Powers { get; set; } = [];
+
+    private static readonly (TraitCategory Category, CharacterAttribute[] Attributes)[] Columns =
+    [
+        (TraitCategory.Physical, [CharacterAttribute.Strength, CharacterAttribute.Dexterity, CharacterAttribute.Stamina]),
+        (TraitCategory.Social, [CharacterAttribute.Charisma, CharacterAttribute.Manipulation, CharacterAttribute.Resolve]),
+        (TraitCategory.Mental, [CharacterAttribute.Perception, CharacterAttribute.Intelligence, CharacterAttribute.Wits]),
+    ];
+
+    private string? ConceptTrigger => Concepts.FirstOrDefault(c => string.Equals(c.Name, Form.Concept, StringComparison.OrdinalIgnoreCase))?.WillpowerTrigger;
+    private BloodlineOption? Bloodline => Form.IsVampire ? Bloodlines.FirstOrDefault(b => b.Id == Form.BloodlineId) : null;
+    private string? PredatorType => Form.IsVampire ? PredatorTypes.FirstOrDefault(p => p.Id == Form.PredatorTypeId)?.Name : null;
+    private List<PowerOption> Learned => Form.LearnedPowerIds.Select(id => Powers.FirstOrDefault(p => p.Id == id)).OfType<PowerOption>().ToList();
+}

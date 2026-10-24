@@ -1,0 +1,39 @@
+@* Step 3: Virtue and Vice (WoD Core p.58), each with what it means to this character. *@
+
+<MudGrid Spacing="2">
+    @foreach (var (label, options, get, set, getDetail, setDetail, help) in Pairs)
+    {
+        <MudItem xs="12" sm="6">
+            <MudSelect T="string" Value="get()" ValueChanged="v => Update(() => set(v))" Label="@label" Variant="Variant.Outlined" Clearable="true">
+                @foreach (var option in options)
+                {
+                    <MudSelectItem T="string" Value="option">@option</MudSelectItem>
+                }
+            </MudSelect>
+            <MudTextField T="string" Value="getDetail()" ValueChanged="v => Update(() => setDetail(v))" Placeholder="@help"
+                          Variant="Variant.Text" Margin="Margin.Dense" MaxLength="FullSheetForm.MaxTextLength" />
+        </MudItem>
+    }
+</MudGrid>
+<MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-2" Style="display:block">
+    A Virtue counts when they give more than they had to offer; a Vice when it hurts someone, themselves included.
+</MudText>
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private (string, IReadOnlyList<string>, Func<string?>, Action<string?>, Func<string?>, Action<string?>, string)[] Pairs =>
+    [
+        ("Virtue", VirtuesAndVices.Virtues, () => Form.Virtue, v => Form.Virtue = v,
+            () => Form.VirtueDetail, v => Form.VirtueDetail = v, "What it means to them, e.g. 'Faith: in mankind'"),
+        ("Vice", VirtuesAndVices.Vices, () => Form.Vice, v => Form.Vice = v,
+            () => Form.ViceDetail, v => Form.ViceDetail = v, "e.g. 'Wrath: at the father who left'"),
+    ];
+
+    private async Task Update(Action change)
+    {
+        change();
+        await Changed.InvokeAsync();
+    }
+}

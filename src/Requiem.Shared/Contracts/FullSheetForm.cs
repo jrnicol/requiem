@@ -61,6 +61,15 @@ public sealed class MilestoneEntry
     public MilestoneStage Stage { get; set; } = MilestoneStage.Opportunity;
 }
 
+/// <summary>Someone in the character's life (WoD Core p.65), usually not in the app.</summary>
+public sealed class RelationshipEntry
+{
+    public RelationshipRole Role { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary>Who they are to the character, e.g. "my sister; she knows what I am".</summary>
+    public string? Description { get; set; }
+}
+
 public sealed class XpLedgerEntry
 {
     /// <summary>Positive when earned, negative when spent.</summary>
@@ -97,6 +106,12 @@ public sealed class FullSheetForm : IValidatableObject
     [StringLength(200)] public string? ViceDetail { get; set; }
     [StringLength(500)] public string? BeastDescription { get; set; }
     public Guid? SireId { get; set; }
+
+    /// <summary>Ghouls: the vampire whose Vitae they drink, a character in the campaign or just a name (VtR p.62).</summary>
+    public Guid? DomitorId { get; set; }
+    [StringLength(200)] public string? DomitorName { get; set; }
+
+    public List<RelationshipEntry> Relationships { get; set; } = [];
 
     public Dictionary<CharacterAttribute, int> Attributes { get; set; } =
         Enum.GetValues<CharacterAttribute>().ToDictionary(a => a, _ => Traits.MinAttribute);
@@ -159,11 +174,14 @@ public sealed class FullSheetForm : IValidatableObject
     public int ExperienceSpent => -Experience.Where(e => e.Amount < 0).Sum(e => e.Amount);
     public int ExperienceAvailable => ExperienceEarned - ExperienceSpent;
 
-    /// <summary>The four VtR Scripts in order (p.136).</summary>
-    public static List<ScriptEntry> DefaultScripts() =>
+    /// <summary>
+    /// The four Scripts in order: VtR's for vampires (p.136); for mortals and ghouls a Quirk and a Personal
+    /// Script (WoD Core p.66). Slots 3 and 4 are the campaign's Coterie Script and Chronicle Tenet either way.
+    /// </summary>
+    public static List<ScriptEntry> DefaultScripts(CharacterKind kind = CharacterKind.Vampire) =>
     [
-        new() { Slot = 1, Kind = ScriptKind.Humanity },
-        new() { Slot = 2, Kind = ScriptKind.Beast },
+        new() { Slot = 1, Kind = kind == CharacterKind.Vampire ? ScriptKind.Humanity : ScriptKind.Quirk },
+        new() { Slot = 2, Kind = kind == CharacterKind.Vampire ? ScriptKind.Beast : ScriptKind.Personal },
         new() { Slot = 3, Kind = ScriptKind.Coterie },
         new() { Slot = 4, Kind = ScriptKind.ChronicleTenet },
     ];
@@ -182,6 +200,8 @@ public sealed class FullSheetForm : IValidatableObject
     /// </summary>
     public void NormalizeForKind()
     {
+        if (!IsGhoul) DomitorId = null;
+        if (!IsGhoul) DomitorName = null;
         if (IsVampire)
         {
             Humanity ??= DerivedStats.StartingHumanity(Morality ?? DerivedStats.StartingMorality);
@@ -194,6 +214,7 @@ public sealed class FullSheetForm : IValidatableObject
 
         Morality ??= Humanity is { } humanity ? Math.Min(10, humanity + 1) : DerivedStats.StartingMorality;
         Humanity = null;
+        SireId = null;
         BloodlineId = null;
         PredatorTypeId = null;
         Generation = null;
@@ -277,6 +298,9 @@ public sealed class FullSheetForm : IValidatableObject
 
         if (Scripts.Count > 4 || Scripts.Select(s => s.Slot).Distinct().Count() != Scripts.Count || Scripts.Any(s => s.Slot is < 1 or > 4))
             yield return Error("Scripts use slots 1–4, once each.", nameof(Scripts));
+
+        if (Relationships.Any(r => string.IsNullOrWhiteSpace(r.Name) || r.Name.Length > MaxTextLength || r.Description?.Length > 500))
+            yield return Error("Each relationship needs a name (and at most 500 characters about them).", nameof(Relationships));
 
         if (Milestones.Any(m => string.IsNullOrWhiteSpace(m.Title)))
             yield return Error("Each Milestone needs a title.", nameof(Milestones));

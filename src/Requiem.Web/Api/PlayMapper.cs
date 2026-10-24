@@ -60,7 +60,8 @@ internal static class PlayMapper
             c.Specialties.OrderBy(s => s.Id).Select(s => new PlaySpecialty(s.Skill, s.Name)).ToList(),
             c.Items.Where(i => i.Kind == ItemKind.Asset).OrderBy(i => i.SortOrder).Select(i => i.Name).ToList(),
             c.Notes,
-            c.GmNotes);
+            c.GmNotes,
+            c.IsPlayerCharacter);
     }
 
     /// <summary>

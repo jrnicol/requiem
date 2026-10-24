@@ -1,0 +1,58 @@
+@* Step 2: name and Concept (WoD Core p.55). Acting out the Concept regains Willpower. *@
+
+<MudGrid Spacing="2" Class="mb-2">
+    <MudItem xs="12" sm="6">
+        <MudTextField T="string" Value="Form.Name" ValueChanged="v => Update(() => Form.Name = v ?? string.Empty)" Label="Name"
+                      Variant="Variant.Outlined" MaxLength="200" Immediate="true" DebounceInterval="300" />
+    </MudItem>
+    <MudItem xs="12" sm="6">
+        <MudTextField T="string" Value="Form.Faction" ValueChanged="v => Update(() => Form.Faction = v)" Label="Faction"
+                      Placeholder="@(Form.IsVampire ? "e.g. Camarilla, Carthians" : "e.g. a gang, a church, the police")"
+                      HelperText="Optional" Variant="Variant.Outlined" MaxLength="200" />
+    </MudItem>
+</MudGrid>
+
+<MudText Typo="Typo.subtitle1">Concept</MudText>
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
+    Who they are at heart. When they act it out, they regain Willpower. Pick one or write your own.
+</MudText>
+
+@if (Selected is { } selected)
+{
+    <MudAlert Severity="Severity.Info" Dense="true" Class="mb-2" Icon="@Icons.Material.Filled.Bolt">
+        <b>@selected.Name:</b> @selected.WillpowerTrigger
+    </MudAlert>
+}
+
+<div class="concept-grid mb-3">
+    @foreach (var concept in Concepts)
+    {
+        var active = string.Equals(concept.Name, Form.Concept, StringComparison.OrdinalIgnoreCase);
+        <button type="button" class="@($"concept-option {(active ? "concept-option-active" : "")}")" aria-pressed="@(active ? "true" : "false")"
+                @onclick="() => Update(() => Form.Concept = concept.Name)">
+            <span class="concept-option-name">@concept.Name</span>
+            <span class="concept-option-text">@concept.Description</span>
+        </button>
+    }
+</div>
+
+<MudTextField T="string" Value="Custom" ValueChanged="v => Update(() => Form.Concept = string.IsNullOrWhiteSpace(v) ? null : v)"
+              Label="Or your own Concept" HelperText="Say how acting it out regains Willpower in the character's notes"
+              Variant="Variant.Outlined" MaxLength="200" />
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public IReadOnlyList<ConceptOption> Concepts { get; set; } = [];
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private ConceptOption? Selected => Concepts.FirstOrDefault(c => string.Equals(c.Name, Form.Concept, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The Concept when it isn't one of the book's.</summary>
+    private string? Custom => Selected is null ? Form.Concept : null;
+
+    private async Task Update(Action change)
+    {
+        change();
+        await Changed.InvokeAsync();
+    }
+}

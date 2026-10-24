@@ -12,7 +12,7 @@ internal sealed class CharacterRelationshipConfiguration : IEntityTypeConfigurat
     public void Configure(EntityTypeBuilder<CharacterRelationship> b)
     {
         b.Property(x => x.ToName).HaveNameLength();
-        b.HasOne(x => x.FromCharacter).WithMany().HasForeignKey(x => x.FromCharacterId).OnDelete(DeleteBehavior.NoAction);
+        b.HasOne(x => x.FromCharacter).WithMany(x => x.Relationships).HasForeignKey(x => x.FromCharacterId).OnDelete(DeleteBehavior.NoAction);
         b.HasOne(x => x.ToCharacter).WithMany().HasForeignKey(x => x.ToCharacterId).OnDelete(DeleteBehavior.NoAction);
         b.ToTable(t => t.HasCheckConstraint("CK_CharacterRelationship_Target",
             "ToCharacterId IS NOT NULL OR ToName IS NOT NULL"));

@@ -20,6 +20,7 @@ public class RequiemDbContext(DbContextOptions<RequiemDbContext> options, TimePr
     public DbSet<MeritDefinition> MeritDefinitions => Set<MeritDefinition>();
     public DbSet<CompelDefinition> CompelDefinitions => Set<CompelDefinition>();
     public DbSet<EdgeDefinition> EdgeDefinitions => Set<EdgeDefinition>();
+    public DbSet<ConceptDefinition> ConceptDefinitions => Set<ConceptDefinition>();
     public DbSet<PowerGroup> PowerGroups => Set<PowerGroup>();
     public DbSet<Power> Powers => Set<Power>();
 
@@ -71,6 +72,7 @@ public class RequiemDbContext(DbContextOptions<RequiemDbContext> options, TimePr
         builder.Properties<ItemKind>().HaveConversion<string>().HaveMaxLength(16);
         builder.Properties<PurchaseKind>().HaveConversion<string>().HaveMaxLength(32);
         builder.Properties<RelationshipKind>().HaveConversion<string>().HaveMaxLength(16);
+        builder.Properties<RelationshipRole>().HaveConversion<string>().HaveMaxLength(16);
         builder.Properties<CampaignRole>().HaveConversion<string>().HaveMaxLength(16);
         builder.Properties<CharacterStatus>().HaveConversion<string>().HaveMaxLength(16);
         builder.Properties<NpcVisibility>().HaveConversion<string>().HaveMaxLength(16);

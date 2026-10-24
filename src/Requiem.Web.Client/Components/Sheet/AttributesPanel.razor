@@ -9,7 +9,7 @@
             {
                 <DotRating Label="@(attribute.ToString())" Value="Form.Attribute(attribute)" Stacked="true" Size="Size.Medium"
                            ValueChanged="v => SetAsync(attribute, v)" />
-                @if (FortifyFor(attribute) is { } fortify && Form.FortifyCap(fortify) > 0)
+                @if (ShowBoosts && FortifyFor(attribute) is { } fortify && Form.FortifyCap(fortify) > 0)
                 {
                     <DotRating Label="@(fortify.ToString())" Value="BoostOf(fortify)" Min="0"
                                Max="Form.FortifyCap(fortify)" Size="Size.Small" Class="ml-4" Stacked="true"
@@ -19,13 +19,13 @@
         </MudItem>
     }
 </MudGrid>
-@if (Form.IsVampire)
+@if (ShowBoosts && Form.IsVampire)
 {
     <MudText Typo="Typo.caption" Color="Color.Secondary">
         Small dots are Fortify Form: Vitae spent for temporary Potence, Celerity or Fortitude, up to the attribute. Clear them when the scene ends.
     </MudText>
 }
-else if (Form.IsGhoul)
+else if (ShowBoosts && Form.IsGhoul)
 {
     <MudText Typo="Typo.caption" Color="Color.Secondary">
         Small dots are Vitae spent for a temporary dot of Potence, Celerity or Fortitude: at most 1 in each for a ghoul,
@@ -36,6 +36,8 @@ else if (Form.IsGhoul)
 @code {
     [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
     [Parameter] public EventCallback Changed { get; set; }
+    /// <summary>Fortify Form dots under the physical attributes; off when building a character.</summary>
+    [Parameter] public bool ShowBoosts { get; set; } = true;
 
     // Same layout as the printed sheet: Physical, then Social (Charisma/Manipulation/Resolve), then Mental.
     private static readonly (string Title, CharacterAttribute[] Attributes)[] Columns =

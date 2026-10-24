@@ -92,6 +92,51 @@ else
             </MudGrid>
         </MudTabPanel>
 
+        <MudTabPanel Text="@CharactersTabTitle" Icon="@Icons.Material.Outlined.Person">
+            @if (_characters is null)
+            {
+                <MudProgressLinear Indeterminate="true" />
+            }
+            else
+            {
+                @if (!_campaign.IsStoryteller && !_characters.Any(c => c.IsMine && c.Status is CharacterStatus.Draft or CharacterStatus.Submitted or CharacterStatus.Active))
+                {
+                    <MudPaper Outlined="true" Class="pa-4 mb-3">
+                        <MudText Typo="Typo.h6">@(_characters.Count == 0 ? "Make your character" : "Make a new character")</MudText>
+                        <MudText Color="Color.Secondary" Class="mb-3">
+                            A step-by-step guide through the book's character creation. Save as you go; when it's ready, the Storyteller approves it.
+                        </MudText>
+                        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                                   Href="@($"campaigns/{Id}/characters/new")" Disabled="_campaign.ArchivedAt is not null">Start</MudButton>
+                    </MudPaper>
+                }
+                @if (_campaign.IsStoryteller && _characters.Count == 0)
+                {
+                    <MudText Color="Color.Secondary">No player characters yet. Players make theirs from this tab once they've joined.</MudText>
+                }
+                <MudGrid Spacing="2">
+                    @foreach (var pc in _characters)
+                    {
+                        <MudItem xs="12" sm="6" lg="4" @key="pc.Id">
+                            <a href="@($"characters/{pc.Id}")" class="npc-card-link">
+                                <MudPaper Outlined="true" Class="pa-3 npc-card">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="1">
+                                        <MudText Typo="Typo.h6">@(string.IsNullOrWhiteSpace(pc.Name) ? "Unnamed" : pc.Name)</MudText>
+                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@CharacterPage.StatusColor(pc.Status)">
+                                            @CharacterPage.StatusLabel(pc.Status)
+                                        </MudChip>
+                                    </MudStack>
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                        @pc.Kind@(pc.Concept is { } concept ? $" · {concept}" : "")@(pc.IsMine ? "" : $" · {pc.OwnerName}")
+                                    </MudText>
+                                </MudPaper>
+                            </a>
+                        </MudItem>
+                    }
+                </MudGrid>
+            }
+        </MudTabPanel>
+
         <MudTabPanel Text="@($"Members ({_campaign.Members.Count})")" Icon="@Icons.Material.Outlined.Group">
             <MudPaper Class="pa-3" Elevation="1">
                 @foreach (var member in _campaign.Members)
@@ -236,11 +281,20 @@ else
     private CharacterSummary? _pick;
     private List<SceneSummary>? _scenes;
     private string? _sceneName;
+    private List<PlayerCharacterSummary>? _characters;
+
+    /// <summary>A Storyteller sees how many characters wait for approval.</summary>
+    private string CharactersTabTitle =>
+        _campaign?.IsStoryteller == true && _characters?.Count(c => c.Status == CharacterStatus.Submitted) is > 0 and var waiting
+            ? $"Characters ({waiting} to approve)"
+            : _campaign?.IsStoryteller == true ? "Characters" : "Your character";
 
     protected override async Task OnParametersSetAsync()
     {
         Show(await Api.GetCampaignAsync(Id));
-        if (_campaign?.IsStoryteller == true) await LoadStorytellerDataAsync();
+        if (_campaign is null) return;
+        _characters = await Api.ListPlayerCharactersAsync(Id);
+        if (_campaign.IsStoryteller) await LoadStorytellerDataAsync();
     }
 
     private void Show(CampaignView? campaign)

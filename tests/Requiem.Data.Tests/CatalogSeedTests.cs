@@ -173,7 +173,7 @@ public class CatalogSeederTests : IDisposable
         await using (var ctx = _db.CreateContext())
         {
             var first = await CatalogSeeder.SeedAsync(ctx);
-            Assert.Equal(new CatalogSeedResult(13, 10, 115, 18, 5, 25, Data.Powers.Count), first);
+            Assert.Equal(new CatalogSeedResult(13, 10, 115, 18, 5, 25, Data.Powers.Count, Concepts: 31), first);
         }
 
         await using (var ctx = _db.CreateContext())

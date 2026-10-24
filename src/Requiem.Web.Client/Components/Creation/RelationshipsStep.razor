@@ -1,0 +1,79 @@
+@* The three people every character starts with (WoD Core p.65), plus anyone added later. *@
+
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+    Drama happens between people. Start with three who matter; they can change, grow or fade once play begins.
+</MudText>
+
+@foreach (var (role, title, prompt) in Roles)
+{
+    var entry = Form.Relationships.FirstOrDefault(r => r.Role == role);
+    <MudPaper Outlined="true" Class="pa-3 mb-2">
+        <MudText Typo="Typo.subtitle2">@title</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display:block" Class="mb-1">@prompt</MudText>
+        <MudGrid Spacing="1">
+            <MudItem xs="12" sm="4">
+                <MudTextField T="string" Value="entry?.Name" ValueChanged="v => SetAsync(role, name: v)" Label="Who"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" ReadOnly="ReadOnly" />
+            </MudItem>
+            <MudItem xs="12" sm="8">
+                <MudTextField T="string" Value="entry?.Description" ValueChanged="v => SetAsync(role, description: v)" Label="Who they are to you"
+                              Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" ReadOnly="ReadOnly" />
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+}
+
+@foreach (var other in Form.Relationships.Where(r => r.Role == RelationshipRole.Other).ToList())
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap" Class="mb-1">
+        <MudTextField T="string" Value="other.Name" ValueChanged="v => Update(() => other.Name = v ?? string.Empty)" Label="Who"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" Style="min-width:10rem; flex:1" ReadOnly="ReadOnly" />
+        <MudTextField T="string" Value="other.Description" ValueChanged="v => Update(() => other.Description = v)" Label="Who they are to you"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500" Style="min-width:12rem; flex:2" ReadOnly="ReadOnly" />
+        @if (!ReadOnly)
+        {
+            <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="@($"Remove {other.Name}")"
+                           OnClick="() => Update(() => Form.Relationships.Remove(other))" />
+        }
+    </MudStack>
+}
+@if (!ReadOnly)
+{
+    <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" Size="Size.Small"
+               OnClick="() => Update(() => Form.Relationships.Add(new RelationshipEntry { Role = RelationshipRole.Other }))">
+        Someone else
+    </MudButton>
+}
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter] public EventCallback Changed { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+
+    private static readonly (RelationshipRole Role, string Title, string Prompt)[] Roles =
+    [
+        (RelationshipRole.Anchor, "Someone who knows you",
+            "Knows you for who you are and means a lot to you: a lover, a child, an old friend. If becoming a monster pushed them away, you'd risk everything to see them again."),
+        (RelationshipRole.Complication, "Someone who complicates your life",
+            "Not necessarily an enemy: overbearing parents, a jealous spouse, a coworker who drags you into their problems. Why can't you escape them?"),
+        (RelationshipRole.Connection, "Someone who ties you to the chronicle",
+            "Picked by you from the places, factions or groups the Storyteller offers. A relationship, not a job: you need them, love them, or share their cause."),
+    ];
+
+    private async Task SetAsync(RelationshipRole role, string? name = null, string? description = null)
+    {
+        var entry = Form.Relationships.FirstOrDefault(r => r.Role == role);
+        if (entry is null) Form.Relationships.Add(entry = new RelationshipEntry { Role = role });
+        if (name is not null) entry.Name = name;
+        if (description is not null) entry.Description = description;
+        // An emptied relationship drops out rather than failing validation.
+        if (string.IsNullOrWhiteSpace(entry.Name) && string.IsNullOrWhiteSpace(entry.Description)) Form.Relationships.Remove(entry);
+        await Changed.InvokeAsync();
+    }
+
+    private async Task Update(Action change)
+    {
+        change();
+        await Changed.InvokeAsync();
+    }
+}

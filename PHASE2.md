@@ -86,8 +86,8 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
 | 1. Template | Mortal, Ghoul or Vampire | Only the templates the campaign allows (decided 2026-10-24). |
 | 2. Concept | Pick from the book's Concepts or write one | Each Concept has a Willpower-regain trigger. **Needs seeding:** Concepts aren't in the catalog yet. |
 | 3. Virtue and Vice | Pick, plus a detail line | Already modelled. |
-| 4. Relationships | Three relationships | Required for PCs (WoD Core p.65). Uses the Phase 1 relationships model (step 7, not built yet). |
-| 5. Scripts | Humanity and Beast; the Coterie Script and Chronicle Tenet are filled in from the campaign | The Coterie Script is one shared text the group agrees; any member can edit it, and edits are audited. Each player marks it on their own sheet. |
+| 4. Relationships | Three relationships | Required for PCs (WoD Core p.65): someone who knows you, someone who complicates your life, someone who ties you to the chronicle. Stored as relationships with a role. |
+| 5. Scripts | Vampires: Humanity and Beast. Mortals and ghouls: a Quirk and a Personal Script (decision 14). The Coterie Script and Chronicle Tenet are filled in from the campaign | The Coterie Script is one shared text the group agrees; any member can edit it, and edits are audited. Each player marks it on their own sheet. |
 | 6. Milestones | Write the first Milestones | Already modelled. |
 | 7. Attributes | Rank Physical / Social / Mental, then spend **5 / 4 / 3** | Every attribute starts at 1 dot, maximum 5. A warning notes that attributes left at 1 can't be raised with XP later. |
 | 8. Skills | Rank, then spend **11 / 7 / 5**; add **3 Specialties** | Maximum 3 dots at creation. A 4th dot is allowed but flagged: a warning in the budget panel and highlighted in the approval queue (decided 2026-10-24). Specialties only on skills with at least 1 dot. |
@@ -175,6 +175,22 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
   - At startup, `AccountsUpgrade` renames the GameMaster role to Admin and moves loose characters and scenes into an "Imported NPCs" campaign per owner (tested).
 - Covered by `CampaignApiTests`, `AccessTests`, `SignUpTests` and `AccountsUpgradeTests`. Checked in the browser at tablet and phone sizes.
 
+**Progress on 2.2 (2026-10-24): done.**
+- **`CreationRules`** (Shared): a draft sheet in, a budget report out.
+  - Pools: Attributes 5/4/3, Skills 11/7/5, 3 Specialties, 10 Merit points, up to 7 points of Flaws. The groups' priorities are inferred (the cheapest fit), so the player never states them.
+  - Merit points also pay for extra Attribute dots (3), Skill dots and Specialties (1), and for vampires Blood Potency, Discipline dots, Rituals and Generation (3 each).
+  - Vampire template: a Bloodline vampire gets a Caitiff dot plus their Bloodline's dot; a Magi House a Caitiff dot plus 1 Ritual; Caitiff 2 Caitiff dots. Humanity 6 within Generation's limit. Ghouls need a domitor.
+  - Levels: Missing (blocks submitting), Warning (over budget or outside the book; the Storyteller decides), Note. 21 tests.
+- **Concepts** seeded from WoD Core p.55–57 (31, each with its Willpower trigger); `GET /api/catalog/concepts`.
+- **Wizard** (`/campaigns/{id}/characters/new`, then `/characters/{id}`): Template, Concept, Virtue & Vice, Relationships, Scripts, Milestones, Attributes, Skills, Merits & Flaws, the Blood (vampire or ghoul), Review.
+  - Each step shows its own issues; the budget panel sits beside it on tablets and below on phones.
+  - Willpower, Humanity, Vitae and Morality are filled in automatically. Picking a Bloodline adds its Discipline.
+  - The draft saves when the player changes step (once it has a name) and reopens at its first incomplete step.
+- **Player characters API** (`/api/campaigns/{id}/player-characters`, `/api/player-characters/{id}`): create, save, delete a draft, submit, withdraw; the Storyteller approves, returns with a note, retires or marks dead. One character in play per player per campaign. Players can't set links to other characters, XP or the Storyteller's notes, and never see those notes. Once Active, a player edits only its story; stats wait for XP (2.3).
+- **Campaign page:** a Characters tab. Players start their character there; Storytellers see every PC, with how many wait for approval. The NPC roster no longer lists PCs.
+- **At the table:** a player opens the play view for their own approved character (wounds, Willpower, Vitae and so on); Storytellers keep the full sheet editor for any PC, including linking a ghoul's domitor.
+- Covered by `CreationRulesTests` and `PlayerCharacterApiTests`. Checked in the browser at tablet and phone sizes.
+
 Each step ships on its own, with tests, and is checked at tablet and phone sizes. **Security tests** (a player can't read another campaign, GM notes or a hidden NPC) are written in 2.0 and extended at every step.
 
 ---
@@ -195,5 +211,8 @@ Each step ships on its own, with tests, and is checked at tablet and phone sizes
 10. **Email:** Azure Communication Services Email.
 11. **Scripts:** players mark their own Scripts and get the XP; audited, and the Storyteller can undo.
 12. **No account types:** anyone can sign up and start a campaign; Storyteller or player is a role per campaign, so one person can tell one campaign and play in another. Every character and scene lives in a campaign (the old personal roster moved into one). Only the site admin edits the shared catalog.
+13. **Discipline limit:** Blood Potency limits the dots in one Discipline, not how many Disciplines a vampire has. A vampire always has their Caitiff Discipline and, in a Bloodline, its Discipline; others come only through diablerie.
+14. **Mortal and ghoul Scripts:** a Quirk, a Personal Script, the shared Coterie Script and the Chronicle Tenet.
+15. **One character in play:** a player has one Draft, Submitted or Active character per campaign at a time; retired and dead ones stay listed.
 
 A pattern runs through these: **players act, the Storyteller oversees.** Player actions take effect at once within the rules, and the audit log with undo is the check. That makes the audit log part of 2.3, not an extra.
