@@ -69,7 +69,7 @@ else if (Form.IsVampire)
     </MudSelect>
     @if (Form.Disciplines.Count > 0)
     {
-        <DisciplinesPanel Form="Form" Options="Disciplines" Powers="Powers" Changed="Changed" AllowAdd="false" />
+        <DisciplinesPanel Form="Form" Options="Disciplines" Powers="Powers" Changed="Changed" AllowAdd="false" BloodlineKind="@Bloodline?.Kind" />
     }
 
     @if (Bloodline?.Kind == "MagiHouse")

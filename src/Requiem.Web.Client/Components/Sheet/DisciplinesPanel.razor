@@ -109,6 +109,8 @@ else
     [Parameter] public EventCallback Changed { get; set; }
     /// <summary>Show the "Add a Discipline" picker and remove buttons; off in the creation wizard, which picks its own.</summary>
     [Parameter] public bool AllowAdd { get; set; } = true;
+    /// <summary>The character's Bloodline kind ("Bloodline", "MagiHouse", "Caitiff"); a Caitiff's 2 starting dots aren't limited by Blood Potency.</summary>
+    [Parameter] public string? BloodlineKind { get; set; }
 
     private int? _pick;
 
@@ -121,7 +123,9 @@ else
         .ThenBy(o => o.Name);
 
     private IEnumerable<string> Warnings => PowerRules
-        .Validate(BloodPotency, Form.Disciplines.Select(d => new DisciplineRating(NameOf(d.PowerGroupId), d.Dots)))
+        .Validate(BloodPotency, Form.Disciplines.Select(d => Options.FirstOrDefault(o => o.Id == d.PowerGroupId) is { } option
+            ? new DisciplineRating(option.Name, d.Dots, CreationRules.StartingDots(option, BloodlineKind))
+            : new DisciplineRating(NameOf(d.PowerGroupId), d.Dots)))
         .Select(v => v.Message);
 
     private string KindLabel(DisciplineOption? option) => option switch

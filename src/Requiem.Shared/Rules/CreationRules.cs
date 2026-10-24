@@ -362,9 +362,22 @@ public static class CreationRules
         else if (total < free && caitiff.Count > 0)
             issues.Add(new(CreationStep.Blood, CreationIssueLevel.Note, $"{free - total} free Discipline dot{(free - total == 1 ? "" : "s")} left to place."));
 
-        foreach (var violation in PowerRules.Validate(bloodPotency, owned.Select(d => new DisciplineRating(d.Group!.Name, d.Entry.Dots))))
+        foreach (var violation in PowerRules.Validate(bloodPotency, owned.Select(d =>
+                     new DisciplineRating(d.Group!.Name, d.Entry.Dots, StartingDots(d.Group, bloodline?.Kind)))))
             issues.Add(new(CreationStep.Blood, CreationIssueLevel.Warning, violation.Message));
     }
+
+    /// <summary>
+    /// The free dots a Discipline gets at creation, which Blood Potency doesn't limit (house ruling 2026-10-24):
+    /// 2 in a Caitiff's Caitiff Discipline, 1 in anyone else's Caitiff or own Bloodline Discipline.
+    /// </summary>
+    /// <param name="bloodlineKind">"Bloodline", "MagiHouse", "Caitiff" or null for none.</param>
+    public static int StartingDots(DisciplineOption discipline, string? bloodlineKind) => discipline.Kind switch
+    {
+        PowerGroupKind.CaitiffDiscipline => bloodlineKind is null or "Caitiff" ? 2 : 1,
+        PowerGroupKind.BloodlineDiscipline => 1,
+        _ => 0,
+    };
 
     private static void CheckRituals(
         FullSheetForm sheet, CreationCatalog catalog, BloodlineOption? bloodline, List<CreationIssue> issues, List<MeritPointCost> points)

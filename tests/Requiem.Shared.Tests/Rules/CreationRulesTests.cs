@@ -200,14 +200,21 @@ public class CreationRulesTests
     }
 
     [Fact]
-    public void A_caitiff_gets_two_dots_in_their_caitiff_discipline()
+    public void A_caitiff_gets_two_dots_in_their_caitiff_discipline_even_at_blood_potency_one()
     {
-        var report = Evaluate(Vampire(Caitiff, [new() { PowerGroupId = Furor, Dots = 2 }], bloodPotency: 2));
+        var report = Evaluate(Vampire(Caitiff, [new() { PowerGroupId = Furor, Dots = 2 }]));
 
         Assert.True(report.IsComplete, Missing(report));
-        // Blood Potency 2 costs 3 points; the 2 Discipline dots are free.
-        Assert.Equal(3, Assert.Single(report.MeritPoints, m => m.Item.StartsWith("Blood Potency")).Points);
         Assert.DoesNotContain(report.MeritPoints, m => m.Item.Contains("Discipline"));
+        // The free dots are exempt from the Blood Potency limit (house ruling 2026-10-24).
+        Assert.DoesNotContain(report.Issues, i => i.Level == CreationIssueLevel.Warning);
+    }
+
+    [Fact]
+    public void A_bought_third_caitiff_dot_still_needs_the_blood_potency()
+    {
+        var report = Evaluate(Vampire(Caitiff, [new() { PowerGroupId = Furor, Dots = 3 }]));
+        Assert.Contains(report.Issues, i => i.Level == CreationIssueLevel.Warning && i.Message.StartsWith("Furor has 3 dots but Blood Potency is 1"));
     }
 
     [Fact]

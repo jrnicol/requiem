@@ -72,7 +72,7 @@ dotnet ef migrations add <Name> --project src/Requiem.Data.SqlServer
 The printed sheet shows 20 Vitae boxes, but with BP 10 the pool can reach 50. The app draws the real max.
 
 ### Constraints (warnings, GM can override)
-- A single Discipline's dots can't exceed Blood Potency.
+- A single Discipline's dots can't exceed Blood Potency, except the free dots it started with (a Caitiff's 2; house ruling 2026-10-24).
 - ~~Number of Disciplines can't exceed Blood Potency.~~ Not a rule (house ruling 2026-10-24): Blood Potency limits dots, not how many Disciplines. A vampire has their Caitiff Discipline and, in a Bloodline, its Discipline; more come only through diablerie.
 - Humanity + BP ≤ Generation Strength. If over, **Humanity** drops (never BP).
 

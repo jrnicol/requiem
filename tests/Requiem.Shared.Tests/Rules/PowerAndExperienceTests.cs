@@ -41,6 +41,15 @@ public class PowerAndExperienceTests
     }
 
     [Fact]
+    public void Starting_dots_are_exempt_from_the_blood_potency_limit()
+    {
+        // A Caitiff starts with 2 dots in their Caitiff Discipline at Blood Potency 1 (house ruling 2026-10-24)…
+        Assert.Empty(PowerRules.Validate(1, [new("Furor", 2, StartingDots: 2)]));
+        // …but a third dot still needs Blood Potency 3.
+        Assert.Contains(PowerRules.Validate(1, [new("Furor", 3, StartingDots: 2)]), v => v.Code == "discipline.dots-exceed-bp");
+    }
+
+    [Fact]
     public void Blood_potency_limits_dots_not_how_many_disciplines()
     {
         // A new Bloodline vampire: a Caitiff dot and a Bloodline dot at Blood Potency 1 (house ruling 2026-10-24).

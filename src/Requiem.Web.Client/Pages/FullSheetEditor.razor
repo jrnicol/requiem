@@ -147,7 +147,8 @@ else
                         @if (_form.IsVampire)
                         {
                             <MudText Typo="Typo.h6" Class="mb-2">Disciplines</MudText>
-                            <DisciplinesPanel Form="_form" Options="_disciplines" Powers="_powers" Changed="StateHasChanged" />
+                            <DisciplinesPanel Form="_form" Options="_disciplines" Powers="_powers" Changed="StateHasChanged"
+                                              BloodlineKind="@SelectedBloodline?.Kind" />
                             <MudDivider Class="my-4" />
                             <MudText Typo="Typo.h6" Class="mb-2">Rituals &amp; Ritae</MudText>
                             <RitualsPanel Form="_form" Options="_disciplines" Powers="_powers" Changed="StateHasChanged" />

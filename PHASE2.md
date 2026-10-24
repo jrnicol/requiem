@@ -225,7 +225,7 @@ Each step ships on its own, with tests, and is checked at tablet and phone sizes
 10. **Email:** Azure Communication Services Email.
 11. **Scripts:** players mark their own Scripts and get the XP; audited, and the Storyteller can undo.
 12. **No account types:** anyone can sign up and start a campaign; Storyteller or player is a role per campaign, so one person can tell one campaign and play in another. Every character and scene lives in a campaign (the old personal roster moved into one). Only the site admin edits the shared catalog.
-13. **Discipline limit:** Blood Potency limits the dots in one Discipline, not how many Disciplines a vampire has. A vampire always has their Caitiff Discipline and, in a Bloodline, its Discipline; others come only through diablerie.
+13. **Discipline limit:** Blood Potency limits the dots in one Discipline, not how many Disciplines a vampire has. A vampire always has their Caitiff Discipline and, in a Bloodline, its Discipline; others come only through diablerie. The free dots a Discipline gets at creation are exempt from the limit, so a Caitiff's 2 Caitiff dots are fine at Blood Potency 1; a third dot still needs Blood Potency 3.
 14. **Mortal and ghoul Scripts:** a Quirk, a Personal Script, the shared Coterie Script and the Chronicle Tenet.
 15. **One character in play:** a player has one Draft, Submitted or Active character per campaign at a time; retired and dead ones stay listed.
 16. **Corruption:** the player logs vampiric acts (audited; the Storyteller can undo). 4 different acts unlock spending XP and earn no XP themselves. Corruption, like Links, resets after a spending session: when the player says they're done, or at the Storyteller's next award once they've spent.

@@ -79,7 +79,9 @@
             if (!Form.IsVampire) yield break;
 
             foreach (var violation in PowerRules.Validate(BloodPotency, Form.Disciplines.Select(d =>
-                         new DisciplineRating(Disciplines.FirstOrDefault(o => o.Id == d.PowerGroupId)?.Name ?? "Discipline", d.Dots))))
+                         Disciplines.FirstOrDefault(o => o.Id == d.PowerGroupId) is { } option
+                             ? new DisciplineRating(option.Name, d.Dots, CreationRules.StartingDots(option, Bloodline?.Kind))
+                             : new DisciplineRating("Discipline", d.Dots))))
                 yield return violation.Message;
 
             if (Form is { Humanity: { } humanity, Generation: { } generation }
