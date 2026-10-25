@@ -36,7 +36,7 @@ Built tablet-first and usable on a phone. Its data is in DynamoDB (DynamoDB Loca
 
 ## Tech stack
 
-- **.NET 10:** ASP.NET Core Minimal APIs, and a Blazor Web App with Interactive WebAssembly.
+- **.NET 10:** ASP.NET Core Minimal APIs (runs on AWS Lambda when hosted), and a standalone Blazor WebAssembly app (static files on S3 when hosted).
 - **UI:** [MudBlazor](https://mudblazor.com/) 9.
 - **Data:** **DynamoDB**, one table ([SERVERLESS.md](SERVERLESS.md)). Locally and in tests, DynamoDB Local stands in for it. Endpoints use the store interfaces in `Requiem.Data/Stores`; ASP.NET Identity and the sign-in keys are stored in the same table.
 - **Tests:** xUnit. Web tests run the real app via `WebApplicationFactory`, each test class against a fresh table in an in-memory DynamoDB Local.
@@ -71,6 +71,7 @@ Then open http://localhost:5053.
 | `Database:SetupOnStartup` | Seed the catalog at startup outside Development | Off |
 | `Auth:SetupCode` | One-time code for first-run setup | Not needed in Development |
 | `Auth:SignUpsPerHour` | New accounts allowed per hour, site-wide (sign-up and invite joins) | `30` |
+| `Hosting:ServeClient` | Also serve the browser app (index.html for app paths), as S3 does when hosted | `true`; `false` on Lambda |
 
 ## Project layout
 
@@ -78,8 +79,8 @@ Then open http://localhost:5053.
 src/
   Requiem.Shared/          Rules engine (pure C#), enums and API contracts shared by server and browser
   Requiem.Data/            Entities, store interfaces, the DynamoDB stores, seed JSON (Seed/*.json) and the catalog seeder
-  Requiem.Web/             ASP.NET Core host: API endpoints, auth, static assets
-  Requiem.Web.Client/      Blazor WebAssembly UI (pages, sheet panels, table mode)
+  Requiem.Web/             The API (ASP.NET Core; Lambda when hosted). Locally it also serves the browser app
+  Requiem.Web.Client/      Standalone Blazor WebAssembly UI (wwwroot/index.html; pages, sheet panels, table mode)
 tests/
   Requiem.Shared.Tests/    Rules engine
   Requiem.Data.Tests/      DynamoDB stores and seed data

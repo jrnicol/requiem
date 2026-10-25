@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Components.Web;
+using Requiem.Web.Client;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using MudBlazor;
 using MudBlazor.Services;
@@ -6,6 +8,9 @@ using Requiem.Shared.Accounts;
 using Requiem.Web.Client.Services;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
+// A standalone app: wwwroot/index.html is the page (served from S3 when hosted, by the API locally).
+builder.RootComponents.Add<Routes>("#app");
+builder.RootComponents.Add<HeadOutlet>("head::after");
 var baseAddress = new Uri(builder.HostEnvironment.BaseAddress);
 
 builder.Services.AddMudServices(config =>

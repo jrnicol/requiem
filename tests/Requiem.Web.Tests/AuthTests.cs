@@ -32,7 +32,7 @@ public class AuthTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFact
     {
         var response = await factory.CreateClient(new() { AllowAutoRedirect = false }).GetAsync(url);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("blazor.web", await response.Content.ReadAsStringAsync());
+        Assert.Contains("_framework/blazor.webassembly", await response.Content.ReadAsStringAsync());
     }
 
     [Fact]

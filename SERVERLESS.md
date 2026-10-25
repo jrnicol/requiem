@@ -67,6 +67,8 @@ The project's guardrails block GitHub OIDC (an undocumented explicit deny). They
 
 1. **Interfaces with the current implementation (done 2026-10-25).** Endpoints move onto the storage interfaces, still backed by EF Core and SQLite. All tests stay green. This is the riskiest refactor, done while the database underneath is still the familiar one.
 2. **DynamoDB implementation (done 2026-10-25).** Stores, Identity, data-protection keys and catalog seeding on DynamoDB; the tests run against DynamoDB Local. EF Core, both migrations projects and the SQLite/SQL Server providers are gone. So are blood bonds and boons, which had no screens yet, and the legacy-data upgrade, since the data starts fresh.
-3. **Hosting split.** The client becomes standalone WebAssembly, and the API gets Lambda hosting. Locally, the app still runs as one site for development.
+3. **Hosting split (done 2026-10-25).** The client is a standalone WebAssembly app with its own `wwwroot/index.html`. The API has no server-rendered pages, answers errors as problem details, and gets Lambda hosting (`AddAWSLambdaHosting`, HTTP API events). Locally, and in tests, it also serves the client and gives app paths `index.html` (`Hosting:ServeClient`, off on Lambda). Notes for phase 4:
+   - Only the `_framework` files have fingerprinted names (`app.css` and MudBlazor's files don't), so the S3 upload caches `_framework/*` for a year and everything else briefly, `index.html` not at all.
+   - The client publishes to about 22 MB (3.8 MB as served, brotli). The API's Lambda publish (`-r linux-arm64`) is 52 MB because it carries a copy of the client; trimming that is optional.
 4. **Infrastructure and pipeline.** The CloudFormation template, then the deploy pipeline.
 5. **Cut-over.** First deploy and checks in the browser. The EC2 template (`infra/aws/requiem.yaml`), the Azure files and Azure itself get retired.
