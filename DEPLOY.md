@@ -40,6 +40,11 @@ CloudFormation creates the connection as **Pending**. Only a person can approve 
 1. In the AWS console, open **Developer Tools > Settings > Connections**, choose **requiem-pipeline-github**, then **Update pending connection**.
 2. Sign in to GitHub if asked. Install the **AWS Connector for GitHub** app on the `jrnicol` account, limited to the `requiem` repository.
 3. Back in the console, choose **Connect**. The status turns **Available**.
+4. Turn on builds for every push. CodeBuild can only register its GitHub webhook once the connection is approved, so step 1 leaves it off:
+
+```powershell
+aws cloudformation deploy --region us-east-2 --stack-name requiem-pipeline --template-file infra/aws/pipeline.yaml --capabilities CAPABILITY_IAM --parameter-overrides Webhook=true
+```
 
 ### 3. First deploy
 
@@ -89,7 +94,7 @@ Open `SiteUrl`, which sends you to `/setup`, and enter the code. The account bec
 
 | Symptom | Meaning | Fix |
 | --- | --- | --- |
-| Builds never start after a push | The GitHub connection isn't approved yet, or the webhook wasn't created. | Step 2. If the connection is **Available** but builds still don't start, start one by hand (step 3); updating the pipeline stack recreates the webhook. |
+| Builds never start after a push | The GitHub connection isn't approved yet, or the webhook is off. | Step 2, including turning on the webhook (`Webhook=true`). |
 | Build fails in `dotnet test` | A test failed; nothing was deployed. | Read the build log. |
 | `AccessDenied` in the build's deploy step | `app.yaml` uses something the deploy role (`pipeline.yaml`) doesn't allow. | Add it to `DeployRole` and rerun step 1. |
 | 502 from `/api/...` | The Lambda function failed to start. | Check the API log; a missing setting or a startup exception shows there. |

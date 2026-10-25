@@ -19,6 +19,16 @@ Parameters:
     Type: String
     Default: requiem-app
     Description: The stack the pipeline creates and updates from app.yaml.
+  Webhook:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      Build on every push. CodeBuild can only register the webhook once the GitHub connection is approved,
+      so the first deploy leaves it off and a second turns it on (DEPLOY.md).
+
+Conditions:
+  HasWebhook: !Equals [!Ref Webhook, 'true']
 
 Resources:
   GitHub:
@@ -208,11 +218,13 @@ Resources:
           Type: CODECONNECTIONS
           Resource: !Ref GitHub
       SourceVersion: !Sub 'refs/heads/${Branch}'
-      Triggers:
-        Webhook: true
-        FilterGroups:
-          - - { Type: EVENT, Pattern: PUSH }
-            - { Type: HEAD_REF, Pattern: !Sub '^refs/heads/${Branch}$' }
+      Triggers: !If
+        - HasWebhook
+        - Webhook: true
+          FilterGroups:
+            - - { Type: EVENT, Pattern: PUSH }
+              - { Type: HEAD_REF, Pattern: !Sub '^refs/heads/${Branch}$' }
+        - !Ref AWS::NoValue
       Artifacts:
         Type: NO_ARTIFACTS
       Environment:
