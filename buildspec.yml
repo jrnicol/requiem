@@ -41,9 +41,10 @@ phases:
         aws cloudformation deploy --stack-name "$APP_STACK" --template-file infra/aws/app.yaml
         --role-arn "$DEPLOY_ROLE_ARN" --capabilities CAPABILITY_IAM --no-fail-on-empty-changeset
         --parameter-overrides "CodeBucket=${ARTIFACTS_BUCKET}" "CodeKey=${KEY}"
-      - output() { aws cloudformation describe-stacks --stack-name "$APP_STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
-      - BUCKET=$(output SiteBucket)
-      - DISTRIBUTION=$(output DistributionId)
+      # Each line runs in its own shell, so only exported variables carry over (not shell functions).
+      - BUCKET=$(aws cloudformation describe-stacks --stack-name "$APP_STACK" --query "Stacks[0].Outputs[?OutputKey=='SiteBucket'].OutputValue" --output text)
+      - DISTRIBUTION=$(aws cloudformation describe-stacks --stack-name "$APP_STACK" --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)
+      - SITE=$(aws cloudformation describe-stacks --stack-name "$APP_STACK" --query "Stacks[0].Outputs[?OutputKey=='SiteUrl'].OutputValue" --output text)
 
       # _framework files have fingerprinted names, so they're cached for a year. CloudFront compresses on the
       # way out, so the .gz/.br copies aren't uploaded. .wasm needs its own type for streaming compilation.
@@ -53,4 +54,4 @@ phases:
       # Everything else (index.html, app.css, MudBlazor's files) keeps its name between builds: always revalidate.
       - aws s3 sync "$WWW" "s3://${BUCKET}" --delete --exclude "_framework/*" --exclude "*.gz" --exclude "*.br" --cache-control "no-cache"
       - aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/*"
-      - echo "Deployed $(output SiteUrl)"
+      - echo "Deployed $SITE"
