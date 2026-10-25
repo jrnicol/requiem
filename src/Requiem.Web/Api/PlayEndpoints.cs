@@ -1,9 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
-using Requiem.Data;
 using Requiem.Data.Entities;
-using Requiem.Shared.Accounts;
+using Requiem.Data.Stores;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Contracts;
 using Requiem.Shared.Rules;
@@ -37,13 +35,13 @@ public static class PlayEndpoints
     // ---------- Characters ----------
 
     private static async Task<Results<Ok<PlayCharacter>, NotFound>> GetAsync(
-        Guid id, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
+        Guid id, ICatalogStore catalog, CampaignAccess access, CancellationToken ct)
     {
         // Players track their own approved characters; Storytellers everything in their campaigns.
-        var character = await LoadAsync(access.PlayableCharacters(), [id], tracked: false, ct);
-        return character.Count == 0
+        var character = await access.PlayableCharacterAsync(id, ct);
+        return character is null
             ? TypedResults.NotFound()
-            : TypedResults.Ok(await ForViewerAsync(PlayMapper.ToPlay(character[0], await CatalogAsync(db, ct)), character[0], access, ct));
+            : TypedResults.Ok(await ForViewerAsync(PlayMapper.ToPlay(character, await CatalogAsync(catalog, ct)), character, access, ct));
     }
 
     /// <summary>A player tracking their own character never sees the Storyteller's notes on it.</summary>
@@ -51,19 +49,17 @@ public static class PlayEndpoints
         character.CampaignId is { } campaignId && await access.IsStorytellerAsync(campaignId, ct) ? play : play with { GmNotes = null };
 
     private static async Task<Results<Ok<PlayCharacter>, NotFound, ValidationProblem>> ActAsync(
-        Guid id, PlayAction action, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
+        Guid id, PlayAction action, ICharacterStore characters, ICatalogStore catalog, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
-        var loaded = await LoadAsync(access.PlayableCharacters(), [id], tracked: true, ct);
-        if (loaded.Count == 0) return TypedResults.NotFound();
-        var character = loaded[0];
+        var character = await access.PlayableCharacterAsync(id, ct);
+        if (character is null) return TypedResults.NotFound();
 
         var error = Apply(character, action, time.GetUtcNow());
         if (error is not null) return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [""] = [error] });
 
-        // Touch the character itself so its version changes and an editor open elsewhere can't overwrite this.
-        db.Entry(character).Property(c => c.UpdatedAt).IsModified = true;
-        await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await ForViewerAsync(PlayMapper.ToPlay(character, await CatalogAsync(db, ct)), character, access, ct));
+        // Saving gives the character a new version, so an editor open elsewhere can't overwrite this.
+        await characters.SaveAsync(character, ct);
+        return TypedResults.Ok(await ForViewerAsync(PlayMapper.ToPlay(character, await CatalogAsync(catalog, ct)), character, access, ct));
     }
 
     /// <returns>An error message, or null when the action was applied.</returns>
@@ -215,19 +211,15 @@ public static class PlayEndpoints
     // ---------- Scenes ----------
 
     /// <param name="campaignId">Only that campaign's scenes.</param>
-    private static async Task<List<SceneSummary>> ListScenesAsync(CampaignAccess access, Guid? campaignId, CancellationToken ct)
-    {
-        var query = access.ManagedScenes().AsNoTracking();
-        if (campaignId is { } id) query = query.Where(s => s.CampaignId == id);
-        var scenes = await query
-            .Select(s => new { s.Id, s.Name, Count = s.Members.Count, s.UpdatedAt, s.CampaignId })
-            .ToListAsync(ct);
-        return scenes.OrderByDescending(s => s.UpdatedAt)
-            .Select(s => new SceneSummary(s.Id, s.Name, s.Count, s.UpdatedAt, s.CampaignId)).ToList();
-    }
+    private static async Task<List<SceneSummary>> ListScenesAsync(CampaignAccess access, Guid? campaignId, CancellationToken ct) =>
+        (await access.ManagedScenesAsync(campaignId, ct))
+            .OrderByDescending(s => s.UpdatedAt)
+            .Select(s => new SceneSummary(s.Id, s.Name, s.Members.Count, s.UpdatedAt, s.CampaignId))
+            .ToList();
 
     private static async Task<Results<Created<SceneView>, ValidationProblem>> CreateSceneAsync(
-        SceneForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
+        SceneForm form, ISceneStore scenes, ICharacterStore characters, ICatalogStore catalog, CampaignAccess access,
+        TimeProvider time, CancellationToken ct)
     {
         if (await access.CampaignProblemAsync(form.CampaignId, ct) is { } problem)
             return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(form.CampaignId)] = [problem] });
@@ -240,34 +232,39 @@ public static class PlayEndpoints
             CreatedAt = now, UpdatedAt = now,
         };
         SetMembers(scene, form.CharacterIds);
-        db.Scenes.Add(scene);
-        await db.SaveChangesAsync(ct);
-        return TypedResults.Created($"/api/scenes/{scene.Id}", await ViewAsync(db, access, scene, ct));
+        await scenes.AddAsync(scene, ct);
+        return TypedResults.Created($"/api/scenes/{scene.Id}", await ViewAsync(characters, catalog, scene, ct));
     }
 
     private static async Task<Results<Ok<SceneView>, NotFound>> GetSceneAsync(
-        Guid id, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
+        Guid id, ICharacterStore characters, ICatalogStore catalog, CampaignAccess access, CancellationToken ct)
     {
-        var scene = await access.ManagedScenes().AsNoTracking().Include(s => s.Members).SingleOrDefaultAsync(s => s.Id == id, ct);
-        return scene is null ? TypedResults.NotFound() : TypedResults.Ok(await ViewAsync(db, access, scene, ct));
+        var scene = await access.ManagedSceneAsync(id, ct);
+        return scene is null ? TypedResults.NotFound() : TypedResults.Ok(await ViewAsync(characters, catalog, scene, ct));
     }
 
     private static async Task<Results<Ok<SceneView>, NotFound, ValidationProblem>> UpdateSceneAsync(
-        Guid id, SceneForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
+        Guid id, SceneForm form, ISceneStore scenes, ICharacterStore characters, ICatalogStore catalog, CampaignAccess access,
+        TimeProvider time, CancellationToken ct)
     {
-        var scene = await access.ManagedScenes().Include(s => s.Members).SingleOrDefaultAsync(s => s.Id == id, ct);
+        var scene = await access.ManagedSceneAsync(id, ct);
         if (scene is null) return TypedResults.NotFound();
         if (await ValidateSceneAsync(form, scene.CampaignId, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
 
         scene.Name = form.Name.Trim();
         scene.UpdatedAt = time.GetUtcNow();
         SetMembers(scene, form.CharacterIds);
-        await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await ViewAsync(db, access, scene, ct));
+        await scenes.SaveAsync(scene, ct);
+        return TypedResults.Ok(await ViewAsync(characters, catalog, scene, ct));
     }
 
-    private static async Task<Results<NoContent, NotFound>> DeleteSceneAsync(Guid id, CampaignAccess access, CancellationToken ct) =>
-        await access.ManagedScenes().Where(s => s.Id == id).ExecuteDeleteAsync(ct) > 0 ? TypedResults.NoContent() : TypedResults.NotFound();
+    private static async Task<Results<NoContent, NotFound>> DeleteSceneAsync(
+        Guid id, ISceneStore scenes, CampaignAccess access, CancellationToken ct)
+    {
+        if (await access.ManagedSceneAsync(id, ct) is null) return TypedResults.NotFound();
+        await scenes.DeleteAsync(id, ct);
+        return TypedResults.NoContent();
+    }
 
     private static void SetMembers(Scene scene, List<Guid> characterIds)
     {
@@ -295,32 +292,20 @@ public static class PlayEndpoints
                 .ToDictionary(g => g.Key, g => g.Select(r => r.ErrorMessage ?? "Invalid value.").ToArray());
     }
 
-    private static async Task<SceneView> ViewAsync(RequiemDbContext db, CampaignAccess access, Scene scene, CancellationToken ct)
+    /// <summary>The scene's characters in order; members since moved to another campaign drop out.</summary>
+    private static async Task<SceneView> ViewAsync(ICharacterStore store, ICatalogStore catalog, Scene scene, CancellationToken ct)
     {
         var order = scene.Members.OrderBy(m => m.SortOrder).Select(m => m.CharacterId).ToList();
-        var characters = await LoadAsync(access.ManagedCharacters(), order, tracked: false, ct);
-        var catalog = await CatalogAsync(db, ct);
+        var characters = (await store.GetManyAsync(order, ct)).Where(c => c.CampaignId == scene.CampaignId).ToList();
+        var play = await CatalogAsync(catalog, ct);
         var members = order.Select(id => characters.FirstOrDefault(c => c.Id == id)).OfType<Character>()
-            .Select(c => PlayMapper.ToPlay(c, catalog)).ToList();
+            .Select(c => PlayMapper.ToPlay(c, play)).ToList();
         return new SceneView(scene.Id, scene.Name, members, scene.CampaignId);
     }
 
-    // ---------- Loading ----------
-
-    private static async Task<List<Character>> LoadAsync(IQueryable<Character> source, List<Guid> ids, bool tracked, CancellationToken ct)
+    private static async Task<PlayCatalog> CatalogAsync(ICatalogStore store, CancellationToken ct)
     {
-        var query = source
-            .Include(c => c.Bloodline)
-            .Include(c => c.Attributes).Include(c => c.Skills).Include(c => c.Specialties)
-            .Include(c => c.Disciplines).ThenInclude(d => d.PowerGroup)
-            .Include(c => c.LearnedPowers).Include(c => c.Wounds).Include(c => c.Compels).Include(c => c.Conditions)
-            .Include(c => c.Items)
-            .AsSplitQuery();
-        if (!tracked) query = query.AsNoTracking();
-        return await query.Where(c => ids.Contains(c.Id)).ToListAsync(ct);
+        var catalog = await store.GetAsync(ct);
+        return new(catalog.Powers, catalog.Concepts.ToDictionary(c => c.Name, c => c.WillpowerTrigger, StringComparer.OrdinalIgnoreCase));
     }
-
-    private static async Task<PlayCatalog> CatalogAsync(RequiemDbContext db, CancellationToken ct) => new(
-        await db.Powers.AsNoTracking().Include(p => p.PowerGroup).ToListAsync(ct),
-        await db.ConceptDefinitions.AsNoTracking().ToDictionaryAsync(c => c.Name, c => c.WillpowerTrigger, StringComparer.OrdinalIgnoreCase, ct));
 }

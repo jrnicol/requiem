@@ -1,8 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
-using Requiem.Data;
 using Requiem.Data.Entities;
+using Requiem.Data.Stores;
 using Requiem.Shared.Accounts;
 using Requiem.Shared.Contracts;
 using Requiem.Shared.Rules;
@@ -16,120 +15,97 @@ public static class CatalogEndpoints
     {
         var catalog = api.MapGroup("/catalog").WithTags("Catalog");
 
-        catalog.MapGet("/bloodlines", BloodlinesAsync);
+        catalog.MapGet("/bloodlines", async (ICatalogStore store, CancellationToken ct) => Bloodlines(await store.GetAsync(ct)));
 
-        catalog.MapGet("/predator-types", async (RequiemDbContext db, CancellationToken ct) =>
-        {
-            var rows = await db.PredatorTypes.AsNoTracking().ToListAsync(ct);
-            return rows
+        catalog.MapGet("/predator-types", async (ICatalogStore store, CancellationToken ct) =>
+            (await store.GetAsync(ct)).PredatorTypes
                 .OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(p => new PredatorTypeOption(p.Id, p.Name, p.Description, p.Restrictions, p.SourcePage))
-                .ToList();
-        });
+                .ToList());
 
-        catalog.MapGet("/edges", async (RequiemDbContext db, CancellationToken ct) =>
-        {
-            var rows = await db.EdgeDefinitions.AsNoTracking().ToListAsync(ct);
-            return rows
+        catalog.MapGet("/edges", async (ICatalogStore store, CancellationToken ct) =>
+            (await store.GetAsync(ct)).Edges
                 .OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(e => new EdgeOption(e.Id, e.Name, e.Edge, e.Description, e.SourcePage))
-                .ToList();
-        });
+                .ToList());
 
-        catalog.MapGet("/disciplines", DisciplinesAsync);
+        catalog.MapGet("/disciplines", async (ICatalogStore store, CancellationToken ct) => Disciplines(await store.GetAsync(ct)));
 
-        catalog.MapGet("/concepts", async (RequiemDbContext db, CancellationToken ct) =>
-        {
-            var rows = await db.ConceptDefinitions.AsNoTracking().ToListAsync(ct);
-            return rows
+        catalog.MapGet("/concepts", async (ICatalogStore store, CancellationToken ct) =>
+            (await store.GetAsync(ct)).Concepts
                 .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(c => new ConceptOption(c.Id, c.Name, c.Description, c.WillpowerTrigger, c.SourcePage))
-                .ToList();
-        });
+                .ToList());
 
         // The whole powers catalog (a few hundred KB): the client caches it and searches locally.
-        catalog.MapGet("/powers", async (RequiemDbContext db, CancellationToken ct) =>
-        {
-            var rows = await db.Powers.AsNoTracking().Include(p => p.BonusOptions).AsSplitQuery().ToListAsync(ct);
-            return rows
+        catalog.MapGet("/powers", async (ICatalogStore store, CancellationToken ct) =>
+            (await store.GetAsync(ct)).Powers
                 .OrderBy(p => p.PowerGroupId).ThenBy(p => p.Level ?? 0).ThenBy(p => p.Id)
                 .Select(ToOption)
-                .ToList();
-        });
+                .ToList());
 
         // Players read the catalog to build characters; only site GMs correct it.
         catalog.MapPut("/powers/{id:int}", UpdatePowerAsync).RequireAuthorization(Policies.Admin);
 
-        catalog.MapGet("/merits", MeritsAsync);
+        catalog.MapGet("/merits", async (ICatalogStore store, CancellationToken ct) => Merits(await store.GetAsync(ct)));
 
-        catalog.MapGet("/compels", async (RequiemDbContext db, CancellationToken ct) =>
-        {
-            var rows = await db.CompelDefinitions.AsNoTracking().ToListAsync(ct);
-            return rows
+        catalog.MapGet("/compels", async (ICatalogStore store, CancellationToken ct) =>
+            (await store.GetAsync(ct)).Compels
                 .OrderBy(c => c.Kind).ThenBy(c => c.Roll).ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(c => new CompelOption(c.Id, c.Name, c.Kind, c.Roll, c.Rating, c.Trigger, c.EndsWhen,
                     c.Description, c.SourcePage))
-                .ToList();
-        });
+                .ToList());
 
         return api;
     }
 
-    internal static async Task<List<BloodlineOption>> BloodlinesAsync(RequiemDbContext db, CancellationToken ct)
-    {
-        var rows = await db.Bloodlines.AsNoTracking().ToListAsync(ct);
-        return rows
+    internal static List<BloodlineOption> Bloodlines(CatalogSnapshot catalog) =>
+        catalog.Bloodlines
             .OrderBy(b => KindOrder(b.Kind)).ThenBy(b => b.Name, StringComparer.OrdinalIgnoreCase)
             .Select(b => new BloodlineOption(b.Id, b.Name, b.Kind.ToString(), b.WeaknessName, b.WeaknessText,
                 b.CompelName, b.CompelText, b.SourcePage))
             .ToList();
-    }
 
-    internal static async Task<List<DisciplineOption>> DisciplinesAsync(RequiemDbContext db, CancellationToken ct)
-    {
-        var rows = await db.PowerGroups.AsNoTracking().Include(g => g.Bloodline).ToListAsync(ct);
-        return rows
+    internal static List<DisciplineOption> Disciplines(CatalogSnapshot catalog) =>
+        catalog.PowerGroups
             .OrderBy(g => g.Kind).ThenBy(g => g.Name, StringComparer.OrdinalIgnoreCase)
             .Select(g => new DisciplineOption(g.Id, g.Name, g.Kind, g.BloodlineId, g.Bloodline?.Name, g.Description, g.SourcePage))
             .ToList();
-    }
 
-    internal static async Task<List<MeritOption>> MeritsAsync(RequiemDbContext db, CancellationToken ct)
-    {
-        var rows = await db.MeritDefinitions.AsNoTracking().ToListAsync(ct);
-        return rows
+    internal static List<MeritOption> Merits(CatalogSnapshot catalog) =>
+        catalog.Merits
             .OrderBy(m => m.Kind).ThenBy(m => m.Name, StringComparer.OrdinalIgnoreCase).ThenBy(m => m.Source)
             .Select(m => new MeritOption(m.Id, m.Name, m.Kind, m.Source, m.Cost, m.MinDots, m.MaxDots,
                 m.Description, m.Restrictions, m.SourcePage))
             .ToList();
-    }
 
     /// <summary>What <see cref="CreationRules"/> needs from the catalog.</summary>
-    internal static async Task<CreationCatalog> CreationCatalogAsync(RequiemDbContext db, CancellationToken ct)
+    internal static async Task<CreationCatalog> CreationCatalogAsync(ICatalogStore store, CancellationToken ct)
     {
-        var powers = await db.Powers.AsNoTracking().Select(p => new { p.Id, p.PowerGroupId, p.Level }).ToListAsync(ct);
+        var catalog = await store.GetAsync(ct);
         return new(
-            await BloodlinesAsync(db, ct),
-            await DisciplinesAsync(db, ct),
-            powers.ToDictionary(p => p.Id, p => p.PowerGroupId),
-            await MeritsAsync(db, ct),
-            powers.ToDictionary(p => p.Id, p => p.Level));
+            Bloodlines(catalog),
+            Disciplines(catalog),
+            catalog.Powers.ToDictionary(p => p.Id, p => p.PowerGroupId),
+            Merits(catalog),
+            catalog.Powers.ToDictionary(p => p.Id, p => p.Level));
     }
 
     private static async Task<Results<Ok<PowerOption>, NotFound, ValidationProblem>> UpdatePowerAsync(
-        int id, PowerEditForm form, RequiemDbContext db, CancellationToken ct)
+        int id, PowerEditForm form, ICatalogStore store, CancellationToken ct)
     {
-        var power = await db.Powers.Include(p => p.BonusOptions).Include(p => p.PowerGroup).SingleOrDefaultAsync(p => p.Id == id, ct);
+        var power = await store.FindPowerAsync(id, ct);
         if (power is null) return TypedResults.NotFound();
+        var catalog = await store.GetAsync(ct);
 
         var results = new List<ValidationResult>();
         Validator.TryValidateObject(form, new ValidationContext(form), results, validateAllProperties: true);
         foreach (var option in form.BonusOptions)
             Validator.TryValidateObject(option, new ValidationContext(option), results, validateAllProperties: true);
         var name = form.Name.Trim();
-        if (await db.Powers.AnyAsync(p => p.PowerGroupId == power.PowerGroupId && p.Id != id && p.Name == name, ct))
+        if (catalog.Powers.Any(p => p.PowerGroupId == power.PowerGroupId && p.Id != id && p.Name == name))
             results.Add(new ValidationResult($"{power.PowerGroup.Name} already has a power called {name}.", [nameof(form.Name)]));
-        if (form.DicePoolPowerGroupId is { } groupId && !await db.PowerGroups.AnyAsync(g => g.Id == groupId, ct))
+        if (form.DicePoolPowerGroupId is { } groupId && catalog.PowerGroup(groupId) is null)
             results.Add(new ValidationResult("Unknown Discipline.", [nameof(form.DicePoolPowerGroupId)]));
         if (results.Count > 0)
             return TypedResults.ValidationProblem(results
@@ -167,7 +143,7 @@ public static class CatalogEndpoints
             power.BonusOptions.AddRange(wanted.Select((b, i) => new PowerBonusOption { SuccessCost = b.SuccessCost, Effect = b.Effect, SortOrder = i }));
         }
 
-        await db.SaveChangesAsync(ct);
+        await store.SavePowerAsync(power, ct);
         return TypedResults.Ok(ToOption(power));
     }
 

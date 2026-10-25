@@ -2,6 +2,8 @@ using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Requiem.Data.Stores;
+using Requiem.Data.Stores.Ef;
 
 namespace Requiem.Data;
 
@@ -60,6 +62,17 @@ public static class RequiemDatabase
 
         services.AddSingleton(TimeProvider.System);
         services.AddDbContext<RequiemDbContext>(o => o.UseRequiemDatabase(provider, connectionString));
+
+        // The stores the API uses (SERVERLESS.md), one set per request like the DbContext.
+        services.AddScoped<AuditBatch>();
+        services.AddScoped<EfUnitOfWork>();
+        services.AddScoped<ICatalogStore, EfCatalogStore>();
+        services.AddScoped<ICharacterStore, EfCharacterStore>();
+        services.AddScoped<ICampaignStore, EfCampaignStore>();
+        services.AddScoped<ISceneStore, EfSceneStore>();
+        services.AddScoped<IAuditStore, EfAuditStore>();
+        services.AddScoped<IUserDirectory, EfUserDirectory>();
+        services.AddScoped<IDatabaseSetup, EfDatabaseSetup>();
         return services;
     }
 

@@ -4,10 +4,8 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
-using Requiem.Data;
 using Requiem.Data.Entities;
-using Requiem.Data.Seeding;
+using Requiem.Data.Stores;
 using Requiem.Shared.Accounts;
 
 namespace Requiem.Web.Api;
@@ -46,10 +44,10 @@ public static class AccountEndpoints
     /// setup page (and its code) decides who becomes the admin.
     /// </summary>
     private static async Task<Results<Ok<CurrentUser>, ValidationProblem, ProblemHttpResult>> RegisterAsync(
-        RegisterRequest request, UserManager<RequiemUser> users, SignInManager<RequiemUser> signIn)
+        RegisterRequest request, UserManager<RequiemUser> users, IUserDirectory directory, SignInManager<RequiemUser> signIn, CancellationToken ct)
     {
         if (Validate(request) is { } errors) return TypedResults.ValidationProblem(errors);
-        if (!await users.Users.AnyAsync())
+        if (!await directory.AnyUsersAsync(ct))
             return TypedResults.Problem("This site hasn't been set up yet.", statusCode: StatusCodes.Status409Conflict);
 
         var email = request.Email.Trim();
@@ -101,13 +99,14 @@ public static class AccountEndpoints
     }
 
     private static async Task<SetupStatus> GetSetupStatusAsync(
-        UserManager<RequiemUser> users, IConfiguration configuration, IHostEnvironment environment) =>
-        new(!await users.Users.AnyAsync(), RequiresSetupCode(configuration, environment));
+        IUserDirectory directory, IConfiguration configuration, IHostEnvironment environment, CancellationToken ct) =>
+        new(!await directory.AnyUsersAsync(ct), RequiresSetupCode(configuration, environment));
 
     private static async Task<Results<Ok<CurrentUser>, ValidationProblem, Conflict<ProblemDetailsBody>, ProblemHttpResult>>
         SetupAsync(
             SetupRequest request,
-            RequiemDbContext db,
+            IDatabaseSetup database,
+            IUserDirectory directory,
             UserManager<RequiemUser> users,
             RoleManager<IdentityRole> roles,
             SignInManager<RequiemUser> signIn,
@@ -119,7 +118,7 @@ public static class AccountEndpoints
         await SetupLock.WaitAsync();
         try
         {
-            if (await users.Users.AnyAsync())
+            if (await directory.AnyUsersAsync(CancellationToken.None))
                 return TypedResults.Conflict(new ProblemDetailsBody("Setup is already complete. Sign in instead."));
 
             if (!SetupCodeAccepted(request.SetupCode, configuration, environment, out var setupProblem))
@@ -144,7 +143,7 @@ public static class AccountEndpoints
 
             await users.AddToRoleAsync(user, Roles.Admin);
             // Characters made before anyone signed up now have someone to tell them.
-            await AccountsUpgrade.RunAsync(db);
+            await database.AfterFirstAccountAsync(CancellationToken.None);
             await signIn.SignInAsync(user, isPersistent: true);
             return TypedResults.Ok(await ToCurrentUserAsync(user, users));
         }

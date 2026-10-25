@@ -345,7 +345,7 @@ public sealed class RequiemApi(HttpClient http)
     }
 
     /// <returns>Null when undone; otherwise why not.</returns>
-    public async Task<string?> UndoAsync(long auditId)
+    public async Task<string?> UndoAsync(string auditId)
     {
         using var response = await http.PostAsync($"api/audit/{auditId}/undo", content: null);
         return response.IsSuccessStatusCode ? null : await ReadDetailAsync(response) ?? $"Couldn't undo it ({(int)response.StatusCode}).";

@@ -1,9 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
-using Requiem.Data;
 using Requiem.Data.Entities;
-using Requiem.Shared.Accounts;
+using Requiem.Data.Stores;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Contracts;
 using Requiem.Shared.Rules;
@@ -26,113 +24,75 @@ public static class FullSheetEndpoints
         return api;
     }
 
-    private static async Task<Results<Ok<FullSheetForm>, NotFound>> GetAsync(
-        Guid id, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
+    private static async Task<Results<Ok<FullSheetForm>, NotFound>> GetAsync(Guid id, CampaignAccess access, CancellationToken ct)
     {
-        var character = await LoadAsync(access, id, CharacterTier.FullSheet, tracked: false, ct);
+        var character = await LoadAsync(access, id, CharacterTier.FullSheet, ct);
         return character is null ? TypedResults.NotFound() : TypedResults.Ok(FullSheetMapper.ToForm(character));
     }
 
     private static async Task<Results<Created<FullSheetForm>, ValidationProblem>> CreateAsync(
-        FullSheetForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
+        FullSheetForm form, ICharacterStore characters, ICatalogStore catalog, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
-        if (await ValidateAsync(form, null, db, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
+        if (await ValidateAsync(form, null, catalog, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
         if (await access.CampaignProblemAsync(form.CampaignId, ct) is { } problem)
             return TypedResults.ValidationProblem(new Dictionary<string, string[]> { [nameof(form.CampaignId)] = [problem] });
 
         var character = new Character { Name = form.Name, OwnerUserId = access.UserId, CampaignId = form.CampaignId };
         FullSheetMapper.Apply(form, character, time.GetUtcNow());
-        db.Characters.Add(character);
-        await db.SaveChangesAsync(ct);
+        await characters.AddAsync(character, ct);
 
         return TypedResults.Created($"/api/characters/{character.Id}/full-sheet", FullSheetMapper.ToForm(character));
     }
 
     private static async Task<Results<Ok<FullSheetForm>, NotFound, ValidationProblem, Conflict<ProblemDetailsBody>>> UpdateAsync(
-        Guid id, FullSheetForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
+        Guid id, FullSheetForm form, ICharacterStore characters, ICatalogStore catalog, CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
-        if (await ValidateAsync(form, id, db, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
+        if (await ValidateAsync(form, id, catalog, access, ct) is { } errors) return TypedResults.ValidationProblem(errors);
 
-        var character = await LoadAsync(access, id, CharacterTier.FullSheet, tracked: true, ct);
+        var character = await LoadAsync(access, id, CharacterTier.FullSheet, ct);
         if (character is null) return TypedResults.NotFound();
 
-        db.Entry(character).Property(c => c.Version).OriginalValue = form.Version;
         FullSheetMapper.Apply(form, character, time.GetUtcNow());
-        db.Entry(character).Property(c => c.UpdatedAt).IsModified = true;
-
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
+        if (!await characters.TrySaveAsync(character, form.Version, ct))
             return TypedResults.Conflict(new ProblemDetailsBody(
                 "This character was changed somewhere else after you opened it. Reload to see the latest version."));
-        }
 
         return TypedResults.Ok(FullSheetMapper.ToForm(character));
     }
 
     private static async Task<Results<Ok<FullSheetForm>, NotFound, Conflict<ProblemDetailsBody>>> PromoteAsync(
-        Guid id, PromoteRequest request, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
+        Guid id, PromoteRequest request, ICharacterStore characters, CampaignAccess access, CancellationToken ct)
     {
-        var character = await LoadAsync(access, id, CharacterTier.SupportingCast, tracked: true, ct);
+        var character = await LoadAsync(access, id, CharacterTier.SupportingCast, ct);
         if (character is null) return TypedResults.NotFound();
 
-        db.Entry(character).Property(c => c.Version).OriginalValue = request.Version;
         FullSheetMapper.Promote(character);
-
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
+        if (!await characters.TrySaveAsync(character, request.Version, ct))
             return TypedResults.Conflict(new ProblemDetailsBody(
                 "This NPC was changed somewhere else. Reload it before promoting."));
-        }
 
         return TypedResults.Ok(FullSheetMapper.ToForm(character));
     }
 
-    private static Task<Character?> LoadAsync(CampaignAccess access, Guid id, CharacterTier tier, bool tracked, CancellationToken ct) =>
-        LoadAsync(access.ManagedCharacters(), id, tier, tracked, ct);
-
-    /// <summary>A character with every part of the full sheet loaded.</summary>
-    internal static Task<Character?> LoadAsync(IQueryable<Character> source, Guid id, CharacterTier tier, bool tracked, CancellationToken ct)
-    {
-        var query = source
-            .Include(c => c.Attributes).Include(c => c.Skills).Include(c => c.Specialties)
-            .Include(c => c.Disciplines).Include(c => c.LearnedPowers).Include(c => c.Merits).Include(c => c.Wounds)
-            .Include(c => c.Stains).Include(c => c.Compels).Include(c => c.Conditions).Include(c => c.Scripts)
-            .Include(c => c.Milestones).Include(c => c.CorruptionMarks).Include(c => c.Items)
-            .Include(c => c.XpLedger).Include(c => c.Relationships)
-            .AsSplitQuery();
-        if (!tracked) query = query.AsNoTracking();
-        return query.SingleOrDefaultAsync(c => c.Id == id && c.Tier == tier, ct);
-    }
+    private static async Task<Character?> LoadAsync(CampaignAccess access, Guid id, CharacterTier tier, CancellationToken ct) =>
+        await access.ManagedCharacterAsync(id, ct) is { } character && character.Tier == tier ? character : null;
 
     /// <summary>
     /// Learned powers are rituals, ritae, or picks in a pick-per-dot Discipline (Investiture) the
     /// character has, no more picks than its dots.
     /// </summary>
-    private static async Task<List<ValidationResult>> ValidateLearnedPowersAsync(FullSheetForm form, RequiemDbContext db, CancellationToken ct)
+    private static List<ValidationResult> ValidateLearnedPowers(FullSheetForm form, CatalogSnapshot catalog)
     {
         var errors = new List<ValidationResult>();
         var powerIds = form.LearnedPowerIds.Distinct().ToList();
         if (powerIds.Count == 0) return errors;
 
-        var powers = await db.Powers.AsNoTracking()
-            .Where(p => powerIds.Contains(p.Id))
-            .Select(p => new { p.Id, p.PowerGroupId, GroupName = p.PowerGroup.Name, p.PowerGroup.Kind })
-            .ToListAsync(ct);
-        var groupIds = powers.Select(p => p.PowerGroupId).Distinct().ToList();
-        var levels = (await db.Powers.AsNoTracking().Where(p => groupIds.Contains(p.PowerGroupId))
-                .Select(p => new { p.PowerGroupId, p.Level }).ToListAsync(ct))
-            .GroupBy(p => p.PowerGroupId).ToDictionary(g => g.Key, g => (IReadOnlyCollection<int?>)g.Select(p => p.Level).ToList());
+        var powers = powerIds.Select(catalog.Power).OfType<Power>().ToList();
+        var levels = catalog.Powers.GroupBy(p => p.PowerGroupId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyCollection<int?>)g.Select(p => p.Level).ToList());
 
         var unknown = powerIds.Count != powers.Count;
-        foreach (var group in powers.GroupBy(p => (p.PowerGroupId, p.GroupName, p.Kind)))
+        foreach (var group in powers.GroupBy(p => (p.PowerGroupId, GroupName: p.PowerGroup.Name, p.PowerGroup.Kind)))
         {
             if (PowerRules.AcquisitionFor(group.Key.Kind) == PowerAcquisition.LearnedIndividually) continue;
             if (!PowerRules.IsPickPerDot(group.Key.Kind, levels[group.Key.PowerGroupId]))
@@ -159,41 +119,37 @@ public static class FullSheetEndpoints
     /// (the Storyteller links them).
     /// </param>
     internal static async Task<Dictionary<string, string[]>?> ValidateAsync(
-        FullSheetForm form, Guid? id, RequiemDbContext db, CampaignAccess access, CancellationToken ct, bool checkLinks = true)
+        FullSheetForm form, Guid? id, ICatalogStore store, CampaignAccess access, CancellationToken ct, bool checkLinks = true)
     {
         // Tidy the form for its kind first (e.g. a ghoul keeps at most 8 Vitae), as saving would.
         form.NormalizeForKind();
         var results = new List<ValidationResult>();
         Validator.TryValidateObject(form, new ValidationContext(form), results, validateAllProperties: true);
+        var catalog = await store.GetAsync(ct);
 
         if (form.IsVampire)
         {
-            if (form.BloodlineId is { } bloodlineId && !await db.Bloodlines.AnyAsync(b => b.Id == bloodlineId, ct))
+            if (form.BloodlineId is { } bloodlineId && catalog.Bloodline(bloodlineId) is null)
                 results.Add(new ValidationResult("Unknown Bloodline.", [nameof(form.BloodlineId)]));
-            if (form.PredatorTypeId is { } predatorId && !await db.PredatorTypes.AnyAsync(p => p.Id == predatorId, ct))
+            if (form.PredatorTypeId is { } predatorId && catalog.PredatorTypes.All(p => p.Id != predatorId))
                 results.Add(new ValidationResult("Unknown Predator type.", [nameof(form.PredatorTypeId)]));
 
-            var groupIds = form.Disciplines.Select(d => d.PowerGroupId).Distinct().ToList();
-            var ratable = await db.PowerGroups
-                .Where(g => groupIds.Contains(g.Id)
-                    && (g.Kind == Shared.Rules.PowerGroupKind.CaitiffDiscipline || g.Kind == Shared.Rules.PowerGroupKind.BloodlineDiscipline))
-                .CountAsync(ct);
-            if (ratable != groupIds.Count)
+            var ratable = form.Disciplines.Select(d => d.PowerGroupId).Distinct()
+                .All(groupId => catalog.PowerGroup(groupId)?.Kind is PowerGroupKind.CaitiffDiscipline or PowerGroupKind.BloodlineDiscipline);
+            if (!ratable)
                 results.Add(new ValidationResult("Only Caitiff and Bloodline Disciplines take dots.", [nameof(form.Disciplines)]));
 
-            results.AddRange(await ValidateLearnedPowersAsync(form, db, ct));
+            results.AddRange(ValidateLearnedPowers(form, catalog));
         }
 
-        var meritIds = form.Merits.Where(m => m.MeritDefinitionId is not null).Select(m => m.MeritDefinitionId!.Value).Distinct().ToList();
-        if (meritIds.Count > 0 && await db.MeritDefinitions.CountAsync(m => meritIds.Contains(m.Id), ct) != meritIds.Count)
+        var meritIds = form.Merits.Where(m => m.MeritDefinitionId is not null).Select(m => m.MeritDefinitionId!.Value).Distinct();
+        if (meritIds.Any(meritId => catalog.Merits.All(m => m.Id != meritId)))
             results.Add(new ValidationResult("Unknown merit or flaw.", [nameof(form.Merits)]));
 
         if (checkLinks && (form.SireId ?? form.DomitorId) is not null)
         {
             // A sire or domitor must be in the same campaign: the form's for a new character, its own otherwise.
-            var campaignId = id is null
-                ? form.CampaignId
-                : await access.ManagedCharacters().Where(c => c.Id == id).Select(c => c.CampaignId).FirstOrDefaultAsync(ct);
+            var campaignId = id is { } existing ? (await access.ManagedCharacterAsync(existing, ct))?.CampaignId : form.CampaignId;
             foreach (var (linked, member, label) in new[] { (form.SireId, nameof(form.SireId), "sire"), (form.DomitorId, nameof(form.DomitorId), "domitor") })
             {
                 if (linked is not { } linkedId) continue;

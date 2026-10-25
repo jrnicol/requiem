@@ -11,7 +11,7 @@ public sealed record ProgressEntry(int Id, string Text, DateTimeOffset At);
 
 /// <summary>A line of the character's advancement history, from the audit log.</summary>
 /// <param name="CanUndo">The Storyteller can reverse it (and it hasn't been already).</param>
-public sealed record AdvancementHistoryEntry(long Id, DateTimeOffset At, string Who, string Summary, bool CanUndo, bool IsUndone);
+public sealed record AdvancementHistoryEntry(string Id, DateTimeOffset At, string Who, string Summary, bool CanUndo, bool IsUndone);
 
 /// <summary>Everything the Advancement tab shows.</summary>
 /// <param name="ProgressName">"Corruption" for vampires, "Links" for mortals and ghouls.</param>

@@ -1,8 +1,7 @@
 using Azure.Monitor.OpenTelemetry.AspNetCore;
-using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using Requiem.Data;
-using Requiem.Data.Seeding;
+using Requiem.Data.Stores;
 using Requiem.Shared.Accounts;
 using Requiem.Shared.Contracts;
 using Requiem.Web.Api;
@@ -34,14 +33,7 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
 {
     await using var scope = app.Services.CreateAsyncScope();
-    var db = scope.ServiceProvider.GetRequiredService<RequiemDbContext>();
-    await db.Database.MigrateAsync();
-    var seeded = await CatalogSeeder.SeedAsync(db);
-    if (seeded.Total > 0)
-        app.Logger.LogInformation("Seeded catalog: {Result}", seeded);
-    var upgraded = await AccountsUpgrade.RunAsync(db);
-    if (upgraded.Changed)
-        app.Logger.LogInformation("Upgraded accounts and loose characters: {Result}", upgraded);
+    await scope.ServiceProvider.GetRequiredService<IDatabaseSetup>().InitializeAsync(CancellationToken.None);
 }
 
 // On AWS, CloudFront reaches the app over plain HTTP and sends no X-Forwarded-Proto. Visitors always

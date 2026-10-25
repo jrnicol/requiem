@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
-using Microsoft.EntityFrameworkCore;
-using Requiem.Data;
 using Requiem.Data.Entities;
+using Requiem.Data.Stores;
 using Requiem.Shared.Campaigns;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Contracts;
@@ -49,48 +48,45 @@ public static class PlayerCharacterEndpoints
     /// (for Links, and to know who's at the table); never their sheets.
     /// </summary>
     private static async Task<Results<Ok<List<PlayerCharacterSummary>>, NotFound>> ListAsync(
-        Guid campaignId, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
+        Guid campaignId, ICharacterStore characters, IUserDirectory users, CampaignAccess access, CancellationToken ct)
     {
         if (await access.RoleInAsync(campaignId, ct) is not { } role) return TypedResults.NotFound();
         var me = access.UserId;
-        var rows = await db.Characters.AsNoTracking()
-            .Where(c => c.CampaignId == campaignId && c.IsPlayerCharacter
-                && (role == CampaignRole.Storyteller || c.OwnerUserId == me || c.Status == CharacterStatus.Active))
-            .Select(c => new
-            {
-                c.Id, c.Name, c.Kind, c.Concept, c.Status, c.OwnerUserId, c.UpdatedAt,
-                OwnerName = db.Users.Where(u => u.Id == c.OwnerUserId).Select(u => u.DisplayName).FirstOrDefault(),
-            })
-            .ToListAsync(ct);
+        var rows = (await characters.ListByCampaignAsync(campaignId, ct))
+            .Where(c => c.IsPlayerCharacter && (role == CampaignRole.Storyteller || c.OwnerUserId == me || c.Status == CharacterStatus.Active))
+            .ToList();
+        var owners = await users.GetAsync(rows.Select(r => r.OwnerUserId).OfType<string>(), ct);
         return TypedResults.Ok(rows
             .OrderBy(r => Array.IndexOf(InPlay, r.Status) is var i && i < 0 ? InPlay.Length : i)
             .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .Select(r => new PlayerCharacterSummary(r.Id, campaignId, r.Name, r.Kind, r.Concept, r.Status,
-                r.OwnerName ?? "Unknown player", r.OwnerUserId == me, r.UpdatedAt))
+                (r.OwnerUserId is { } owner ? owners.GetValueOrDefault(owner)?.DisplayName : null) ?? "Unknown player",
+                r.OwnerUserId == me, r.UpdatedAt))
             .ToList());
     }
 
     private static async Task<Results<Created<PlayerCharacterView>, NotFound, ValidationProblem, Conflict<ProblemDetailsBody>>> CreateAsync(
-        Guid campaignId, FullSheetForm form, RequiemDbContext db, CampaignAccess access, AuditLog audit, TimeProvider time, CancellationToken ct)
+        Guid campaignId, FullSheetForm form, ICharacterStore characters, ICampaignStore campaigns, ICatalogStore catalog, IUserDirectory users,
+        CampaignAccess access, AuditLog audit, TimeProvider time, CancellationToken ct)
     {
         var role = await access.RoleInAsync(campaignId, ct);
         if (role is null) return TypedResults.NotFound();
         if (role != CampaignRole.Player)
             return Problem(nameof(form.CampaignId), "Storytellers make NPCs in their own campaign; player characters belong to players.");
 
-        var campaign = await db.Campaigns.AsNoTracking().SingleAsync(c => c.Id == campaignId, ct);
+        var campaign = (await campaigns.GetAsync(campaignId, ct))!;
         if (campaign.ArchivedAt is not null) return Problem(nameof(form.CampaignId), "This campaign has been archived.");
         if (!Allows(campaign.AllowedTemplates, form.Kind))
             return Problem(nameof(form.Kind), $"This campaign doesn't allow {form.Kind.ToString().ToLowerInvariant()} characters.");
 
         var me = access.UserId;
-        if (await db.Characters.AnyAsync(c => c.CampaignId == campaignId && c.IsPlayerCharacter && c.OwnerUserId == me && InPlay.Contains(c.Status), ct))
+        if ((await characters.ListByCampaignAsync(campaignId, ct)).Any(c => c.IsPlayerCharacter && c.OwnerUserId == me && InPlay.Contains(c.Status)))
             return TypedResults.Conflict(new ProblemDetailsBody(
                 "You already have a character in this campaign. Players have one at a time; a new one can follow when it retires or dies."));
 
         form.CampaignId = campaignId;
         KeepPlayerOutOf(form, current: null, campaign);
-        if (await FullSheetEndpoints.ValidateAsync(form, null, db, access, ct, checkLinks: false) is { } errors)
+        if (await FullSheetEndpoints.ValidateAsync(form, null, catalog, access, ct, checkLinks: false) is { } errors)
             return TypedResults.ValidationProblem(errors);
 
         var character = new Character
@@ -101,31 +97,30 @@ public static class PlayerCharacterEndpoints
             IsPlayerCharacter = true, Status = CharacterStatus.Draft,
         };
         FullSheetMapper.Apply(form, character, time.GetUtcNow());
-        db.Characters.Add(character);
         audit.Record(campaignId, character.Id, "character.create", $"Started a {character.Kind.ToString().ToLowerInvariant()} character, {character.Name}.");
-        await db.SaveChangesAsync(ct);
+        await characters.AddAsync(character, ct);
 
-        return TypedResults.Created($"/api/player-characters/{character.Id}", await ViewAsync(db, access, character, campaign, ct));
+        return TypedResults.Created($"/api/player-characters/{character.Id}", await ViewAsync(users, access, character, campaign, ct));
     }
 
     // ---------- Reading and editing ----------
 
     private static async Task<Results<Ok<PlayerCharacterView>, NotFound>> GetAsync(
-        Guid id, RequiemDbContext db, CampaignAccess access, CancellationToken ct)
+        Guid id, ICampaignStore campaigns, IUserDirectory users, CampaignAccess access, CancellationToken ct)
     {
-        var character = await LoadAsync(db, access, id, tracked: false, ct);
+        var character = await LoadAsync(access, id, ct);
         if (character is null) return TypedResults.NotFound();
-        var campaign = await db.Campaigns.AsNoTracking().SingleAsync(c => c.Id == character.CampaignId, ct);
-        return TypedResults.Ok(await ViewAsync(db, access, character, campaign, ct));
+        return TypedResults.Ok(await ViewAsync(users, access, character, await CampaignAsync(campaigns, character, ct), ct));
     }
 
     /// <summary>The player saves their character: everything while it's a Draft, its story once it's Active.</summary>
     private static async Task<Results<Ok<PlayerCharacterView>, NotFound, ValidationProblem, Conflict<ProblemDetailsBody>>> UpdateAsync(
-        Guid id, FullSheetForm form, RequiemDbContext db, CampaignAccess access, TimeProvider time, CancellationToken ct)
+        Guid id, FullSheetForm form, ICharacterStore characters, ICampaignStore campaigns, ICatalogStore catalog, IUserDirectory users,
+        CampaignAccess access, TimeProvider time, CancellationToken ct)
     {
-        var character = await LoadAsync(db, access, id, tracked: true, ct);
+        var character = await LoadAsync(access, id, ct);
         if (character is null || character.OwnerUserId != access.UserId) return TypedResults.NotFound();
-        var campaign = await db.Campaigns.AsNoTracking().SingleAsync(c => c.Id == character.CampaignId, ct);
+        var campaign = await CampaignAsync(campaigns, character, ct);
         var current = FullSheetMapper.ToForm(character);
 
         switch (character.Status)
@@ -145,52 +140,44 @@ public static class PlayerCharacterEndpoints
                     : $"This character is {character.Status.ToString().ToLowerInvariant()}; only the Storyteller can change it now."));
         }
 
-        if (await FullSheetEndpoints.ValidateAsync(form, id, db, access, ct, checkLinks: false) is { } errors)
+        if (await FullSheetEndpoints.ValidateAsync(form, id, catalog, access, ct, checkLinks: false) is { } errors)
             return TypedResults.ValidationProblem(errors);
 
-        db.Entry(character).Property(c => c.Version).OriginalValue = form.Version;
         FullSheetMapper.Apply(form, character, time.GetUtcNow());
-        db.Entry(character).Property(c => c.UpdatedAt).IsModified = true;
-        try
-        {
-            await db.SaveChangesAsync(ct);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
+        if (!await characters.TrySaveAsync(character, form.Version, ct))
             return TypedResults.Conflict(new ProblemDetailsBody(
                 "This character was changed somewhere else after you opened it. Reload to see the latest version."));
-        }
-        return TypedResults.Ok(await ViewAsync(db, access, character, campaign, ct));
+        return TypedResults.Ok(await ViewAsync(users, access, character, campaign, ct));
     }
 
     /// <summary>A player can throw away a Draft; anything further along is the Storyteller's to retire.</summary>
     private static async Task<Results<NoContent, NotFound, Conflict<ProblemDetailsBody>>> DeleteAsync(
-        Guid id, RequiemDbContext db, CampaignAccess access, AuditLog audit, CancellationToken ct)
+        Guid id, ICharacterStore characters, CampaignAccess access, AuditLog audit, CancellationToken ct)
     {
-        var character = await access.OwnCharacters(db.Characters.AsNoTracking()).SingleOrDefaultAsync(c => c.Id == id, ct);
+        var character = await access.OwnCharacterAsync(id, ct);
         if (character is null) return TypedResults.NotFound();
         if (character.Status != CharacterStatus.Draft)
             return TypedResults.Conflict(new ProblemDetailsBody("Only a draft can be deleted."));
 
         audit.Record(character.CampaignId, null, "character.delete", $"Deleted the draft character {character.Name}.");
-        await db.SaveChangesAsync(ct);
-        await db.DeleteCharacterAsync(id, ct);
+        await characters.DeleteAsync(id, ct);
         return TypedResults.NoContent();
     }
 
     // ---------- Submitting and approving ----------
 
     private static async Task<Results<Ok<PlayerCharacterView>, NotFound, ValidationProblem, Conflict<ProblemDetailsBody>>> SubmitAsync(
-        Guid id, RequiemDbContext db, CampaignAccess access, AuditLog audit, CancellationToken ct)
+        Guid id, ICharacterStore characters, ICampaignStore campaigns, ICatalogStore catalog, IUserDirectory users,
+        CampaignAccess access, AuditLog audit, CancellationToken ct)
     {
-        var character = await LoadAsync(db, access, id, tracked: true, ct);
+        var character = await LoadAsync(access, id, ct);
         if (character is null || character.OwnerUserId != access.UserId) return TypedResults.NotFound();
         if (character.Status != CharacterStatus.Draft)
             return TypedResults.Conflict(new ProblemDetailsBody("Only a draft can be submitted."));
 
-        var campaign = await db.Campaigns.AsNoTracking().SingleAsync(c => c.Id == character.CampaignId, ct);
+        var campaign = await CampaignAsync(campaigns, character, ct);
         var report = CreationRules.Evaluate(WithCampaignScripts(FullSheetMapper.ToForm(character), campaign),
-            await CatalogEndpoints.CreationCatalogAsync(db, ct), campaign.AllowedTemplates);
+            await CatalogEndpoints.CreationCatalogAsync(catalog, ct), campaign.AllowedTemplates);
         if (!report.IsComplete)
             return TypedResults.ValidationProblem(new Dictionary<string, string[]>
             {
@@ -202,59 +189,62 @@ public static class PlayerCharacterEndpoints
         audit.Record(campaign.Id, id, "character.submit", report.IsWithinBudget
             ? $"Submitted {character.Name} for approval."
             : $"Submitted {character.Name} for approval, over budget: {string.Join("; ", report.Budget.Where(b => b.IsOver).Select(b => $"{b.Name} {b.Spent}/{b.Allowed}"))}.");
-        await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await ViewAsync(db, access, character, campaign, ct));
+        await characters.SaveAsync(character, ct);
+        return TypedResults.Ok(await ViewAsync(users, access, character, campaign, ct));
     }
 
     private static Task<Results<Ok<PlayerCharacterView>, NotFound, Conflict<ProblemDetailsBody>>> WithdrawAsync(
-        Guid id, RequiemDbContext db, CampaignAccess access, AuditLog audit, CancellationToken ct) =>
-        ChangeStatusAsync(id, db, access, audit, ct, byStoryteller: false, CharacterStatus.Submitted, CharacterStatus.Draft,
+        Guid id, ICharacterStore characters, ICampaignStore campaigns, IUserDirectory users, CampaignAccess access, AuditLog audit, CancellationToken ct) =>
+        ChangeStatusAsync(id, characters, campaigns, users, access, audit, ct, byStoryteller: false, CharacterStatus.Submitted, CharacterStatus.Draft,
             "character.withdraw", c => $"Withdrew {c.Name} to make changes.");
 
     private static Task<Results<Ok<PlayerCharacterView>, NotFound, Conflict<ProblemDetailsBody>>> ApproveAsync(
-        Guid id, RequiemDbContext db, CampaignAccess access, AuditLog audit, CancellationToken ct) =>
-        ChangeStatusAsync(id, db, access, audit, ct, byStoryteller: true, CharacterStatus.Submitted, CharacterStatus.Active,
+        Guid id, ICharacterStore characters, ICampaignStore campaigns, IUserDirectory users, CampaignAccess access, AuditLog audit, CancellationToken ct) =>
+        ChangeStatusAsync(id, characters, campaigns, users, access, audit, ct, byStoryteller: true, CharacterStatus.Submitted, CharacterStatus.Active,
             "character.approve", c => $"Approved {c.Name}; they're in play.");
 
     private static Task<Results<Ok<PlayerCharacterView>, NotFound, Conflict<ProblemDetailsBody>>> ReturnAsync(
-        Guid id, ReturnCharacterRequest request, RequiemDbContext db, CampaignAccess access, AuditLog audit, CancellationToken ct)
+        Guid id, ReturnCharacterRequest request, ICharacterStore characters, ICampaignStore campaigns, IUserDirectory users,
+        CampaignAccess access, AuditLog audit, CancellationToken ct)
     {
         var note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim()[..Math.Min(request.Note.Trim().Length, 2000)];
-        return ChangeStatusAsync(id, db, access, audit, ct, byStoryteller: true, CharacterStatus.Submitted, CharacterStatus.Draft,
+        return ChangeStatusAsync(id, characters, campaigns, users, access, audit, ct, byStoryteller: true, CharacterStatus.Submitted, CharacterStatus.Draft,
             "character.return", c => note is null ? $"Returned {c.Name} to its player." : $"Returned {c.Name} to its player: {note}",
             c => c.ReviewNote = note);
     }
 
     /// <summary>The Storyteller retires a character, records its death, or brings it back into play.</summary>
     private static async Task<Results<Ok<PlayerCharacterView>, NotFound, Conflict<ProblemDetailsBody>, ValidationProblem>> SetStatusAsync(
-        Guid id, CharacterStatusRequest request, RequiemDbContext db, CampaignAccess access, AuditLog audit, CancellationToken ct)
+        Guid id, CharacterStatusRequest request, ICharacterStore characters, ICampaignStore campaigns, IUserDirectory users,
+        CampaignAccess access, AuditLog audit, CancellationToken ct)
     {
         if (request.Status is not (CharacterStatus.Active or CharacterStatus.Retired or CharacterStatus.Dead))
             return Problem(nameof(request.Status), "A character can be put back in play, retired or marked dead.");
 
-        var character = await LoadAsync(db, access, id, tracked: true, ct);
+        var character = await LoadAsync(access, id, ct);
         if (character?.CampaignId is not { } campaignId || !await access.IsStorytellerAsync(campaignId, ct)) return TypedResults.NotFound();
         if (character.Status is CharacterStatus.Draft or CharacterStatus.Submitted)
             return TypedResults.Conflict(new ProblemDetailsBody("Approve or return the character first."));
-        if (character.Status == request.Status) return TypedResults.Ok(await ViewAsync(db, access, character, await CampaignAsync(db, campaignId, ct), ct));
+        var campaign = await CampaignAsync(campaigns, character, ct);
+        if (character.Status == request.Status) return TypedResults.Ok(await ViewAsync(users, access, character, campaign, ct));
 
         if (request.Status == CharacterStatus.Active
-            && await db.Characters.AnyAsync(c => c.Id != id && c.CampaignId == campaignId && c.IsPlayerCharacter
-                && c.OwnerUserId == character.OwnerUserId && InPlay.Contains(c.Status), ct))
+            && (await characters.ListByCampaignAsync(campaignId, ct)).Any(c => c.Id != id && c.IsPlayerCharacter
+                && c.OwnerUserId == character.OwnerUserId && InPlay.Contains(c.Status)))
             return TypedResults.Conflict(new ProblemDetailsBody("Their player already has another character in play."));
 
         audit.Record(campaignId, id, "character.status", $"{character.Name}: {character.Status} → {request.Status}.");
         character.Status = request.Status;
-        await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await ViewAsync(db, access, character, await CampaignAsync(db, campaignId, ct), ct));
+        await characters.SaveAsync(character, ct);
+        return TypedResults.Ok(await ViewAsync(users, access, character, campaign, ct));
     }
 
     private static async Task<Results<Ok<PlayerCharacterView>, NotFound, Conflict<ProblemDetailsBody>>> ChangeStatusAsync(
-        Guid id, RequiemDbContext db, CampaignAccess access, AuditLog audit, CancellationToken ct,
+        Guid id, ICharacterStore characters, ICampaignStore campaigns, IUserDirectory users, CampaignAccess access, AuditLog audit, CancellationToken ct,
         bool byStoryteller, CharacterStatus from, CharacterStatus to, string action, Func<Character, string> summary,
         Action<Character>? also = null)
     {
-        var character = await LoadAsync(db, access, id, tracked: true, ct);
+        var character = await LoadAsync(access, id, ct);
         if (character?.CampaignId is not { } campaignId) return TypedResults.NotFound();
         var allowed = byStoryteller ? await access.IsStorytellerAsync(campaignId, ct) : character.OwnerUserId == access.UserId;
         if (!allowed) return TypedResults.NotFound();
@@ -264,26 +254,26 @@ public static class PlayerCharacterEndpoints
         character.Status = to;
         also?.Invoke(character);
         audit.Record(campaignId, id, action, summary(character));
-        await db.SaveChangesAsync(ct);
-        return TypedResults.Ok(await ViewAsync(db, access, character, await CampaignAsync(db, campaignId, ct), ct));
+        await characters.SaveAsync(character, ct);
+        return TypedResults.Ok(await ViewAsync(users, access, character, await CampaignAsync(campaigns, character, ct), ct));
     }
 
     // ---------- Helpers ----------
 
-    private static Task<Character?> LoadAsync(RequiemDbContext db, CampaignAccess access, Guid id, bool tracked, CancellationToken ct) =>
-        FullSheetEndpoints.LoadAsync(access.VisiblePlayerCharacters(db.Characters), id, CharacterTier.FullSheet, tracked, ct);
+    private static async Task<Character?> LoadAsync(CampaignAccess access, Guid id, CancellationToken ct) =>
+        await access.VisiblePlayerCharacterAsync(id, ct) is { Tier: CharacterTier.FullSheet } character ? character : null;
 
-    private static Task<Campaign> CampaignAsync(RequiemDbContext db, Guid id, CancellationToken ct) =>
-        db.Campaigns.AsNoTracking().SingleAsync(c => c.Id == id, ct);
+    private static async Task<Campaign> CampaignAsync(ICampaignStore campaigns, Character character, CancellationToken ct) =>
+        (await campaigns.GetAsync(character.CampaignId!.Value, ct))!;
 
     private static async Task<PlayerCharacterView> ViewAsync(
-        RequiemDbContext db, CampaignAccess access, Character character, Campaign campaign, CancellationToken ct)
+        IUserDirectory users, CampaignAccess access, Character character, Campaign campaign, CancellationToken ct)
     {
         var isStoryteller = await access.IsStorytellerAsync(campaign.Id, ct);
         var isMine = character.OwnerUserId == access.UserId;
         var sheet = WithCampaignScripts(FullSheetMapper.ToForm(character), campaign);
         if (!isStoryteller) sheet.GmNotes = null;
-        var owner = await db.Users.Where(u => u.Id == character.OwnerUserId).Select(u => u.DisplayName).FirstOrDefaultAsync(ct);
+        var owner = character.OwnerUserId is { } ownerId ? (await users.GetAsync([ownerId], ct)).GetValueOrDefault(ownerId)?.DisplayName : null;
         return new PlayerCharacterView(
             sheet, character.Status, owner ?? "Unknown player", isMine, isStoryteller,
             CanEdit: isMine && character.Status is CharacterStatus.Draft or CharacterStatus.Active && campaign.ArchivedAt is null,
