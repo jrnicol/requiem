@@ -1,0 +1,56 @@
+# Requiem's deploy (SERVERLESS.md): the CodeBuild project in infra/aws/pipeline.yaml runs this on every push to
+# main. Tests first (against DynamoDB Local); if they pass, the API goes to Lambda through the app stack
+# (infra/aws/app.yaml) and the browser app to its S3 bucket behind CloudFront.
+version: 0.2
+
+env:
+  shell: bash
+  variables:
+    DOTNET_ROOT: /root/.dotnet
+    DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+    DOTNET_NOLOGO: '1'
+    DYNAMODB_LOCAL_HOME: /root/dynamodb-local
+
+phases:
+  install:
+    runtime-versions:
+      java: corretto21
+    commands:
+      # The SDK global.json asks for, and DynamoDB Local for the tests.
+      - curl -sSfL https://dot.net/v1/dotnet-install.sh -o /tmp/dotnet-install.sh
+      - bash /tmp/dotnet-install.sh --jsonfile global.json --install-dir "$DOTNET_ROOT"
+      - mkdir -p "$DYNAMODB_LOCAL_HOME"
+      - curl -sSfL https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_latest.tar.gz | tar -xz -C "$DYNAMODB_LOCAL_HOME"
+
+  build:
+    on-failure: ABORT
+    commands:
+      - export PATH="$DOTNET_ROOT:$PATH"
+      - dotnet test Requiem.slnx --configuration Release
+
+      # The API for Lambda (arm64). S3 serves the browser app, so the API's copy of it is left out.
+      - dotnet publish src/Requiem.Web --configuration Release --runtime linux-arm64 --self-contained false --output out/api
+      - rm -rf out/api/wwwroot
+      - (cd out/api && zip -qr ../api.zip .)
+      - KEY="api/${CODEBUILD_RESOLVED_SOURCE_VERSION}.zip"
+      - aws s3 cp out/api.zip "s3://${ARTIFACTS_BUCKET}/${KEY}"
+
+      - dotnet publish src/Requiem.Web.Client --configuration Release --output out/client
+
+      - >-
+        aws cloudformation deploy --stack-name "$APP_STACK" --template-file infra/aws/app.yaml
+        --role-arn "$DEPLOY_ROLE_ARN" --capabilities CAPABILITY_IAM --no-fail-on-empty-changeset
+        --parameter-overrides "CodeBucket=${ARTIFACTS_BUCKET}" "CodeKey=${KEY}"
+      - output() { aws cloudformation describe-stacks --stack-name "$APP_STACK" --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue" --output text; }
+      - BUCKET=$(output SiteBucket)
+      - DISTRIBUTION=$(output DistributionId)
+
+      # _framework files have fingerprinted names, so they're cached for a year. CloudFront compresses on the
+      # way out, so the .gz/.br copies aren't uploaded. .wasm needs its own type for streaming compilation.
+      - WWW=out/client/wwwroot
+      - aws s3 sync "$WWW/_framework" "s3://${BUCKET}/_framework" --delete --exclude "*.gz" --exclude "*.br" --exclude "*.wasm" --cache-control "public, max-age=31536000, immutable"
+      - aws s3 sync "$WWW/_framework" "s3://${BUCKET}/_framework" --delete --exclude "*" --include "*.wasm" --content-type application/wasm --cache-control "public, max-age=31536000, immutable"
+      # Everything else (index.html, app.css, MudBlazor's files) keeps its name between builds: always revalidate.
+      - aws s3 sync "$WWW" "s3://${BUCKET}" --delete --exclude "_framework/*" --exclude "*.gz" --exclude "*.br" --cache-control "no-cache"
+      - aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/*"
+      - echo "Deployed $(output SiteUrl)"

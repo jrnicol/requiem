@@ -115,7 +115,7 @@ Imported powers start unreviewed; check them on the Powers review screen. The OC
 
 ## Deploying
 
-Hosting is moving to S3 + CloudFront, API Gateway + Lambda and DynamoDB ([SERVERLESS.md](SERVERLESS.md)); the deploy pipeline and DEPLOY.md follow in that plan. Until then nothing deploys from `main`: GitHub Actions only builds, tests and publishes the image.
+Pushes to `main` deploy through AWS CodeBuild once the pipeline stack exists: S3 + CloudFront for the browser app, API Gateway + Lambda for the API, DynamoDB for data. [DEPLOY.md](DEPLOY.md) has the first-time setup, and [SERVERLESS.md](SERVERLESS.md) the design.
 
 ## Status
 

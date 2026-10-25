@@ -1,0 +1,240 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Requiem's deploy pipeline (SERVERLESS.md): a CodeBuild project that runs on every push to main, through a
+  CodeConnections link to GitHub (no AWS keys in GitHub). It tests, publishes, deploys the app stack (app.yaml)
+  and uploads the browser app. Created once by hand; the GitHub connection then needs one approval in the console.
+
+Metadata:
+  AWSToolsMetrics:
+    AWSAgentToolkit: aws-cloudformation@3
+
+Parameters:
+  Repository:
+    Type: String
+    Default: https://github.com/jrnicol/requiem.git
+  Branch:
+    Type: String
+    Default: main
+  AppStackName:
+    Type: String
+    Default: requiem-app
+    Description: The stack the pipeline creates and updates from app.yaml.
+
+Resources:
+  GitHub:
+    Type: AWS::CodeConnections::Connection
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: How CodeBuild reads the repository and hears about pushes.
+        must: >-
+          Created PENDING; someone must approve it once in the console (Developer Tools > Settings >
+          Connections > Update pending connection) before builds can start.
+    Properties:
+      ConnectionName: !Sub '${AWS::StackName}-github'
+      ProviderType: GitHub
+
+  Artifacts:
+    Type: AWS::S3::Bucket
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: The API's Lambda packages, one per build. Old ones expire; the app stack only needs the latest.
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: old-packages
+            Status: Enabled
+            ExpirationInDays: 30
+            NoncurrentVersionExpiration: { NoncurrentDays: 7 }
+
+  ArtifactsPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref Artifacts
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: HttpsOnly
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt Artifacts.Arn
+              - !Sub '${Artifacts.Arn}/*'
+            Condition:
+              Bool: { aws:SecureTransport: 'false' }
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: >-
+          What CloudFormation acts as when it creates and updates the app stack: every service app.yaml uses.
+          Only CloudFormation can assume it; the build itself can only hand it to CloudFormation.
+        must: >-
+          Grows with app.yaml. Scoped by service rather than by resource because CloudFormation names the
+          app's resources itself.
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: cloudformation.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: app-stack
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:*
+                  - lambda:*
+                  - apigateway:*
+                  - cloudfront:*
+                  - logs:*
+                  - secretsmanager:*
+                Resource: '*'
+              - Effect: Allow
+                Action: s3:*
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:PassRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:UpdateAssumeRolePolicy
+                Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${AppStackName}-*'
+
+  BuildLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/${AWS::StackName}/build'
+      RetentionInDays: 30
+
+  BuildRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: >-
+          The build: read the repository, write logs and packages, deploy the app stack (as DeployRole), then
+          upload the browser app and clear CloudFront's copy of index.html.
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: codebuild.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: build
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - codeconnections:UseConnection
+                  - codeconnections:GetConnectionToken
+                  - codeconnections:GetConnection
+                Resource: !Ref GitHub
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub '${BuildLogs.Arn}:*'
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${Artifacts.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStack
+                  - cloudformation:UpdateStack
+                  - cloudformation:CreateChangeSet
+                  - cloudformation:ExecuteChangeSet
+                  - cloudformation:DescribeChangeSet
+                  - cloudformation:DeleteChangeSet
+                  - cloudformation:DescribeStacks
+                  - cloudformation:DescribeStackEvents
+                  - cloudformation:GetTemplateSummary
+                Resource: !Sub 'arn:${AWS::Partition}:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/${AppStackName}/*'
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt DeployRole.Arn
+                Condition:
+                  StringEquals: { iam:PassedToService: cloudformation.amazonaws.com }
+              # The app stack's bucket and distribution get their names from CloudFormation.
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AppStackName}-sitebucket-*'
+                  - !Sub 'arn:${AWS::Partition}:s3:::${AppStackName}-sitebucket-*/*'
+              - Effect: Allow
+                Action: cloudfront:CreateInvalidation
+                Resource: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/*'
+
+  Build:
+    Type: AWS::CodeBuild::Project
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: Every push to main is tested and, if green, deployed. The steps are in buildspec.yml at the repository root.
+    Properties:
+      Description: Test, publish and deploy Requiem on every push to main
+      ServiceRole: !GetAtt BuildRole.Arn
+      Source:
+        Type: GITHUB
+        Location: !Ref Repository
+        BuildSpec: buildspec.yml
+        Auth:
+          Type: CODECONNECTIONS
+          Resource: !Ref GitHub
+      SourceVersion: !Sub 'refs/heads/${Branch}'
+      Triggers:
+        Webhook: true
+        FilterGroups:
+          - - { Type: EVENT, Pattern: PUSH }
+            - { Type: HEAD_REF, Pattern: !Sub '^refs/heads/${Branch}$' }
+      Artifacts:
+        Type: NO_ARTIFACTS
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux-x86_64-standard:5.0
+        EnvironmentVariables:
+          - { Name: ARTIFACTS_BUCKET, Value: !Ref Artifacts }
+          - { Name: APP_STACK, Value: !Ref AppStackName }
+          - { Name: DEPLOY_ROLE_ARN, Value: !GetAtt DeployRole.Arn }
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: !Ref BuildLogs
+      TimeoutInMinutes: 30
+      ConcurrentBuildLimit: 1
+
+Outputs:
+  ConnectionArn:
+    Description: Approve this connection once in the console before the first build.
+    Value: !Ref GitHub
+  BuildProject:
+    Value: !Ref Build
+  ArtifactsBucket:
+    Value: !Ref Artifacts
