@@ -44,6 +44,18 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Databas
         app.Logger.LogInformation("Upgraded accounts and loose characters: {Result}", upgraded);
 }
 
+// On AWS, CloudFront reaches the app over plain HTTP and sends no X-Forwarded-Proto. Visitors always
+// arrive over HTTPS (CloudFront redirects HTTP), so requests are treated as HTTPS: HSTS is sent and
+// generated URLs use https.
+if (app.Configuration.GetValue<bool>("Hosting:BehindHttpsProxy"))
+{
+    app.Use((context, next) =>
+    {
+        context.Request.Scheme = Uri.UriSchemeHttps;
+        return next(context);
+    });
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {

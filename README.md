@@ -2,7 +2,7 @@
 
 A character manager for a homebrew **Vampire: The Requiem** ruleset (house VtR v2026.09.08 on house World of Darkness Core v2026.09.12). Anyone can start a campaign and tell it, or join one as a player. Each campaign keeps its NPC roster, full character sheets and scenes, with a searchable Discipline powers catalog shared by all and a table mode for running NPCs during a session.
 
-Built tablet-first and usable on a phone. It's meant to be hosted on Azure eventually; for now it runs locally on SQLite.
+Built tablet-first and usable on a phone. It runs locally on SQLite and is hosted on AWS (one EC2 server behind CloudFront, also on SQLite).
 
 ## Features
 
@@ -38,7 +38,7 @@ Built tablet-first and usable on a phone. It's meant to be hosted on Azure event
 
 - **.NET 10:** ASP.NET Core Minimal APIs, and a Blazor Web App with Interactive WebAssembly.
 - **UI:** [MudBlazor](https://mudblazor.com/) 9.
-- **Data:** EF Core 10 with **SQLite** for local development and **SQL Server** (Azure SQL) for hosting. Each provider has its own migrations project.
+- **Data:** EF Core 10 with **SQLite** locally and on AWS. The **SQL Server** provider (used for the earlier Azure hosting) is kept. Each provider has its own migrations project.
 - **Tests:** xUnit. Web tests run the real app via `WebApplicationFactory` against a throwaway SQLite file.
 
 ## Getting started
@@ -115,8 +115,8 @@ Imported powers start unreviewed; check them on the Powers review screen. The OC
 
 ## Deploying
 
-The Azure infrastructure is in [`infra/`](infra/), and GitHub Actions deploys `main`. [DEPLOY.md](DEPLOY.md) has the first-time setup.
+The AWS infrastructure is in [`infra/aws/`](infra/aws/). GitHub Actions publishes the image from `main`, and the server picks it up within two minutes. [DEPLOY.md](DEPLOY.md) has the first-time setup.
 
 ## Status
 
-Phase 1 covers the GM tools listed above. Phase 2 adds campaigns and player access ([PHASE2.md](PHASE2.md)); its data model, permissions and Azure templates are in place. See [PLAN.md](PLAN.md) for the full plan and the house-rules decisions.
+Phase 1 covers the GM tools listed above. Phase 2 adds campaigns and player access ([PHASE2.md](PHASE2.md)); its data model, permissions and hosting templates are in place. See [PLAN.md](PLAN.md) for the full plan and the house-rules decisions.

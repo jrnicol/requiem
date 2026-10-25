@@ -10,7 +10,7 @@ Page refs below are PDF pages. OCR text of both books lives in `rules-text/`.
 | Layer | Choice |
 |---|---|
 | Backend | ASP.NET Core (.NET 10 LTS), Minimal APIs |
-| Data | EF Core. **SQLite for local dev** (decided 2026-10-23); **Azure SQL Database** in prod. `Database:Provider` in config picks the provider. |
+| Data | EF Core. **SQLite for local dev** (decided 2026-10-23) and, since the move to AWS (2026-10-25), in prod too; Azure SQL Database before that. `Database:Provider` in config picks the provider. |
 | Frontend | **Blazor Web App, Interactive WebAssembly**, **MudBlazor**, installable as a **PWA** |
 | Search | Powers-catalog search behind one interface: SQLite FTS5 in dev, SQL Server Full-Text Search on Azure SQL |
 | Real-time (Phase 2) | SignalR (Azure SignalR Service when hosted) |
@@ -208,7 +208,13 @@ The catalog is homebrew book content: the hosted app requires login and doesn't 
 
 ---
 
-## 6. Azure hosting
+## 6. Hosting
+
+**AWS (moved 2026-10-25, decided with the user):** one EC2 instance (t3.micro) runs the container with SQLite on its own EBS volume, behind CloudFront for HTTPS, in the AWS project's Region (us-east-2). The project is on AWS's free plan (no App Runner). Its guardrails block GitHub OIDC, so the server pulls new images itself. AWS Backup snapshots the data daily. About $13 a month, under the free plan's credit. The Azure deployment below is being retired, and its data isn't carried over. See [`infra/aws/requiem.yaml`](infra/aws/requiem.yaml) and [DEPLOY.md](DEPLOY.md).
+- SQLite means one instance and one writer. If that ever pinches, the SQL Server provider is still there, or a PostgreSQL provider can be added (RDS).
+- Real-time and file storage (portraits) aren't built yet. On AWS they'd be polling or SignalR on the same server, and S3.
+
+### Azure (until 2026-10-25)
 
 | Piece | Service |
 |---|---|

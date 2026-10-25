@@ -1,150 +1,118 @@
-# Deploying Requiem to Azure
+# Deploying Requiem to AWS
 
-The infrastructure is in [`infra/main.bicep`](infra/main.bicep). GitHub Actions ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)) builds and tests every push. On `main` it also publishes the app as a container image to `ghcr.io/jrnicol/requiem` and rolls that image out to Azure.
+The infrastructure is one CloudFormation template, [`infra/aws/requiem.yaml`](infra/aws/requiem.yaml). GitHub Actions ([`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)) builds and tests every push. On `main` it also publishes the app as a container image to `ghcr.io/jrnicol/requiem`, tagged with the commit and `latest`. The server checks for a new `latest` every two minutes and swaps it in.
 
-**What it creates** (free tier, decided 2026-10-24). The default region is West US 3, because West US 2 refused new SQL servers for this subscription. Override it with `REQUIEM_LOCATION` and `REQUIEM_SQL_LOCATION`.
+**Why pull-based:** the AWS project's guardrails block IAM OpenID Connect providers, so GitHub Actions can't sign in to AWS. GitHub holds no AWS credentials at all.
+
+**What it creates** (decided 2026-10-25). Region us-east-2, the project's Region. Costs are rough monthly figures, covered by the free plan's credit.
 
 | Resource | Notes | Cost |
 | --- | --- | --- |
-| **Azure Container Apps** environment + app | Runs the app's container, one copy at most. Scales to zero when idle, so the first request after a quiet spell takes roughly 10–20 seconds. Needs no App Service quota, which Free Trial subscriptions don't have. | Free within the monthly allowance (hundreds of active hours) |
-| Azure SQL database (serverless, **free offer**) | Pauses when the monthly free allowance runs out rather than billing. Auto-pauses after an hour idle; waking takes up to a minute. One free database offer per subscription. | Free |
-| Two managed identities | The app's (signs in to SQL and Key Vault, no passwords) and the deploy identity (GitHub Actions signs in with OpenID Connect, no stored secrets). | Free |
-| Key Vault | Holds the first-run setup code. | Pennies |
-| Log Analytics + Application Insights | Logs, errors and performance. Ingestion is capped to stay in the free allowance. | Free |
+| **EC2 instance** (t3.micro, Amazon Linux 2023) | Runs the app's container under Docker. Always on, so there's no cold start. One instance only: SQLite allows one writer. | ~$7.60 |
+| **Data volume** (EBS gp3, 4 GiB, encrypted) | The SQLite database and the settings file. Separate from the instance, so the instance can be replaced without losing data. Deleting the stack snapshots it first. | ~$0.35 |
+| Root volume (gp3, 10 GiB, encrypted) | The operating system and Docker images. | ~$0.80 |
+| **Elastic IP** | A fixed address, so CloudFront's origin name never changes. | ~$3.65 |
+| **CloudFront** | HTTPS at a `*.cloudfront.net` address. Pages and API calls pass through uncached; only `/_framework/*` is cached. | Free within 1 TB/month |
+| Security group | Port 80 from CloudFront's addresses only. No SSH: use Session Manager. | Free |
+| **AWS Backup** | Snapshots the data volume daily at 09:00 UTC and keeps 14 days. The vault is kept if the stack is deleted. | Cents |
+| Systems Manager | Session Manager shell access, plus OS security patches every Sunday 10:00 UTC (reboots if needed). | Free |
+| CloudWatch Logs | The app's output, kept 30 days. | Free within 5 GB |
 
-To keep the app warm instead of scaling to zero (a few dollars a month), deploy with `minReplicas=1` in the template's parameters.
+That's about **$13 a month**. The project is on AWS's free plan, with $100 of credit until 2027-04-25. After that, or when the credit runs out, the project has to be upgraded to the paid plan in AWS Settings, or it closes.
 
 ---
 
 ## First-time setup
 
-You need an Azure subscription where you're **Owner** (the template grants roles to the two identities). Free Trial is fine.
+You need the AWS CLI signed in to the project (`aws login --region us-east-2`). These commands are for PowerShell, from the repository root.
 
-### 0. Clean up a failed attempt
+### 1. Create the stack
 
-Skip this if you haven't deployed before.
+Look up CloudFront's address list for the Region. Only those addresses may reach the server:
 
-A failed run leaves resources behind, and their regions can't be changed. In Cloud Shell, delete the old resource group:
+```powershell
+$prefixList = aws ec2 describe-managed-prefix-lists --region us-east-2 --filters Name=prefix-list-name,Values=com.amazonaws.global.cloudfront.origin-facing --query "PrefixLists[0].PrefixListId" --output text
+```
+
+```powershell
+aws cloudformation deploy --region us-east-2 --stack-name requiem --template-file infra/aws/requiem.yaml --capabilities CAPABILITY_IAM --parameter-overrides CloudFrontPrefixListId=$prefixList
+```
+
+This takes about five minutes, most of it CloudFront. On first boot, the server installs Docker, formats the data volume, generates a random **setup code**, and starts the app. The app migrates the database and seeds the catalog when it starts.
+
+### 2. Get the address and setup code
+
+```powershell
+aws cloudformation describe-stacks --region us-east-2 --stack-name requiem --query "Stacks[0].Outputs" --output table
+```
+
+Keep `SiteUrl` and `InstanceId`. To read the setup code without opening a shell:
+
+```powershell
+$command = aws ssm send-command --region us-east-2 --instance-ids <InstanceId> --document-name AWS-RunShellScript --parameters 'commands=["grep SetupCode /var/lib/requiem/config/requiem.env"]' --query Command.CommandId --output text
+```
+
+```powershell
+aws ssm get-command-invocation --region us-east-2 --instance-id <InstanceId> --command-id $command --query StandardOutputContent --output text
+```
+
+### 3. Create the first account
+
+Open `SiteUrl`. If you get a 502 or 504, the server is still booting; wait a minute. You'll be sent to `/setup`. Enter the setup code and create your account. It becomes the site admin, which edits the shared powers catalog; everyone else signs up at `/register`.
+
+Setup locks itself as soon as an account exists, so the code is useless from then on.
+
+---
+
+## Day to day
+
+- **Deploying:** push to `main`. Once the workflow has published the image, the server picks it up within two minutes.
+  - If the new version doesn't answer `/healthz` within three minutes, the server puts the previous one back and doesn't retry that image.
+  - The app migrates the database when it starts. A rollback after a migration has run may not work with the newer schema.
+- **Deploying or rolling back to a specific commit:** run `deploy.sh` with the full commit SHA:
+
+  ```powershell
+  aws ssm send-command --region us-east-2 --instance-ids <InstanceId> --document-name AWS-RunShellScript --parameters 'commands=["/opt/requiem/deploy.sh <full commit SHA>"]'
+  ```
+
+  The two-minute check moves it back to `latest` only when a newer `latest` is published.
+- **Logs:** CloudWatch log group `/requiem/app`, or live:
+
+  ```powershell
+  aws logs tail /requiem/app --region us-east-2 --follow
+  ```
+
+- **A shell on the server:** `aws ssm start-session --region us-east-2 --target <InstanceId>`. This needs the [Session Manager plugin](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html). The console's **EC2 > Instances > Connect > Session Manager** works too.
+  - The app is the `requiem` Docker container.
+  - Its data is in `/var/lib/requiem`.
+  - The update check is `requiem-update.timer`.
+- **Changing infrastructure:** edit `infra/aws/requiem.yaml` and rerun step 1's `deploy` command.
+  - The first-boot script runs only once per instance, so changes to it take effect only on a new instance.
+  - To get a new instance, change something that replaces it, such as `InstanceType` or the AMI.
+  - The data volume and its contents carry over to the new instance.
+- **Backups:** **AWS Backup > Backup vaults > requiem-backups**.
+  - To restore, restore a recovery point to a new volume in the same Availability Zone.
+  - Then, in a Session Manager shell, stop the app (`docker stop requiem`) and copy `requiem.db` over from the restored volume.
+
+## If something fails
+
+| Symptom | Meaning | Fix |
+| --- | --- | --- |
+| 502/504 from CloudFront | The app isn't answering on the server. During the first five minutes, it's still booting. | Check the logs. On the server, `docker ps -a` and `docker logs requiem`. |
+| Nothing deploys after a push | The workflow didn't publish, or the image failed its health check. | Check the Actions run. On the server, `journalctl -u requiem-update` shows each check, and `/opt/requiem/failed-image` names an image that was rolled back. |
+| First boot failed | The setup script stopped with an error. | `sudo cat /var/log/cloud-init-output.log` in a Session Manager shell. |
+| `AccessDenied` on actions that used to work | The project may be near a spend limit, which blocks creating resources. | Check **AWS Settings > Billing**. |
+
+---
+
+## Retiring the Azure deployment
+
+Until 2026-10-25 Requiem ran on Azure Container Apps and Azure SQL, from [`infra/main.bicep`](infra/main.bicep). The workflow no longer deploys there, so the Azure site keeps running the last version it got. Its data isn't carried over: the AWS site starts fresh.
+
+To shut it down, delete its resource group in [Azure Cloud Shell](https://shell.azure.com):
 
 ```bash
 az group delete --name rg-requiem --yes
 ```
 
-The deleted Key Vault keeps its name reserved for 7 days. List deleted vaults; if this prints a name, purge it with the next command:
-
-```bash
-az keyvault list-deleted --query "[].name" -o tsv
-```
-
-```bash
-az keyvault purge --name <name it printed>
-```
-
-### 1. Create the resources (Azure Cloud Shell)
-
-Open **https://shell.azure.com** and choose **Bash**. Cloud Shell already has the Azure CLI and Bicep. Get the code, or update it if you cloned it before:
-
-```bash
-git clone https://github.com/jrnicol/requiem.git || git -C requiem pull
-```
-
-```bash
-cd ~/requiem
-```
-
-```bash
-az group create --name rg-requiem --location westus3
-```
-
-You become the database's administrator, and a random setup code is generated. **Copy the setup code it prints:** you need it in step 6.
-
-```bash
-export REQUIEM_SQL_ADMIN_OBJECT_ID=$(az ad signed-in-user show --query id -o tsv)
-export REQUIEM_SQL_ADMIN_LOGIN=$(az ad signed-in-user show --query userPrincipalName -o tsv)
-export REQUIEM_SETUP_CODE=$(openssl rand -base64 18)
-echo "Setup code: $REQUIEM_SETUP_CODE"
-```
-
-```bash
-az deployment group create --resource-group rg-requiem --template-file infra/main.bicep --parameters infra/main.bicepparam --query properties.outputs
-```
-
-Keep the outputs. `appUrl`, `containerAppName`, `resourceGroupName`, `deployClientId`, `tenantId` and `subscriptionId` are used below. If it fails, see **If something fails** below.
-
-### 2. Let the app into its database (once)
-
-The template makes you the database's administrator. The app's own identity needs a database user, which only an administrator can create:
-
-1. In the Azure portal, open **SQL databases > requiem > Query editor**.
-2. Sign in with **Microsoft Entra authentication**. If it offers to add a firewall rule for your IP address, allow it.
-3. Run:
-
-```sql
-CREATE USER [id-requiem-app] FROM EXTERNAL PROVIDER;
-ALTER ROLE db_owner ADD MEMBER [id-requiem-app];
-```
-
-`db_owner` is needed because the app applies database migrations itself when it starts.
-
-### 3. Connect GitHub to Azure
-
-In the GitHub repository, open **Settings > Secrets and variables > Actions > Variables**. Add these **repository variables** (they aren't secrets, so use Variables, not Secrets):
-
-| Variable | Value from step 1's outputs |
-| --- | --- |
-| `AZURE_CLIENT_ID` | `deployClientId` |
-| `AZURE_TENANT_ID` | `tenantId` |
-| `AZURE_SUBSCRIPTION_ID` | `subscriptionId` |
-| `AZURE_RESOURCE_GROUP` | `resourceGroupName` |
-| `AZURE_CONTAINERAPP_NAME` | `containerAppName` |
-
-### 4. First run of the workflow
-
-Open **Actions > Build and deploy > Run workflow**. The **build** job tests the app and publishes the container image to `ghcr.io/jrnicol/requiem`.
-
-The **deploy** job may fail the first time if GitHub made the new package private, because then Azure can't pull the image. On this repository the package took the public repo's visibility automatically (2026-10-24), and deploy worked first time. If it fails with a pull or authorization error, do step 5.
-
-### 5. If needed: make the image public, then deploy
-
-1. On GitHub, open your profile's **Packages** tab, then **requiem > Package settings**.
-2. Under **Danger Zone**, choose **Change visibility > Public**. The image only holds what's already in this public repository.
-3. Back in **Actions**, open that workflow run and choose **Re-run failed jobs**.
-
-The deploy job points the container app at the new image. On start, the app migrates the database and seeds the catalog.
-
-### 6. Create the first account
-
-Open the `appUrl` from step 1. The first load can take a minute while the app and database wake up. You'll be sent to `/setup`. Enter the **setup code** from step 1 and create your account. It becomes the site admin, which edits the shared powers catalog; everyone else signs up at `/register`.
-
-Setup locks itself as soon as an account exists, so the code is useless from then on. Deleting it is tidying, not security.
-
-Subscription Owner can manage the vault but not its secrets, so give yourself the secrets role once in Cloud Shell:
-
-```bash
-az role assignment create --role "Key Vault Secrets Officer" --assignee $(az ad signed-in-user show --query id -o tsv) --scope $(az keyvault show --name <keyVaultName from step 1> --query id -o tsv)
-```
-
-After a minute or two, delete the code:
-
-```bash
-az keyvault secret delete --vault-name <keyVaultName from step 1> --name Auth--SetupCode
-```
-
----
-
-## If something fails
-
-| Error | Meaning | Fix |
-| --- | --- | --- |
-| `RegionDoesNotAllowProvisioning` on the SQL server | That region isn't accepting new SQL servers for your subscription. | Pick another region for the database, e.g. `export REQUIEM_SQL_LOCATION=centralus`, then redo step 0 and step 1. |
-| A message about the SQL **free offer** | The subscription has already used its one free database. | Ask, and the template can switch to a small paid database. |
-| Deploy job: image pull **unauthorized** / revision failed | The `ghcr.io` package is still private. | Step 5. |
-| Deploy job: `AADSTS700213: No matching federated identity record found` | Azure doesn't trust the subject in GitHub's sign-in token. GitHub now writes numeric IDs into it (`repo:jrnicol@9485852/requiem@1431808700:environment:production`). | The template uses that form. If the log's "subject claim" line shows something different, set `githubRepository` in `infra/main.bicepparam` to match and redeploy, or run `az identity federated-credential update --name github-production --identity-name id-requiem-deploy --resource-group rg-requiem --issuer https://token.actions.githubusercontent.com --subject "<subject claim>" --audiences api://AzureADTokenExchange`. |
-| The site shows a .NET sample page | The workflow hasn't deployed yet, or the template was rerun (which resets the image). | Run the workflow. |
-| First sign-in fails after a quiet spell | The database was paused and is waking up. | Wait a minute and try again. |
-
-## Day to day
-
-- **Deploying:** push to `main`, or run the workflow by hand.
-- **Changing infrastructure:** edit `infra/main.bicep`, then rerun the `az deployment group create` command from step 1 in Cloud Shell. Set the three `export` lines again first. Rerunning resets the container image to a placeholder, so run the workflow afterwards.
-- **Watching it:** open the container app's **Log stream** for live logs, and **Application Insights > Failures** for errors.
+Then remove the repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP` and `AZURE_CONTAINERAPP_NAME` (**Settings > Secrets and variables > Actions > Variables**). After that, `infra/main.bicep`, `infra/main.bicepparam` and the Azure Monitor package can be deleted.
