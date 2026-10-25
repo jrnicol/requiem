@@ -1,8 +1,9 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >-
-  Requiem's deploy pipeline (SERVERLESS.md): a CodeBuild project that runs on every push to main, through a
-  CodeConnections link to GitHub (no AWS keys in GitHub). It tests, publishes, deploys the app stack (app.yaml)
-  and uploads the browser app. Created once by hand; the GitHub connection then needs one approval in the console.
+  Requiem's deploy pipeline (SERVERLESS.md): a CodePipeline that starts on every push to main, through a
+  CodeConnections link to GitHub (no AWS keys in GitHub), and runs a CodeBuild project. The build tests, publishes,
+  deploys the app stack (app.yaml) and uploads the browser app. Created once by hand; the GitHub connection
+  then needs one approval in the console.
 
 Metadata:
   AWSToolsMetrics:
@@ -11,7 +12,8 @@ Metadata:
 Parameters:
   Repository:
     Type: String
-    Default: https://github.com/jrnicol/requiem.git
+    Default: jrnicol/requiem
+    Description: The GitHub repository, owner/name.
   Branch:
     Type: String
     Default: main
@@ -19,26 +21,17 @@ Parameters:
     Type: String
     Default: requiem-app
     Description: The stack the pipeline creates and updates from app.yaml.
-  Webhook:
-    Type: String
-    Default: 'false'
-    AllowedValues: ['true', 'false']
-    Description: >-
-      Build on every push. CodeBuild can only register the webhook once the GitHub connection is approved,
-      so the first deploy leaves it off and a second turns it on (DEPLOY.md).
-
-Conditions:
-  HasWebhook: !Equals [!Ref Webhook, 'true']
 
 Resources:
   GitHub:
     Type: AWS::CodeConnections::Connection
     Metadata:
       com.aws.cloudformation.Context:
-        why: How CodeBuild reads the repository and hears about pushes.
+        why: How the pipeline reads the repository and hears about pushes.
         must: >-
           Created PENDING; someone must approve it once in the console (Developer Tools > Settings >
-          Connections > Update pending connection) before builds can start.
+          Connections > Update pending connection) before the pipeline can run. Changing its properties
+          replaces it, and the new one needs approving again.
     Properties:
       ConnectionName: !Sub '${AWS::StackName}-github'
       ProviderType: GitHub
@@ -47,7 +40,9 @@ Resources:
     Type: AWS::S3::Bucket
     Metadata:
       com.aws.cloudformation.Context:
-        why: The API's Lambda packages, one per build. Old ones expire; the app stack only needs the latest.
+        why: >-
+          The pipeline's copy of each commit, and the API's Lambda packages, one per build. Old ones expire;
+          the app stack only needs the latest.
     Properties:
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
@@ -61,7 +56,7 @@ Resources:
         Status: Enabled
       LifecycleConfiguration:
         Rules:
-          - Id: old-packages
+          - Id: old-artifacts
             Status: Enabled
             ExpirationInDays: 30
             NoncurrentVersionExpiration: { NoncurrentDays: 7 }
@@ -142,8 +137,8 @@ Resources:
     Metadata:
       com.aws.cloudformation.Context:
         why: >-
-          The build: read the repository, write logs and packages, deploy the app stack (as DeployRole), then
-          upload the browser app and clear CloudFront's copy of index.html.
+          The build: read the commit the pipeline fetched, write logs and packages, deploy the app stack (as
+          DeployRole), then upload the browser app and clear CloudFront's cached copy.
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -158,12 +153,6 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
-                  - codeconnections:UseConnection
-                  - codeconnections:GetConnectionToken
-                  - codeconnections:GetConnection
-                Resource: !Ref GitHub
-              - Effect: Allow
-                Action:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub '${BuildLogs.Arn}:*'
@@ -171,6 +160,7 @@ Resources:
                 Action:
                   - s3:PutObject
                   - s3:GetObject
+                  - s3:GetObjectVersion
                 Resource: !Sub '${Artifacts.Arn}/*'
               - Effect: Allow
                 Action:
@@ -206,27 +196,15 @@ Resources:
     Type: AWS::CodeBuild::Project
     Metadata:
       com.aws.cloudformation.Context:
-        why: Every push to main is tested and, if green, deployed. The steps are in buildspec.yml at the repository root.
+        why: The pipeline's one action. The steps are in buildspec.yml at the repository root.
     Properties:
-      Description: Test, publish and deploy Requiem on every push to main
+      Description: Test, publish and deploy Requiem
       ServiceRole: !GetAtt BuildRole.Arn
       Source:
-        Type: GITHUB
-        Location: !Ref Repository
+        Type: CODEPIPELINE
         BuildSpec: buildspec.yml
-        Auth:
-          Type: CODECONNECTIONS
-          Resource: !Ref GitHub
-      SourceVersion: !Sub 'refs/heads/${Branch}'
-      Triggers: !If
-        - HasWebhook
-        - Webhook: true
-          FilterGroups:
-            - - { Type: EVENT, Pattern: PUSH }
-              - { Type: HEAD_REF, Pattern: !Sub '^refs/heads/${Branch}$' }
-        - !Ref AWS::NoValue
       Artifacts:
-        Type: NO_ARTIFACTS
+        Type: CODEPIPELINE
       Environment:
         Type: LINUX_CONTAINER
         ComputeType: BUILD_GENERAL1_SMALL
@@ -242,10 +220,91 @@ Resources:
       TimeoutInMinutes: 30
       ConcurrentBuildLimit: 1
 
+  PipelineRole:
+    Type: AWS::IAM::Role
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: The pipeline fetches the pushed commit through the connection into the artifacts bucket and starts the build.
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: codepipeline.amazonaws.com }
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: pipeline
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: codeconnections:UseConnection
+                Resource: !Ref GitHub
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                  - s3:GetObjectVersion
+                  - s3:GetBucketVersioning
+                Resource:
+                  - !GetAtt Artifacts.Arn
+                  - !Sub '${Artifacts.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - codebuild:StartBuild
+                  - codebuild:BatchGetBuilds
+                Resource: !GetAtt Build.Arn
+
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: >-
+          Starts on every push to the branch: the GitHub app behind the connection tells CodePipeline directly,
+          which CodeBuild alone can't do with this kind of connection (it can't create repository webhooks).
+        must: QUEUED, so pushes deploy one at a time and in order.
+    Properties:
+      PipelineType: V2
+      ExecutionMode: QUEUED
+      RoleArn: !GetAtt PipelineRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref Artifacts
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: GitHub
+              Namespace: SourceVariables
+              ActionTypeId: { Category: Source, Owner: AWS, Provider: CodeStarSourceConnection, Version: '1' }
+              Configuration:
+                ConnectionArn: !Ref GitHub
+                FullRepositoryId: !Ref Repository
+                BranchName: !Ref Branch
+                OutputArtifactFormat: CODE_ZIP
+              OutputArtifacts: [{ Name: Source }]
+        - Name: Deploy
+          Actions:
+            - Name: TestPublishDeploy
+              ActionTypeId: { Category: Build, Owner: AWS, Provider: CodeBuild, Version: '1' }
+              Configuration:
+                ProjectName: !Ref Build
+                # The commit, for naming the Lambda package (CodeBuild sees only the pipeline's copy of it).
+                EnvironmentVariables: '[{"name":"COMMIT_ID","value":"#{SourceVariables.CommitId}","type":"PLAINTEXT"}]'
+              InputArtifacts: [{ Name: Source }]
+      Triggers:
+        - ProviderType: CodeStarSourceConnection
+          GitConfiguration:
+            SourceActionName: GitHub
+            Push:
+              - Branches:
+                  Includes: [!Ref Branch]
+
 Outputs:
   ConnectionArn:
-    Description: Approve this connection once in the console before the first build.
+    Description: Approve this connection once in the console before the first run.
     Value: !Ref GitHub
+  Pipeline:
+    Value: !Ref Pipeline
   BuildProject:
     Value: !Ref Build
   ArtifactsBucket:

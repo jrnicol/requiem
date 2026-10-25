@@ -1,4 +1,4 @@
-# Requiem's deploy (SERVERLESS.md): the CodeBuild project in infra/aws/pipeline.yaml runs this on every push to
+# Requiem's deploy (SERVERLESS.md): the pipeline in infra/aws/pipeline.yaml runs this CodeBuild project on every push to
 # main. Tests first (against DynamoDB Local); if they pass, the API goes to Lambda through the app stack
 # (infra/aws/app.yaml) and the browser app to its S3 bucket behind CloudFront.
 version: 0.2
@@ -32,7 +32,7 @@ phases:
       - dotnet publish src/Requiem.Web --configuration Release --runtime linux-arm64 --self-contained false --output out/api
       - rm -rf out/api/wwwroot
       - (cd out/api && zip -qr ../api.zip .)
-      - KEY="api/${CODEBUILD_RESOLVED_SOURCE_VERSION}.zip"
+      - KEY="api/${COMMIT_ID:-$CODEBUILD_BUILD_NUMBER}.zip"
       - aws s3 cp out/api.zip "s3://${ARTIFACTS_BUCKET}/${KEY}"
 
       - dotnet publish src/Requiem.Web.Client --configuration Release --output out/client

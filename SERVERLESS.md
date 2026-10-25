@@ -57,7 +57,7 @@ Everything a request needs is a GetItem, a Query or a transaction. Nothing scans
 The project's guardrails block GitHub OIDC (an undocumented explicit deny). They do allow IAM users, CodeBuild and CodeConnections (checked 2026-10-25).
 
 - **Infrastructure:** one CloudFormation template creates the table, bucket, distribution, HTTP API, function and roles. Like the earlier EC2 template, it gets `cfn-lint`, per-resource design notes, and a retain policy on the table.
-- **Pipeline (decided with the user):** AWS CodeBuild, connected to GitHub through CodeConnections, builds, tests and deploys on every push to `main`.
+- **Pipeline (decided with the user):** AWS CodeBuild builds, tests and deploys on every push to `main`. It runs inside a CodePipeline, because CodeBuild alone can't create the GitHub webhook through a CodeConnections GitHub-app connection (found 2026-10-25); the pipeline gets pushes from the connection itself.
   - No AWS keys are stored in GitHub.
   - The connection needs one approval in the AWS console.
 

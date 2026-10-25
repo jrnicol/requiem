@@ -4,11 +4,11 @@ Requiem runs serverless in the AWS project's Region, us-east-2 ([SERVERLESS.md](
 
 | Stack | Template | What it holds | Who changes it |
 | --- | --- | --- | --- |
-| `requiem-pipeline` | [`infra/aws/pipeline.yaml`](infra/aws/pipeline.yaml) | The GitHub connection, a CodeBuild project, a bucket for the API's packages, and the role CloudFormation deploys with | You, once by hand (and again only if the pipeline itself changes) |
+| `requiem-pipeline` | [`infra/aws/pipeline.yaml`](infra/aws/pipeline.yaml) | The GitHub connection, a CodePipeline with one CodeBuild project, a bucket for its artifacts, and the role CloudFormation deploys with | You, once by hand (and again only if the pipeline itself changes) |
 | `requiem-app` | [`infra/aws/app.yaml`](infra/aws/app.yaml) | The DynamoDB table, the browser app's S3 bucket, CloudFront, the API Gateway HTTP API and the Lambda function | The pipeline, on every push to `main` |
 
 **Each push to `main`:**
-1. CodeBuild runs [`buildspec.yml`](buildspec.yml), which runs the tests against DynamoDB Local.
+1. CodePipeline hears about the push through the GitHub connection and runs a CodeBuild project with [`buildspec.yml`](buildspec.yml), which runs the tests against DynamoDB Local.
 2. It publishes the API for Lambda (arm64) and updates `requiem-app` with the new package.
 3. It uploads the browser app to S3 and clears CloudFront's cached copy.
 
@@ -17,7 +17,7 @@ A failed test stops the deploy. GitHub holds no AWS credentials: the project's g
 **Cost:** about $0–1 a month at this scale.
 - DynamoDB, Lambda and CloudFront stay within AWS's always-free allowances.
 - API Gateway is free for 12 months, then about $1 per million requests.
-- CodeBuild's small machines cost about half a cent per build minute, and a build takes a few minutes.
+- CodeBuild's small machines cost about half a cent per build minute, and a build takes a few minutes. CodePipeline V2 charges per action minute, also cents a month.
 
 The project is on AWS's free plan with $100 of credit until 2027-04-25. After that the project has to be upgraded to the paid plan in AWS Settings, or it closes.
 
@@ -37,24 +37,19 @@ aws cloudformation deploy --region us-east-2 --stack-name requiem-pipeline --tem
 
 CloudFormation creates the connection as **Pending**. Only a person can approve it:
 
-1. In the AWS console, open **Developer Tools > Settings > Connections**, choose **requiem-pipeline-github**, then **Update pending connection**.
+1. Open the connections list in the AWS console (https://us-east-2.console.aws.amazon.com/codesuite/settings/connections?region=us-east-2, or search for CodePipeline, then **Settings > Connections**). Choose **requiem-pipeline-github**, then **Update pending connection**. A direct link to the connection itself can show "page not found" after signing in; the list works.
 2. Sign in to GitHub if asked. Install the **AWS Connector for GitHub** app on the `jrnicol` account, limited to the `requiem` repository.
 3. Back in the console, choose **Connect**. The status turns **Available**.
-4. Turn on builds for every push. CodeBuild can only register its GitHub webhook once the connection is approved, so step 1 leaves it off:
-
-```powershell
-aws cloudformation deploy --region us-east-2 --stack-name requiem-pipeline --template-file infra/aws/pipeline.yaml --capabilities CAPABILITY_IAM --parameter-overrides Webhook=true
-```
 
 ### 3. First deploy
 
-Push to `main`, or start a build by hand:
+Creating the pipeline starts a first run on its own. Later, push to `main`, or start a run by hand:
 
 ```powershell
-aws codebuild start-build --region us-east-2 --project-name <BuildProject output of requiem-pipeline>
+aws codepipeline start-pipeline-execution --region us-east-2 --name <Pipeline output of requiem-pipeline>
 ```
 
-The first build creates `requiem-app` and takes 10–15 minutes, most of it CloudFront. Later builds take about five. To watch it, open **CodeBuild > Build projects** in the console, or tail the log:
+The first run creates `requiem-app` and takes 10–15 minutes, most of it CloudFront. Later runs take about five. To watch it, open **CodePipeline > Pipelines** in the console, or tail the build log:
 
 ```powershell
 aws logs tail /requiem-pipeline/build --region us-east-2 --follow
@@ -94,7 +89,7 @@ Open `SiteUrl`, which sends you to `/setup`, and enter the code. The account bec
 
 | Symptom | Meaning | Fix |
 | --- | --- | --- |
-| Builds never start after a push | The GitHub connection isn't approved yet, or the webhook is off. | Step 2, including turning on the webhook (`Webhook=true`). |
+| Nothing runs after a push | The GitHub connection isn't approved, or the pipeline's trigger is on another branch. | Step 2; check **CodePipeline > Pipelines** for the run. |
 | Build fails in `dotnet test` | A test failed; nothing was deployed. | Read the build log. |
 | `AccessDenied` in the build's deploy step | `app.yaml` uses something the deploy role (`pipeline.yaml`) doesn't allow. | Add it to `DeployRole` and rerun step 1. |
 | 502 from `/api/...` | The Lambda function failed to start. | Check the API log; a missing setting or a startup exception shows there. |
