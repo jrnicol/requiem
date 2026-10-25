@@ -26,16 +26,18 @@ Partition key `PK` and sort key `SK`, both strings, plus two global secondary in
 
 | Item | PK | SK | Indexes | Notes |
 | --- | --- | --- | --- | --- |
-| Catalog entry | `CATALOG` | `POWER#<id>`, `BLOODLINE#<id>`, … | | The whole catalog (about 390 items) loads with one Query. Lambda caches it, checked against the version stamp below. Integer IDs stay, because characters refer to them. |
-| Catalog version | `CATALOG` | `VERSION` | | Bumped on every admin edit, so caches refresh. Also the counter for new catalog IDs. |
-| User | `USER#<id>` | `USER` | | ASP.NET Identity fields, plus roles as a list. |
-| Email lookup | `EMAIL#<normalized>` | `EMAIL` | | Written in the same transaction as the user, with a condition that it doesn't exist yet, so emails stay unique. |
+| Catalog entry | `CATALOG` | `POWER#00042`, `BLOODLINE#00003`, … | | The whole catalog (about 390 items) loads with one Query. Each process caches it and rechecks the version stamp every 30 seconds. Integer IDs stay, because characters refer to them. |
+| Catalog version | `CATALOG` | `VERSION` | | `Version` is bumped on every admin edit, so caches reload. `SeedHash` fingerprints the seed files, so startup seeding is skipped while they're unchanged. |
+| User | `USER#<id>` | `USER` | | ASP.NET Identity's fields as a document, `ConcurrencyStamp` checked on update, and role names in `Roles`. |
+| User name / email lookup | `USERNAME#<normalized>`, `EMAIL#<normalized>` | `LOOKUP` | | Point at the user. They're written in the user's transaction with a not-exists condition, so both stay unique. |
+| User count | `USERCOUNT` | `USERCOUNT` | | Answers "has the site been set up?". |
+| Role | `ROLE#<normalized>` | `ROLE` | | Just Admin. |
 | Campaign | `CAMPAIGN#<id>` | `CAMPAIGN` | | |
-| Member | `CAMPAIGN#<id>` | `MEMBER#<userId>` | GSI1: `USER#<userId>` / `CAMPAIGN#<id>` | GSI1 lists a user's campaigns. |
-| Invite | `CAMPAIGN#<id>` | `INVITE#<id>` | GSI1: `INVITE#<code>` / `INVITE` | GSI1 finds an invite by its code. |
-| Character | `CHARACTER#<id>` | `CHARACTER` | GSI2: `CAMPAIGN#<id>` / `CHARACTER#<id>` | **One document per character**: the sheet and all its lists (attributes, skills, disciplines, wounds, XP ledger, links and so on). It's loaded and saved whole, as every endpoint already does. Summary fields sit beside it for the campaign listing, which uses GSI2 and doesn't read the documents. Writes check `Version` for optimistic concurrency. |
-| Scene | `CAMPAIGN#<id>` | `SCENE#<id>` | | Includes the member character IDs in order. |
-| Audit entry | `CHARACTER#<id>` or `CAMPAIGN#<id>` | `AUDIT#<ULID>` | | The ULID keeps entries in time order. Undo marks the entry. Saving a change and its audit entry together is a `TransactWriteItems`, which replaces `SaveWithAuditAsync`. |
+| Member | `CAMPAIGN#<id>` | `MEMBER#<userId>` | GSI1: `USER#<userId>` / `CAMPAIGN#<id>` | GSI1 lists a user's campaigns. Access checks for one campaign read the member item directly, because the index can lag a just-made membership. |
+| Invite | `CAMPAIGN#<id>` | `INVITE#<id>` | GSI1: `INVITE#<token hash>` / `INVITE` | Plain attributes, so joining can test them. The join spends a use (if limited) and adds the member in one transaction, on condition the link is live. |
+| Character | `CHARACTER#<id>` | `CHARACTER` | GSI2: `CAMPAIGN#<id>` / `CHARACTER#<id>` | **One document per character**: the sheet and all its lists (attributes, skills, disciplines, wounds, XP ledger, links and so on). It's loaded and saved whole, as every endpoint already does. Writes check `Version` for optimistic concurrency. New list items get the next free id in their list. |
+| Scene | `SCENE#<id>` | `SCENE` | GSI2: `CAMPAIGN#<id>` / `SCENE#<id>` | Includes the member character IDs in order. |
+| Audit entry | `AUDIT#<id>` | `AUDIT` | GSI1: `CHARACTER#<id>` / `AUDIT#<id>` | The id is time-ordered, so a character's history is GSI1 newest first. Undo marks the entry. A change and its audit entries commit in one transaction. |
 | Data-protection key | `DATAPROTECTION` | `KEY#<name>` | | Sign-in cookie keys, so a cold start doesn't sign anyone out. |
 
 Everything a request needs is a GetItem, a Query or a transaction. Nothing scans the table. Cross-character questions, such as who names this character as sire before deleting it, read the campaign's characters through GSI2. Campaigns are small, so that's fine.
@@ -63,8 +65,8 @@ The project's guardrails block GitHub OIDC (an undocumented explicit deny). They
 
 ## Phases
 
-1. **Interfaces with the current implementation.** Endpoints move onto the storage interfaces, still backed by EF Core and SQLite. All tests stay green. This is the riskiest refactor, done while the database underneath is still the familiar one.
-2. **DynamoDB implementation.** Tables, stores, Identity, data-protection keys and catalog seeding, with the tests switched to DynamoDB Local. When everything passes, EF Core is deleted.
+1. **Interfaces with the current implementation (done 2026-10-25).** Endpoints move onto the storage interfaces, still backed by EF Core and SQLite. All tests stay green. This is the riskiest refactor, done while the database underneath is still the familiar one.
+2. **DynamoDB implementation (done 2026-10-25).** Stores, Identity, data-protection keys and catalog seeding on DynamoDB; the tests run against DynamoDB Local. EF Core, both migrations projects and the SQLite/SQL Server providers are gone. So are blood bonds and boons, which had no screens yet, and the legacy-data upgrade, since the data starts fresh.
 3. **Hosting split.** The client becomes standalone WebAssembly, and the API gets Lambda hosting. Locally, the app still runs as one site for development.
 4. **Infrastructure and pipeline.** The CloudFormation template, then the deploy pipeline.
 5. **Cut-over.** First deploy and checks in the browser. The EC2 template (`infra/aws/requiem.yaml`), the Azure files and Azure itself get retired.

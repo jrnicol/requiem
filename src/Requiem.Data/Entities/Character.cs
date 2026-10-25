@@ -68,8 +68,8 @@ public class Character
     /// </summary>
     public string? OwnerUserId { get; set; }
     /// <summary>
-    /// Every character belongs to a campaign, and only its Storytellers run it. Null only on data from
-    /// before campaigns, which <see cref="Seeding.AccountsUpgrade"/> moves into one at startup.
+    /// Every character belongs to a campaign, and only its Storytellers run it. Nullable for characters
+    /// from before campaigns; none exist since the move to DynamoDB, which started fresh.
     /// </summary>
     public Guid? CampaignId { get; set; }
     public Campaign? Campaign { get; set; }

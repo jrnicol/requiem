@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
-using Requiem.Data;
+using Requiem.Data.Dynamo;
 using Requiem.Data.Entities;
 using Requiem.Shared.Accounts;
 
@@ -35,15 +35,14 @@ public static class AuthSetup
                 options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
             })
             .AddRoles<IdentityRole>()
-            .AddEntityFrameworkStores<RequiemDbContext>()
             .AddSignInManager()
             .AddDefaultTokenProviders();
 
-        // The key ring that signs the cookie lives in the database: the hosted container scales to zero
-        // and loses its disk, and keys kept there would sign everyone out on every cold start.
+        // The key ring that signs the cookie lives in the table: Lambda instances come and go and share no
+        // disk, and keys kept on one would sign everyone out on every cold start.
         services.AddDataProtection()
             .SetApplicationName("Requiem")
-            .PersistKeysToDbContext<RequiemDbContext>();
+            .PersistKeysToDynamo();
 
         services.AddAuthentication(IdentityConstants.ApplicationScheme).AddIdentityCookies();
         services.ConfigureApplicationCookie(options =>

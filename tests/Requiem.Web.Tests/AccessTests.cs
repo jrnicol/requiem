@@ -1,9 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Requiem.Data;
+using Requiem.Data.Stores;
 using Requiem.Data.Entities;
 using Requiem.Shared.Accounts;
 using Requiem.Shared.Campaigns;
@@ -170,10 +169,9 @@ public class AccessTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFa
     private async Task AddMemberAsync(Guid campaignId, string email, CampaignRole role)
     {
         using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<RequiemDbContext>();
+        var campaigns = scope.ServiceProvider.GetRequiredService<ICampaignStore>();
         var user = (await scope.ServiceProvider.GetRequiredService<UserManager<RequiemUser>>().FindByEmailAsync(email))!;
-        db.CampaignMembers.Add(new CampaignMember { CampaignId = campaignId, UserId = user.Id, Role = role, JoinedAt = DateTimeOffset.UtcNow });
-        await db.SaveChangesAsync();
-        Assert.True(await db.CampaignMembers.AnyAsync(m => m.CampaignId == campaignId && m.UserId == user.Id));
+        await campaigns.AddMemberAsync(new CampaignMember { CampaignId = campaignId, UserId = user.Id, Role = role, JoinedAt = DateTimeOffset.UtcNow }, CancellationToken.None);
+        Assert.Equal(role, await campaigns.RoleAsync(campaignId, user.Id, CancellationToken.None));
     }
 }

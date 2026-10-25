@@ -1,9 +1,13 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Amazon.DynamoDBv2;
+using Amazon.DynamoDBv2.Model;
 using Microsoft.Extensions.DependencyInjection;
-using Requiem.Data;
+using Microsoft.Extensions.Options;
+using Requiem.Data.Dynamo;
+using Requiem.Data.Entities;
+using Requiem.Data.Stores;
 using Requiem.Shared.Accounts;
 using Requiem.Shared.Campaigns;
 using Requiem.Shared.Contracts;
@@ -124,8 +128,8 @@ public class CampaignApiTests(RequiemWebFactory factory) : IClassFixture<Requiem
         var invite = await CreateInviteAsync(gm, campaign.Id);
 
         using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<RequiemDbContext>();
-        var stored = await db.CampaignInvites.SingleAsync(i => i.Id == invite.Invite.Id);
+        var invites = await scope.ServiceProvider.GetRequiredService<ICampaignStore>().InvitesAsync(campaign.Id, CancellationToken.None);
+        var stored = invites.Single(i => i.Id == invite.Invite.Id);
         Assert.NotEqual(invite.Token, stored.TokenHash);
         Assert.Equal(64, stored.TokenHash.Length);
     }
@@ -166,9 +170,13 @@ public class CampaignApiTests(RequiemWebFactory factory) : IClassFixture<Requiem
         Assert.Equal("We never leave one behind",
             (await gm.GetFromJsonAsync<CampaignView>($"/api/campaigns/{campaign.Id}", RequiemJson.Options))!.CoterieScript);
 
+        // Campaign-level entries aren't indexed by campaign (nothing reads them that way yet), so scan for it.
         using var scope = factory.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<RequiemDbContext>();
-        Assert.True(await db.AuditEntries.AnyAsync(a => a.CampaignId == campaign.Id && a.Action == "campaign.coterie-script"));
+        var client = scope.ServiceProvider.GetRequiredService<IAmazonDynamoDB>();
+        var table = scope.ServiceProvider.GetRequiredService<IOptions<DynamoOptions>>().Value.TableName;
+        var items = (await client.ScanAsync(new ScanRequest { TableName = table })).Items ?? [];
+        Assert.Contains(items.Where(i => i[Keys.SK].S == "AUDIT").Select(Documents.Read<AuditEntry>),
+            a => a.CampaignId == campaign.Id && a.Action == "campaign.coterie-script");
     }
 
     [Fact]

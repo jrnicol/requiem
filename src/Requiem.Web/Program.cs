@@ -1,6 +1,6 @@
 using Azure.Monitor.OpenTelemetry.AspNetCore;
 using MudBlazor.Services;
-using Requiem.Data;
+using Requiem.Data.Dynamo;
 using Requiem.Data.Stores;
 using Requiem.Shared.Accounts;
 using Requiem.Shared.Contracts;
@@ -10,10 +10,19 @@ using Requiem.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Locally, DynamoDB Local (Java) stands in for DynamoDB (SERVERLESS.md). The app starts it, keeps its data
+// in App_Data, and stops it on exit.
+if (builder.Configuration.GetValue<bool>("DynamoDB:StartLocal"))
+{
+    var local = DynamoDbLocal.Start(Path.Combine(builder.Environment.ContentRootPath, "App_Data", "dynamodb"));
+    builder.Configuration["DynamoDB:ServiceUrl"] = local.ServiceUrl;
+    builder.Services.AddSingleton(local);
+}
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveWebAssemblyComponents();
-builder.Services.AddRequiemData(builder.Configuration, builder.Environment.ContentRootPath);
+builder.Services.AddRequiemData(builder.Configuration);
 builder.Services.AddRequiemAuth(builder.Configuration, builder.Environment);
 builder.Services.AddProblemDetails();
 // The UI runs in the browser (no prerender), but registering MudBlazor keeps server rendering safe if that changes.
@@ -27,10 +36,10 @@ if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_
 
 var app = builder.Build();
 
-// Bring the database up to date and fill in any missing catalog entries (seeding is insert-only).
-// Always in Development; hosted, when Database:MigrateOnStartup is set (one App Service instance,
-// decided 2026-10-24). A failed migration shows up as a failed start.
-if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Database:MigrateOnStartup"))
+// Create the table where allowed (DynamoDB Local) and fill in any missing catalog entries (seeding is insert-only).
+// Always in Development; hosted, when Database:SetupOnStartup is set. Seeding is skipped while the seed files
+// are unchanged, so a cold start pays one read. A failure shows up as a failed start.
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Database:SetupOnStartup"))
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<IDatabaseSetup>().InitializeAsync(CancellationToken.None);

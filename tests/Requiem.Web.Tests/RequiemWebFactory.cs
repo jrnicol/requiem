@@ -3,13 +3,11 @@ using System.Net.Http.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Requiem.Data;
+using Requiem.Data.Dynamo;
 using Requiem.Data.Entities;
-using Requiem.Data.Seeding;
+using Requiem.Data.Stores;
 using Requiem.Shared.Accounts;
 using Requiem.Shared.Contracts;
 
@@ -19,23 +17,25 @@ namespace Requiem.Web.Tests;
 public sealed record Storyteller(HttpClient Client, Guid CampaignId);
 
 /// <summary>
-/// Runs the real app against a throwaway SQLite file, migrated and seeded like the dev database.
-/// Each test class gets its own instance, so its own empty set of users.
+/// Runs the real app against DynamoDB Local: one in-memory instance for the whole test run, and a fresh,
+/// seeded table per factory. Each test class gets its own factory, so its own empty set of users.
 /// </summary>
 public sealed class RequiemWebFactory : WebApplicationFactory<Program>
 {
     public const string SetupCode = "test-setup-code";
     public const string DefaultPassword = "correct horse battery staple";
 
-    private readonly string _databasePath =
-        Path.Combine(Path.GetTempPath(), "requiem-tests", $"{Guid.NewGuid():N}.db");
+    /// <summary>Started on first use; the process ends with the test run.</summary>
+    private static readonly Lazy<DynamoDbLocal> Local = new(() => DynamoDbLocal.Start());
+
+    private readonly string _table = $"requiem-test-{Guid.NewGuid():N}";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(_databasePath)!);
         builder.UseEnvironment("Testing");
-        builder.UseSetting("Database:Provider", "Sqlite");
-        builder.UseSetting("ConnectionStrings:Requiem", $"Data Source={_databasePath}");
+        builder.UseSetting("DynamoDB:ServiceUrl", Local.Value.ServiceUrl);
+        builder.UseSetting("DynamoDB:TableName", _table);
+        builder.UseSetting("DynamoDB:CreateTable", "true");
         builder.UseSetting("Auth:SetupCode", SetupCode);
     }
 
@@ -43,9 +43,7 @@ public sealed class RequiemWebFactory : WebApplicationFactory<Program>
     {
         var host = base.CreateHost(builder);
         using var scope = host.Services.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<RequiemDbContext>();
-        db.Database.Migrate();
-        CatalogSeeder.SeedAsync(db).GetAwaiter().GetResult();
+        scope.ServiceProvider.GetRequiredService<IDatabaseSetup>().InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
         return host;
     }
 
@@ -94,13 +92,5 @@ public sealed class RequiemWebFactory : WebApplicationFactory<Program>
         if (response.StatusCode != HttpStatusCode.OK)
             throw new InvalidOperationException($"Sign-in as {email} failed: {(int)response.StatusCode}");
         return client;
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        base.Dispose(disposing);
-        SqliteConnection.ClearAllPools();
-        foreach (var file in new[] { _databasePath, _databasePath + "-wal", _databasePath + "-shm" })
-            if (File.Exists(file)) File.Delete(file);
     }
 }

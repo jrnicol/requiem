@@ -87,6 +87,9 @@ public interface ICampaignStore
     /// <summary>Every campaign the user belongs to, and their role in it.</summary>
     Task<IReadOnlyDictionary<Guid, CampaignRole>> RolesOfAsync(string userId, CancellationToken ct);
 
+    /// <summary>The user's role in one campaign, read consistently (it may have been granted a moment ago).</summary>
+    Task<CampaignRole?> RoleAsync(Guid campaignId, string userId, CancellationToken ct);
+
     Task<Campaign?> GetAsync(Guid id, CancellationToken ct);
 
     /// <summary>Adds a campaign together with its members (the Storyteller who started it).</summary>

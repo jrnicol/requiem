@@ -10,7 +10,7 @@ Page refs below are PDF pages. OCR text of both books lives in `rules-text/`.
 | Layer | Choice |
 |---|---|
 | Backend | ASP.NET Core (.NET 10 LTS), Minimal APIs |
-| Data | EF Core. **SQLite for local dev** (decided 2026-10-23) and, since the move to AWS (2026-10-25), in prod too; Azure SQL Database before that. `Database:Provider` in config picks the provider. |
+| Data | **DynamoDB**, one table (decided with the user 2026-10-25; [SERVERLESS.md](SERVERLESS.md)), with DynamoDB Local for development and tests. Before that: EF Core on SQLite locally and Azure SQL hosted. |
 | Frontend | **Blazor Web App, Interactive WebAssembly**, **MudBlazor**, installable as a **PWA** |
 | Search | Powers-catalog search behind one interface: SQLite FTS5 in dev, SQL Server Full-Text Search on Azure SQL |
 | Real-time (Phase 2) | SignalR (Azure SignalR Service when hosted) |
@@ -210,9 +210,9 @@ The catalog is homebrew book content: the hosted app requires login and doesn't 
 
 ## 6. Hosting
 
-**AWS (moved 2026-10-25, decided with the user):** one EC2 instance (t3.micro) runs the container with SQLite on its own EBS volume, behind CloudFront for HTTPS, in the AWS project's Region (us-east-2). The project is on AWS's free plan (no App Runner). Its guardrails block GitHub OIDC, so the server pulls new images itself. AWS Backup snapshots the data daily. About $13 a month, under the free plan's credit. The Azure deployment below is being retired, and its data isn't carried over. See [`infra/aws/requiem.yaml`](infra/aws/requiem.yaml) and [DEPLOY.md](DEPLOY.md).
-- SQLite means one instance and one writer. If that ever pinches, the SQL Server provider is still there, or a PostgreSQL provider can be added (RDS).
-- Real-time and file storage (portraits) aren't built yet. On AWS they'd be polling or SignalR on the same server, and S3.
+**AWS, serverless (decided with the user 2026-10-25):** S3 + CloudFront for the browser app, API Gateway + one Lambda for the API, and DynamoDB for data, in the AWS project's Region (us-east-2). The project is on AWS's free plan (no App Runner) and its guardrails block GitHub OIDC, so deploys will run in AWS CodeBuild. The plan and progress are in [SERVERLESS.md](SERVERLESS.md). An EC2 + SQLite setup was built the same day and deleted when the user chose this instead; its template ([`infra/aws/requiem.yaml`](infra/aws/requiem.yaml)) and [DEPLOY.md](DEPLOY.md) go in the cut-over. The Azure deployment below is being retired, and its data isn't carried over.
+- The catalog is cached per Lambda instance; characters are whole documents, so a sheet is one read and one conditional write.
+- Real-time and file storage (portraits) aren't built yet. On AWS they'd be polling (or API Gateway WebSockets) and S3.
 
 ### Azure (until 2026-10-25)
 

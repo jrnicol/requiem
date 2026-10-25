@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.EntityFrameworkCore;
 using Requiem.Data.Entities;
 using Requiem.Shared.Rules;
 
@@ -60,7 +59,7 @@ public sealed record CatalogSeedResult(int Bloodlines, int PredatorTypes, int Me
 }
 
 /// <summary>
-/// Seeds the rulebook catalog from the JSON files embedded under Seed/.
+/// The rulebook catalog in the JSON files embedded under Seed/. DynamoCatalog.SeedAsync loads it into the table.
 /// Insert-only: entries are matched by their natural key and existing rows are never changed,
 /// so the GM's edits survive re-seeding and the seeder is safe to run on every startup.
 /// </summary>
@@ -115,41 +114,7 @@ public static class CatalogSeeder
         return data;
     }
 
-    public static async Task<CatalogSeedResult> SeedAsync(RequiemDbContext db, CancellationToken cancellationToken = default)
-    {
-        var data = Load();
-        var bloodlines = await AddMissingAsync(db.Bloodlines, data.Bloodlines, b => b.Name, cancellationToken);
-        var predators = await AddMissingAsync(db.PredatorTypes, data.PredatorTypes, p => p.Name, cancellationToken);
-        var merits = await AddMissingAsync(db.MeritDefinitions, data.Merits, m => (m.Name, m.Kind, m.Source), cancellationToken);
-        var compels = await AddMissingAsync(db.CompelDefinitions, data.Compels, c => c.Name, cancellationToken);
-        var edges = await AddMissingAsync(db.EdgeDefinitions, data.Edges, e => e.Name, cancellationToken);
-        var concepts = await AddMissingAsync(db.ConceptDefinitions, data.Concepts, c => c.Name, cancellationToken);
-        // Power groups link to Bloodlines by id, so those must exist first.
-        if (bloodlines + predators + merits + compels + edges + concepts > 0) await db.SaveChangesAsync(cancellationToken);
-
-        var bloodlineIds = await db.Bloodlines.AsNoTracking().ToDictionaryAsync(b => b.Name, b => b.Id, cancellationToken);
-        var powerGroups = await AddMissingAsync(db.PowerGroups, data.PowerGroups.Select(g => new PowerGroup
-        {
-            Name = g.Name,
-            Kind = g.Kind,
-            // A Bloodline the GM renamed or removed just leaves the group unlinked.
-            BloodlineId = g.Bloodline is not null && bloodlineIds.TryGetValue(g.Bloodline, out var id) ? id : null,
-            Description = g.Description,
-            SourcePage = g.SourcePage,
-        }).ToList(), g => g.Name, cancellationToken);
-        if (powerGroups > 0) await db.SaveChangesAsync(cancellationToken);
-
-        var groupIds = await db.PowerGroups.AsNoTracking().ToDictionaryAsync(g => g.Name, g => g.Id, cancellationToken);
-        var powers = await AddMissingAsync(db.Powers, data.Powers
-            // A group the GM renamed or removed skips its powers rather than failing startup.
-            .Where(p => groupIds.ContainsKey(p.Group))
-            .Select(p => ToEntity(p, groupIds)).ToList(), p => (p.PowerGroupId, p.Name), cancellationToken);
-        if (powers > 0) await db.SaveChangesAsync(cancellationToken);
-
-        return new CatalogSeedResult(bloodlines, predators, merits, compels, edges, powerGroups, powers, concepts);
-    }
-
-    private static Power ToEntity(PowerSeed p, IReadOnlyDictionary<string, int> groupIds) => new()
+    internal static Power ToEntity(PowerSeed p, IReadOnlyDictionary<string, int> groupIds) => new()
     {
         PowerGroupId = groupIds[p.Group],
         Level = p.Level,
@@ -177,17 +142,6 @@ public static class CatalogSeeder
         IsReviewed = false,
         BonusOptions = p.BonusOptions?.Select((b, i) => new PowerBonusOption { SuccessCost = b.SuccessCost, Effect = b.Effect, SortOrder = i }).ToList() ?? [],
     };
-
-    private static async Task<int> AddMissingAsync<T, TKey>(
-        DbSet<T> set, IReadOnlyList<T> seed, Func<T, TKey> key, CancellationToken cancellationToken)
-        where T : class
-    {
-        // Catalog tables are small; comparing in memory keeps composite keys simple.
-        var existing = (await set.AsNoTracking().ToListAsync(cancellationToken)).Select(key).ToHashSet();
-        var missing = seed.Where(item => !existing.Contains(key(item))).ToList();
-        set.AddRange(missing);
-        return missing.Count;
-    }
 
     private static List<T> Read<T>(string fileName)
     {

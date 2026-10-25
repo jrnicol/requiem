@@ -16,8 +16,6 @@
   <ItemGroup>
     <ProjectReference Include="..\Requiem.Data\Requiem.Data.csproj" />
     <ProjectReference Include="..\Requiem.Shared\Requiem.Shared.csproj" />
-    <ProjectReference Include="..\Requiem.Data.Sqlite\Requiem.Data.Sqlite.csproj" />
-    <ProjectReference Include="..\Requiem.Data.SqlServer\Requiem.Data.SqlServer.csproj" />
   </ItemGroup>
 
 </Project>

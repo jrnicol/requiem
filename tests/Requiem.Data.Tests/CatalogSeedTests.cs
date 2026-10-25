@@ -1,6 +1,8 @@
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Requiem.Data.Dynamo;
 using Requiem.Data.Entities;
 using Requiem.Data.Seeding;
+using Requiem.Data.Stores;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Rules;
 
@@ -163,127 +165,96 @@ public class PowerSeedDataTests
 public class CatalogSeederTests : IDisposable
 {
     private static readonly CatalogSeedData Data = CatalogSeeder.Load();
-    private readonly SqliteTestDatabase _db = new();
+    private readonly DynamoTestTable _table = new();
 
-    public void Dispose() => _db.Dispose();
+    public void Dispose() => _table.Dispose();
+
+    private async Task<CatalogSeedResult> SeedAsync(bool force = false)
+    {
+        await using var scope = _table.Scope();
+        return await DynamoCatalog.SeedAsync(scope.ServiceProvider.GetRequiredService<DynamoWriter>(), CancellationToken.None, force);
+    }
+
+    private async Task<CatalogSnapshot> CatalogAsync()
+    {
+        await using var scope = _table.Scope();
+        scope.ServiceProvider.GetRequiredService<CatalogCache>().Invalidate();
+        return await scope.ServiceProvider.GetRequiredService<ICatalogStore>().GetAsync(CancellationToken.None);
+    }
 
     [Fact]
-    public async Task First_run_adds_everything_and_second_adds_nothing()
+    public async Task First_run_adds_everything_and_later_runs_add_nothing()
     {
-        await using (var ctx = _db.CreateContext())
-        {
-            var first = await CatalogSeeder.SeedAsync(ctx);
-            Assert.Equal(new CatalogSeedResult(13, 10, 115, 18, 5, 25, Data.Powers.Count, Concepts: 31), first);
-        }
-
-        await using (var ctx = _db.CreateContext())
-        {
-            Assert.Equal(0, (await CatalogSeeder.SeedAsync(ctx)).Total);
-            Assert.Equal(115, await ctx.MeritDefinitions.CountAsync());
-        }
+        Assert.Equal(new CatalogSeedResult(13, 10, 115, 18, 5, 25, Data.Powers.Count, Concepts: 31), await SeedAsync());
+        // Unchanged seed files: skipped outright. Forced: compared entry by entry, and still nothing to add.
+        Assert.Equal(0, (await SeedAsync()).Total);
+        Assert.Equal(0, (await SeedAsync(force: true)).Total);
+        Assert.Equal(115, (await CatalogAsync()).Merits.Count);
     }
 
     [Fact]
     public async Task Seeded_bloodline_disciplines_link_to_their_bloodline()
     {
-        await using var ctx = _db.CreateContext();
-        await CatalogSeeder.SeedAsync(ctx);
-        var tartarus = await ctx.PowerGroups.Include(g => g.Bloodline).SingleAsync(g => g.Name == "Tartarus");
+        await SeedAsync();
+        var tartarus = (await CatalogAsync()).PowerGroups.Single(g => g.Name == "Tartarus");
         Assert.Equal("Brujah", tartarus.Bloodline!.Name);
         Assert.Equal(PowerGroupKind.BloodlineDiscipline, tartarus.Kind);
     }
 
     [Fact]
-    public async Task Gm_edits_survive_reseeding()
+    public async Task Admin_edits_survive_reseeding()
     {
-        await using (var ctx = _db.CreateContext())
+        await SeedAsync();
+        await using (var scope = _table.Scope())
         {
-            await CatalogSeeder.SeedAsync(ctx);
-            var ventrue = await ctx.Bloodlines.SingleAsync(b => b.Name == "Ventrue");
-            ventrue.WeaknessText = "House ruling: prey is chosen at the Embrace.";
-            await ctx.SaveChangesAsync();
+            var store = scope.ServiceProvider.GetRequiredService<ICatalogStore>();
+            var awe = (await store.FindPowerAsync((await CatalogAsync()).Powers.Single(p => p.Name == "Awe").Id, CancellationToken.None))!;
+            awe.SuccessText = "Corrected by the GM.";
+            awe.IsReviewed = true;
+            await store.SavePowerAsync(awe, CancellationToken.None);
         }
 
-        await using (var ctx = _db.CreateContext())
-        {
-            await CatalogSeeder.SeedAsync(ctx);
-            var ventrue = await ctx.Bloodlines.SingleAsync(b => b.Name == "Ventrue");
-            Assert.Equal("House ruling: prey is chosen at the Embrace.", ventrue.WeaknessText);
-        }
+        Assert.Equal(0, (await SeedAsync(force: true)).Powers);
+        var reloaded = (await CatalogAsync()).Powers.Single(p => p.Name == "Awe");
+        Assert.True(reloaded.IsReviewed);
+        Assert.Equal("Corrected by the GM.", reloaded.SuccessText);
     }
 
     [Fact]
-    public async Task A_deleted_entry_is_restored_on_the_next_run()
+    public async Task A_deleted_entry_is_restored_when_the_seed_is_compared()
     {
-        await using (var ctx = _db.CreateContext())
+        await SeedAsync();
+        await using (var scope = _table.Scope())
         {
-            await CatalogSeeder.SeedAsync(ctx);
-            ctx.CompelDefinitions.Remove(await ctx.CompelDefinitions.SingleAsync(c => c.Name == "Ravenous"));
-            await ctx.SaveChangesAsync();
+            var writer = scope.ServiceProvider.GetRequiredService<DynamoWriter>();
+            var ravenous = (await CatalogAsync()).Compels.Single(c => c.Name == "Ravenous");
+            await writer.CommitAsync(writer.Delete(DynamoCatalog.PK, $"{DynamoCatalog.Kinds.Compel}#{ravenous.Id:D5}"), CancellationToken.None);
         }
 
-        await using (var ctx = _db.CreateContext())
-        {
-            var result = await CatalogSeeder.SeedAsync(ctx);
-            Assert.Equal(new CatalogSeedResult(0, 0, 0, 1, 0, 0), result);
-            Assert.Equal(4, (await ctx.CompelDefinitions.SingleAsync(c => c.Name == "Ravenous")).Roll);
-        }
+        Assert.Equal(new CatalogSeedResult(0, 0, 0, 1, 0, 0), await SeedAsync(force: true));
+        Assert.Equal(4, (await CatalogAsync()).Compels.Single(c => c.Name == "Ravenous").Roll);
     }
 
     [Fact]
     public async Task Seeded_powers_are_unreviewed_and_link_their_dice_pool_discipline()
     {
-        await using var ctx = _db.CreateContext();
-        await CatalogSeeder.SeedAsync(ctx);
+        await SeedAsync();
+        var catalog = await CatalogAsync();
 
-        var command = await ctx.Powers.Include(p => p.PowerGroup).SingleAsync(p => p.Name == "Command");
+        var command = catalog.Powers.Single(p => p.Name == "Command");
         Assert.Equal("Dominate", command.PowerGroup.Name);
         Assert.Equal(command.PowerGroupId, command.DicePoolPowerGroupId);
-        Assert.False(await ctx.Powers.AnyAsync(p => p.IsReviewed));
-        Assert.Equal(5, await ctx.Set<PowerBonusOption>().CountAsync(b => b.PowerId == ctx.Powers.Single(p => p.Name == "Aura Perception").Id));
+        Assert.DoesNotContain(catalog.Powers, p => p.IsReviewed);
+        Assert.Equal(5, catalog.Powers.Single(p => p.Name == "Aura Perception").BonusOptions.Count);
     }
 
     [Fact]
-    public async Task Reviewed_powers_survive_reseeding()
+    public async Task Catalog_ids_are_unique_within_each_kind()
     {
-        await using (var ctx = _db.CreateContext())
-        {
-            await CatalogSeeder.SeedAsync(ctx);
-            var awe = await ctx.Powers.SingleAsync(p => p.Name == "Awe");
-            awe.SuccessText = "Corrected by the GM.";
-            awe.IsReviewed = true;
-            await ctx.SaveChangesAsync();
-        }
-
-        await using (var ctx = _db.CreateContext())
-        {
-            Assert.Equal(0, (await CatalogSeeder.SeedAsync(ctx)).Powers);
-            var awe = await ctx.Powers.SingleAsync(p => p.Name == "Awe");
-            Assert.True(awe.IsReviewed);
-            Assert.Equal("Corrected by the GM.", awe.SuccessText);
-        }
-    }
-
-    [Fact]
-    public async Task Seeded_entries_are_usable_from_characters()
-    {
-        await using var ctx = _db.CreateContext();
-        await CatalogSeeder.SeedAsync(ctx);
-
-        var nosferatu = await ctx.Bloodlines.SingleAsync(b => b.Name == "Nosferatu");
-        var sandman = await ctx.PredatorTypes.SingleAsync(p => p.Name == "Sandman");
-        var touchstone = await ctx.MeritDefinitions.SingleAsync(m => m.Name == "Touchstone");
-        ctx.Characters.Add(new Character
-        {
-            Name = "Edmund",
-            Kind = CharacterKind.Vampire,
-            Bloodline = nosferatu,
-            PredatorType = sandman,
-            Merits = [new() { MeritDefinition = touchstone, Name = touchstone.Name, Kind = touchstone.Kind, Dots = 3 }],
-        });
-        await ctx.SaveChangesAsync();
-
-        Assert.Equal("Hideous Visage of the Beast",
-            await ctx.Characters.Where(c => c.Name == "Edmund").Select(c => c.Bloodline!.WeaknessName).SingleAsync());
+        await SeedAsync();
+        var catalog = await CatalogAsync();
+        Assert.Equal(catalog.Powers.Count, catalog.Powers.Select(p => p.Id).Distinct().Count());
+        Assert.Equal(catalog.PowerGroups.Count, catalog.PowerGroups.Select(g => g.Id).Distinct().Count());
+        Assert.DoesNotContain(catalog.Merits, m => m.Id == 0);
     }
 }

@@ -2,7 +2,7 @@
 
 A character manager for a homebrew **Vampire: The Requiem** ruleset (house VtR v2026.09.08 on house World of Darkness Core v2026.09.12). Anyone can start a campaign and tell it, or join one as a player. Each campaign keeps its NPC roster, full character sheets and scenes, with a searchable Discipline powers catalog shared by all and a table mode for running NPCs during a session.
 
-Built tablet-first and usable on a phone. It runs locally on SQLite and is hosted on AWS (one EC2 server behind CloudFront, also on SQLite).
+Built tablet-first and usable on a phone. Its data is in DynamoDB (DynamoDB Local when run locally), and it is moving to serverless AWS hosting ([SERVERLESS.md](SERVERLESS.md)).
 
 ## Features
 
@@ -38,12 +38,16 @@ Built tablet-first and usable on a phone. It runs locally on SQLite and is hoste
 
 - **.NET 10:** ASP.NET Core Minimal APIs, and a Blazor Web App with Interactive WebAssembly.
 - **UI:** [MudBlazor](https://mudblazor.com/) 9.
-- **Data:** EF Core 10 with **SQLite** locally and on AWS. The **SQL Server** provider (used for the earlier Azure hosting) is kept. Each provider has its own migrations project.
-- **Tests:** xUnit. Web tests run the real app via `WebApplicationFactory` against a throwaway SQLite file.
+- **Data:** **DynamoDB**, one table ([SERVERLESS.md](SERVERLESS.md)). Locally and in tests, DynamoDB Local stands in for it. Endpoints use the store interfaces in `Requiem.Data/Stores`; ASP.NET Identity and the sign-in keys are stored in the same table.
+- **Tests:** xUnit. Web tests run the real app via `WebApplicationFactory`, each test class against a fresh table in an in-memory DynamoDB Local.
 
 ## Getting started
 
-Prerequisite: the [.NET 10 SDK](https://dotnet.microsoft.com/download) (10.0.402 or a later feature band; see `global.json`).
+Prerequisites:
+
+- The [.NET 10 SDK](https://dotnet.microsoft.com/download) (10.0.402 or a later feature band; see `global.json`).
+- Java 17 or later for DynamoDB Local, e.g. [Amazon Corretto 21](https://corretto.aws/) (`winget install Amazon.Corretto.21.JDK`).
+- [DynamoDB Local](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/DynamoDBLocal.DownloadingAndRunning.html), unzipped to `%LOCALAPPDATA%\DynamoDBLocal`, or anywhere with `DYNAMODB_LOCAL_HOME` pointing at it.
 
 ```bash
 dotnet run --project src/Requiem.Web --launch-profile http
@@ -51,7 +55,7 @@ dotnet run --project src/Requiem.Web --launch-profile http
 
 Then open http://localhost:5053.
 
-1. **Database.** In Development, the app applies migrations and seeds the catalog on startup. The SQLite file lives at `src/Requiem.Web/App_Data/requiem.db`, which is gitignored.
+1. **Database.** In Development, the app starts DynamoDB Local itself. It creates the table, seeds the catalog, and keeps the data in `src/Requiem.Web/App_Data/dynamodb`, which is gitignored. DynamoDB Local stops when the app does.
 2. **First run.** You'll be sent to `/setup` to create the first account (the site admin). Outside Development, setup is locked until you set `Auth:SetupCode` in the server configuration, then enter that code on the setup page.
 3. **Use it.** Start a campaign on the Campaigns page; its NPCs and Scenes tabs hold the Storyteller tools. Powers is in the nav too.
 
@@ -59,8 +63,12 @@ Then open http://localhost:5053.
 
 | Setting | Values | Default |
 | --- | --- | --- |
-| `Database:Provider` | `Sqlite` or `SqlServer` | `Sqlite` in Development |
-| `ConnectionStrings:Requiem` | Connection string for the chosen provider | `Data Source=App_Data/requiem.db` in Development |
+| `DynamoDB:TableName` | The table | `requiem` |
+| `DynamoDB:ServiceUrl` | DynamoDB Local's address; unset on AWS | Set by `StartLocal` in Development |
+| `DynamoDB:StartLocal` | Start DynamoDB Local with the app | `true` in Development |
+| `DynamoDB:CreateTable` | Create the table if it's missing (on AWS, CloudFormation does) | `true` in Development |
+| `DynamoDB:Region` | AWS Region | `us-east-2` |
+| `Database:SetupOnStartup` | Seed the catalog at startup outside Development | Off |
 | `Auth:SetupCode` | One-time code for first-run setup | Not needed in Development |
 | `Auth:SignUpsPerHour` | New accounts allowed per hour, site-wide (sign-up and invite joins) | `30` |
 
@@ -69,14 +77,12 @@ Then open http://localhost:5053.
 ```
 src/
   Requiem.Shared/          Rules engine (pure C#), enums and API contracts shared by server and browser
-  Requiem.Data/            EF Core model, DbContext, seed JSON (Seed/*.json) and the catalog seeder
-  Requiem.Data.Sqlite/     SQLite migrations
-  Requiem.Data.SqlServer/  SQL Server migrations
+  Requiem.Data/            Entities, store interfaces, the DynamoDB stores, seed JSON (Seed/*.json) and the catalog seeder
   Requiem.Web/             ASP.NET Core host: API endpoints, auth, static assets
   Requiem.Web.Client/      Blazor WebAssembly UI (pages, sheet panels, table mode)
 tests/
   Requiem.Shared.Tests/    Rules engine
-  Requiem.Data.Tests/      Persistence, migrations and seed data
+  Requiem.Data.Tests/      DynamoDB stores and seed data
   Requiem.Web.Tests/       API, auth and integration tests
 tools/
   CatalogImport/           Windows-only tool that turns the rulebook PDF into Seed/powers.json
@@ -85,22 +91,15 @@ PLAN.md                    Design plan, rules decisions and status
 
 ## Development
 
-Run all tests:
+Run all tests (they start their own DynamoDB Local):
 
 ```bash
 dotnet test Requiem.slnx
 ```
 
-**Model changes need a migration for both providers.** `dotnet-ef` is a local tool (`dotnet tool restore`):
+**There are no migrations.** Each entity is stored as a JSON document, so new fields just appear; renaming or removing one needs code that reads old documents.
 
-```bash
-dotnet ef migrations add <Name> --project src/Requiem.Data.Sqlite
-dotnet ef migrations add <Name> --project src/Requiem.Data.SqlServer
-```
-
-The test suite fails if either provider has model changes without a migration.
-
-**Catalog seeding** is insert-only, matched by each entry's natural key. Corrections the GM makes in the app survive re-seeding, and a deleted entry comes back on the next run.
+**Catalog seeding** is insert-only, matched by each entry's natural key. Corrections the admin makes in the app survive re-seeding. Seeding only compares entries when the seed files have changed since the last run, so a deleted entry comes back with the next change to them.
 
 ### Re-importing the powers catalog
 
@@ -115,7 +114,7 @@ Imported powers start unreviewed; check them on the Powers review screen. The OC
 
 ## Deploying
 
-The AWS infrastructure is in [`infra/aws/`](infra/aws/). GitHub Actions publishes the image from `main`, and the server picks it up within two minutes. [DEPLOY.md](DEPLOY.md) has the first-time setup.
+Hosting is moving to S3 + CloudFront, API Gateway + Lambda and DynamoDB ([SERVERLESS.md](SERVERLESS.md)); the deploy pipeline and DEPLOY.md follow in that plan. Until then nothing deploys from `main`: GitHub Actions only builds, tests and publishes the image.
 
 ## Status
 

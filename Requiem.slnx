@@ -1,7 +1,5 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/Requiem.Data.Sqlite/Requiem.Data.Sqlite.csproj" />
-    <Project Path="src/Requiem.Data.SqlServer/Requiem.Data.SqlServer.csproj" />
     <Project Path="src/Requiem.Data/Requiem.Data.csproj" />
     <Project Path="src/Requiem.Shared/Requiem.Shared.csproj" />
     <Project Path="src/Requiem.Web.Client/Requiem.Web.Client.csproj" />

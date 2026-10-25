@@ -3,9 +3,8 @@ using Requiem.Shared.Campaigns;
 namespace Requiem.Data.Entities;
 
 /// <summary>
-/// A chronicle its Storytellers run with players (Phase 2, PHASE2.md §3). The database refuses to delete a
-/// campaign that still has characters or scenes, but EF would quietly detach any it has loaded, so
-/// code that deletes a campaign must check for them first (or archive instead).
+/// A chronicle its Storytellers run with players (Phase 2, PHASE2.md §3). Nothing stops deleting one that
+/// still has characters or scenes, so code that deletes a campaign must check for them first (or archive instead).
 /// </summary>
 public class Campaign
 {
@@ -55,7 +54,7 @@ public class CampaignInvite
 /// </summary>
 public class AuditEntry
 {
-    public long Id { get; set; }
+    public string Id { get; set; } = "";
     public Guid? CampaignId { get; set; }
     public Guid? CharacterId { get; set; }
     public required string UserId { get; set; }

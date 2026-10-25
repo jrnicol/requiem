@@ -8,8 +8,8 @@ public class Scene
     /// <summary>The Storyteller who made it; null on scenes made before Phase 2.</summary>
     public string? OwnerUserId { get; set; }
     /// <summary>
-    /// The campaign whose Storytellers share it. Null only on data from before campaigns, which
-    /// <see cref="Seeding.AccountsUpgrade"/> moves into one at startup.
+    /// The campaign whose Storytellers share it. Nullable for scenes from before campaigns; none exist
+    /// since the move to DynamoDB, which started fresh.
     /// </summary>
     public Guid? CampaignId { get; set; }
     public DateTimeOffset CreatedAt { get; set; }

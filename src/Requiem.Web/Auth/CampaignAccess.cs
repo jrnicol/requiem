@@ -36,9 +36,16 @@ public sealed class CampaignAccess(ICampaignStore campaigns, ICharacterStore cha
     public async Task<List<Guid>> StorytellerCampaignIdsAsync(CancellationToken ct) =>
         (await RolesAsync(ct)).Where(r => r.Value == CampaignRole.Storyteller).Select(r => r.Key).ToList();
 
+    private readonly Dictionary<Guid, CampaignRole?> _roleIn = [];
+
     /// <summary>The user's role in a campaign, or null when they aren't a member (or it doesn't exist).</summary>
-    public async Task<CampaignRole?> RoleInAsync(Guid campaignId, CancellationToken ct) =>
-        (await RolesAsync(ct)).TryGetValue(campaignId, out var role) ? role : null;
+    /// <remarks>Read directly rather than from <see cref="RolesAsync"/>, whose index can lag a just-made membership.</remarks>
+    public async Task<CampaignRole?> RoleInAsync(Guid campaignId, CancellationToken ct)
+    {
+        if (!_roleIn.TryGetValue(campaignId, out var role))
+            _roleIn[campaignId] = role = await campaigns.RoleAsync(campaignId, UserId, ct);
+        return role;
+    }
 
     public async Task<bool> IsStorytellerAsync(Guid campaignId, CancellationToken ct) =>
         await RoleInAsync(campaignId, ct) == CampaignRole.Storyteller;
