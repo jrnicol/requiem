@@ -1,24 +1,15 @@
-@* The campaign's shared NPCs as players see them: only the details the Storyteller has revealed.
-   The campaign's Storytellers also get links to edit and run each one. *@
+@* A player's view of the campaign's shared NPCs: only the details the Storyteller has revealed.
+   Storytellers see the same cards with the Players' view switch on their NPCs tab. *@
 
 @if (Npcs.Count == 0)
 {
-    <MudText Typo="Typo.body2" Color="Color.Secondary">
-        @(IsStoryteller
-            ? "No NPCs are shared yet. Open an NPC, and under Profile switch on \"Share with players\"."
-            : "Nobody yet. NPCs appear here as the Storyteller introduces them.")
-    </MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">Nobody yet. NPCs appear here as the Storyteller introduces them.</MudText>
 }
 else
 {
-    @if (IsStoryteller)
-    {
-        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">This is exactly what your players see.</MudText>
-    }
-    <NpcProfileCards Npcs="Npcs" ShowLinks="IsStoryteller" />
+    <NpcProfileCards Npcs="Npcs" />
 }
 
 @code {
     [Parameter, EditorRequired] public IReadOnlyList<KnownNpc> Npcs { get; set; } = [];
-    [Parameter] public bool IsStoryteller { get; set; }
 }

@@ -1,10 +1,11 @@
-@* One campaign's NPCs, for its Storytellers: search and filter, as profile cards showing every detail. *@
+@* One campaign's NPCs, for its Storytellers: search and filter, as profile cards showing every detail. The players'
+   view shows the shared NPCs exactly as players see them, and then searches and filters only on what they know. *@
 @inject RequiemApi Api
 @inject ISnackbar Snackbar
 
 <MudGrid Spacing="2" Class="mb-4">
     <MudItem xs="12" md="6">
-        <MudTextField T="string" @bind-Value="_search" Placeholder="Search name, concept or faction"
+        <MudTextField T="string" @bind-Value="_search" Placeholder="@(_playersView ? "Search what the players know" : "Search name, concept or faction")"
                       Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search"
                       Clearable="true" DebounceInterval="300" OnDebounceIntervalElapsed="_ => LoadAsync()"
                       OnClearButtonClick="_ => LoadAsync()" Variant="Variant.Outlined" Margin="Margin.Dense"
@@ -21,8 +22,14 @@
                 }
             </MudChipSet>
             <MudSpacer />
-            <MudSwitch T="bool" Value="_includeArchived" ValueChanged="OnIncludeArchivedChanged"
-                       Color="Color.Primary" Label="Archived" />
+            @* Players never see archived NPCs, so the players' view has nothing to switch. *@
+            @if (!_playersView)
+            {
+                <MudSwitch T="bool" Value="_includeArchived" ValueChanged="OnIncludeArchivedChanged"
+                           Color="Color.Primary" Label="Archived" />
+            }
+            <MudSwitch T="bool" Value="_playersView" ValueChanged="OnPlayersViewChanged"
+                       Color="Color.Primary" Label="Players' view" />
         </MudStack>
     </MudItem>
 </MudGrid>
@@ -34,11 +41,11 @@
         <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoadAsync">Try again</MudButton>
     </MudAlert>
 }
-else if (_characters is null)
+else if (_profiles is null)
 {
     <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
 }
-else if (_characters.Count == 0)
+else if (_profiles.Count == 0)
 {
     <MudPaper Outlined="true" Class="pa-8">
         <MudStack AlignItems="AlignItems.Center" Spacing="2">
@@ -46,7 +53,14 @@ else if (_characters.Count == 0)
             @if (IsFiltered)
             {
                 <MudText Typo="Typo.h6">No NPCs match</MudText>
-                <MudText Color="Color.Secondary">Try a different search or filter.</MudText>
+                <MudText Color="Color.Secondary">
+                    @(_playersView ? "Only what the players know is searched. Try a different search or filter." : "Try a different search or filter.")
+                </MudText>
+            }
+            else if (_playersView)
+            {
+                <MudText Typo="Typo.h6">Nothing shared yet</MudText>
+                <MudText Color="Color.Secondary">Open an NPC, and under Profile switch on "Share with players".</MudText>
             }
             else
             {
@@ -58,24 +72,33 @@ else if (_characters.Count == 0)
 }
 else
 {
-    <MudText Color="Color.Secondary" Class="mb-2">@CountText</MudText>
-    <NpcProfileCards Npcs="_profiles" ShowLinks="true" EmptyText="No appearance, reputation or backstory yet.">
-        <Badges>
-            @if (_byId[context.Id] is { IsArchived: var archived, IsShared: var shared } && (archived || shared))
-            {
-                <MudStack Row="true" Spacing="1" Class="mt-1">
-                    @if (archived)
-                    {
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Outlined.Archive" Class="ma-0">Archived</MudChip>
-                    }
-                    @if (shared)
-                    {
-                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Outlined.Badge" Class="ma-0">Shared</MudChip>
-                    }
-                </MudStack>
-            }
-        </Badges>
-    </NpcProfileCards>
+    <MudText Color="Color.Secondary" Class="mb-2">
+        @CountText@(_playersView ? " · exactly what your players see" : "")
+    </MudText>
+    @if (_playersView)
+    {
+        <NpcProfileCards Npcs="_profiles" ShowLinks="true" />
+    }
+    else
+    {
+        <NpcProfileCards Npcs="_profiles" ShowLinks="true" EmptyText="No appearance, reputation or backstory yet.">
+            <Badges>
+                @if (_byId[context.Id] is { IsArchived: var archived, IsShared: var shared } && (archived || shared))
+                {
+                    <MudStack Row="true" Spacing="1" Class="mt-1">
+                        @if (archived)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Outlined.Archive" Class="ma-0">Archived</MudChip>
+                        }
+                        @if (shared)
+                        {
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Outlined.Badge" Class="ma-0">Shared</MudChip>
+                        }
+                    </MudStack>
+                }
+            </Badges>
+        </NpcProfileCards>
+    }
 }
 
 @code {
@@ -83,33 +106,52 @@ else
 
     [Parameter, EditorRequired] public Guid CampaignId { get; set; }
 
-    private List<CharacterSummary>? _characters;
-    private List<KnownNpc> _profiles = [];
+    private List<KnownNpc>? _profiles;
     private Dictionary<Guid, CharacterSummary> _byId = [];
     private bool _loadFailed;
     private string? _search;
     private string _kindFilter = "All";
     private bool _includeArchived;
+    private bool _playersView;
+    private int _loads;
 
-    private bool IsFiltered => !string.IsNullOrWhiteSpace(_search) || _kindFilter != "All" || _includeArchived;
+    private bool IsFiltered => !string.IsNullOrWhiteSpace(_search) || _kindFilter != "All" || (_includeArchived && !_playersView);
 
-    private string CountText => _characters!.Count == 1 ? "1 NPC" : $"{_characters.Count} NPCs";
+    private string CountText => _profiles!.Count == 1 ? "1 NPC" : $"{_profiles.Count} NPCs";
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
     /// <summary>Reloads the list, e.g. after an NPC moves in from another campaign.</summary>
     public async Task LoadAsync()
     {
+        // Loads can overlap (a search still settling when the view switches); only the latest one's results count.
+        var load = ++_loads;
         _loadFailed = false;
         try
         {
             CharacterKind? kind = Enum.TryParse<CharacterKind>(_kindFilter, out var k) ? k : null;
-            _characters = await Api.ListCharactersAsync(new CharacterQuery(_search, Kind: kind, IncludeArchived: _includeArchived, CampaignId: CampaignId));
-            _profiles = _characters.Select(Profile).ToList();
-            _byId = _characters.ToDictionary(c => c.Id);
+            if (_playersView)
+            {
+                // The players' cards hold only what's revealed, so filtering them can't give away anything else.
+                var search = _search?.Trim();
+                var known = await Api.GetKnownNpcsAsync(CampaignId);
+                if (load != _loads) return;
+                _profiles = known
+                    .Where(n => kind is null || n.Kind == kind)
+                    .Where(n => string.IsNullOrEmpty(search) || KnownText(n).Any(t => t?.Contains(search, StringComparison.OrdinalIgnoreCase) == true))
+                    .ToList();
+            }
+            else
+            {
+                var characters = await Api.ListCharactersAsync(new CharacterQuery(_search, Kind: kind, IncludeArchived: _includeArchived, CampaignId: CampaignId));
+                if (load != _loads) return;
+                _profiles = characters.Select(Profile).ToList();
+                _byId = characters.ToDictionary(c => c.Id);
+            }
         }
         catch (HttpRequestException)
         {
+            if (load != _loads) return;
             _loadFailed = true;
             Snackbar.Add("Couldn't reach the server.", Severity.Error);
         }
@@ -128,7 +170,17 @@ else
         await LoadAsync();
     }
 
-    /// <summary>The same cards as Known NPCs, with every detail filled in rather than only the revealed ones.</summary>
+    private async Task OnPlayersViewChanged(bool value)
+    {
+        _playersView = value;
+        _profiles = null;
+        await LoadAsync();
+    }
+
+    private static IEnumerable<string?> KnownText(KnownNpc n) =>
+        [n.Name, n.Faction, n.Bloodline, n.Appearance, n.Reputation, n.Backstory];
+
+    /// <summary>The same cards as the players', with every detail filled in rather than only the revealed ones.</summary>
     private static KnownNpc Profile(CharacterSummary c) => new(
         c.Id, c.Name, c.PortraitUrl, c.Faction, c.BloodlineName, c.Generation, c.Appearance, c.Reputation, c.Backstory, c.Kind, c.Tier);
 }

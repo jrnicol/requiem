@@ -169,16 +169,20 @@ else
             </MudPaper>
         </MudTabPanel>
 
-        <MudTabPanel Text="Known NPCs" Icon="@Icons.Material.Outlined.Badge">
-            @if (_knownNpcs is null)
-            {
-                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
-            }
-            else
-            {
-                <KnownNpcCards Npcs="_knownNpcs" IsStoryteller="_campaign.IsStoryteller" />
-            }
-        </MudTabPanel>
+        @* Storytellers get the same cards from the Players' view switch on their NPCs tab. *@
+        @if (!_campaign.IsStoryteller)
+        {
+            <MudTabPanel Text="Known NPCs" Icon="@Icons.Material.Outlined.Badge">
+                @if (_knownNpcs is null)
+                {
+                    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+                }
+                else
+                {
+                    <KnownNpcCards Npcs="_knownNpcs" />
+                }
+            </MudTabPanel>
+        }
 
         @if (_campaign.IsStoryteller)
         {
@@ -313,8 +317,8 @@ else
         Show(await Api.GetCampaignAsync(Id));
         if (_campaign is null) return;
         _characters = await Api.ListPlayerCharactersAsync(Id);
-        _knownNpcs = await Api.GetKnownNpcsAsync(Id);
         if (_campaign.IsStoryteller) await LoadStorytellerDataAsync();
+        else _knownNpcs = await Api.GetKnownNpcsAsync(Id);
     }
 
     private void Show(CampaignView? campaign)
