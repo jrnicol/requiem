@@ -12,8 +12,8 @@ Page refs below are PDF pages. OCR text of both books lives in `rules-text/`.
 | Backend | ASP.NET Core (.NET 10 LTS), Minimal APIs |
 | Data | **DynamoDB**, one table (decided with the user 2026-10-25; [SERVERLESS.md](SERVERLESS.md)), with DynamoDB Local for development and tests. Before that: EF Core on SQLite locally and Azure SQL hosted. |
 | Frontend | **Blazor Web App, Interactive WebAssembly**, **MudBlazor**, installable as a **PWA** |
-| Search | Powers-catalog search behind one interface: SQLite FTS5 in dev, SQL Server Full-Text Search on Azure SQL |
-| Real-time (Phase 2) | SignalR (Azure SignalR Service when hosted) |
+| Search | Powers-catalog search in the browser: the client caches the whole catalog (a few hundred KB) and searches it locally. |
+| Real-time (Phase 2) | Not built. On AWS: polling, or API Gateway WebSockets. |
 | Auth | ASP.NET Core Identity now; external logins (Google/Discord/Microsoft) in Phase 2 |
 
 Solution (`Requiem.slnx`):
@@ -210,7 +210,7 @@ The catalog is homebrew book content: the hosted app requires login and doesn't 
 
 ## 6. Hosting
 
-**AWS, serverless (decided with the user 2026-10-25):** S3 + CloudFront for the browser app, API Gateway + one Lambda for the API, and DynamoDB for data, in the AWS project's Region (us-east-2). The project is on AWS's free plan (no App Runner) and its guardrails block GitHub OIDC, so deploys will run in AWS CodeBuild. The plan and progress are in [SERVERLESS.md](SERVERLESS.md). An EC2 + SQLite setup was built the same day and deleted when the user chose this instead; its template ([`infra/aws/requiem.yaml`](infra/aws/requiem.yaml)) and [DEPLOY.md](DEPLOY.md) go in the cut-over. The Azure deployment below is being retired, and its data isn't carried over.
+**AWS, serverless (decided with the user 2026-10-25):** S3 + CloudFront for the browser app, API Gateway + one Lambda for the API, and DynamoDB for data, in the AWS project's Region (us-east-2). The project is on AWS's free plan (no App Runner) and its guardrails block GitHub OIDC, so CodePipeline and CodeBuild deploy every push to `main`. Live since 2026-10-25 at https://d1amgeq01zslzq.cloudfront.net. The plan and progress are in [SERVERLESS.md](SERVERLESS.md). An EC2 + SQLite setup was built the same day and deleted when the user chose this instead; its template was deleted in the cut-over (2026-10-26). [DEPLOY.md](DEPLOY.md) describes the deploy. The Azure deployment below is being retired, and its data isn't carried over.
 - The catalog is cached per Lambda instance; characters are whole documents, so a sheet is one read and one conditional write.
 - Real-time and file storage (portraits) aren't built yet. On AWS they'd be polling (or API Gateway WebSockets) and S3.
 

@@ -1,5 +1,4 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
-using Azure.Monitor.OpenTelemetry.AspNetCore;
 using Requiem.Data.Dynamo;
 using Requiem.Data.Stores;
 using Requiem.Shared.Accounts;
@@ -32,10 +31,6 @@ builder.Services.AddHealthChecks();
 // On AWS the API runs in Lambda behind API Gateway's HTTP API (SERVERLESS.md); elsewhere this does nothing.
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
-// Azure Monitor (Application Insights) when hosted; the connection string comes from App Service settings.
-if (!string.IsNullOrEmpty(builder.Configuration["APPLICATIONINSIGHTS_CONNECTION_STRING"]))
-    builder.Services.AddOpenTelemetry().UseAzureMonitor();
-
 var app = builder.Build();
 
 // Create the table where allowed (DynamoDB Local) and fill in any missing catalog entries (seeding is insert-only).
@@ -45,18 +40,6 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Databas
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<IDatabaseSetup>().InitializeAsync(CancellationToken.None);
-}
-
-// On AWS, CloudFront reaches the app over plain HTTP and sends no X-Forwarded-Proto. Visitors always
-// arrive over HTTPS (CloudFront redirects HTTP), so requests are treated as HTTPS: HSTS is sent and
-// generated URLs use https.
-if (app.Configuration.GetValue<bool>("Hosting:BehindHttpsProxy"))
-{
-    app.Use((context, next) =>
-    {
-        context.Request.Scheme = Uri.UriSchemeHttps;
-        return next(context);
-    });
 }
 
 // Configure the HTTP request pipeline. The API answers errors with problem details, never HTML pages.

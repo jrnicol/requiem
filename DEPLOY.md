@@ -99,7 +99,7 @@ Open `SiteUrl`, which sends you to `/setup`, and enter the code. The account bec
 
 ## Retiring the Azure deployment
 
-Until 2026-10-25 Requiem ran on Azure Container Apps and Azure SQL, from [`infra/main.bicep`](infra/main.bicep). The workflow no longer deploys there, so the Azure site keeps running the last version it got. Its data isn't carried over: the AWS site starts fresh.
+Until 2026-10-25 Requiem ran on Azure Container Apps and Azure SQL, from `infra/main.bicep` (deleted on 2026-10-26; it's in the git history). Nothing deploys there any more, so the Azure site keeps running the last version it got. Its data wasn't carried over: the AWS site started fresh.
 
 To shut it down, delete its resource group in [Azure Cloud Shell](https://shell.azure.com):
 
@@ -107,4 +107,4 @@ To shut it down, delete its resource group in [Azure Cloud Shell](https://shell.
 az group delete --name rg-requiem --yes
 ```
 
-Then remove the repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP` and `AZURE_CONTAINERAPP_NAME` (**Settings > Secrets and variables > Actions > Variables**). After that, `infra/main.bicep`, `infra/main.bicepparam` and the Azure Monitor package can be deleted.
+Then remove the repository variables `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP` and `AZURE_CONTAINERAPP_NAME` (**Settings > Secrets and variables > Actions > Variables**). The old container images can go too: on GitHub, open your profile's **Packages** tab, then **requiem > Package settings > Delete this package**.

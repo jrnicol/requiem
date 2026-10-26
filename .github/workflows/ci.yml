@@ -1,0 +1,43 @@
+# Builds and tests every push and pull request, for quick feedback on GitHub. Deploying is AWS's job:
+# CodePipeline picks up pushes to main and CodeBuild tests and deploys them (buildspec.yml, DEPLOY.md).
+# GitHub holds no AWS credentials; the AWS project's guardrails don't allow GitHub's OpenID Connect sign-in.
+
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      # The tests run against DynamoDB Local, which needs Java.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: corretto
+          java-version: '21'
+
+      - name: Get DynamoDB Local
+        run: |
+          mkdir -p "$RUNNER_TEMP/dynamodb-local"
+          curl -sSfL https://d1ni2b6xgvw0s0.cloudfront.net/v2.x/dynamodb_local_latest.tar.gz | tar -xz -C "$RUNNER_TEMP/dynamodb-local"
+          echo "DYNAMODB_LOCAL_HOME=$RUNNER_TEMP/dynamodb-local" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: dotnet test Requiem.slnx --configuration Release

@@ -152,7 +152,7 @@ A **step-by-step wizard** on tablet and phone, following the core book's order (
 **Progress on 2.0 (2026-10-24):**
 - **Data model and migrations: done.** `AddCampaigns` adds campaigns, members, invites, the audit log and Links, plus the new character, scene and XP-ledger fields. Existing characters upgrade as Active, Hidden and unowned (tested).
 - **Per-campaign authorization: done for the existing API.** `CampaignAccess` limits every character and scene request to the campaigns the user tells. Anything else reads as "not found". Characters, scenes and sires must all be in the same campaign. Covered by `AccessTests`.
-- **Azure hosting: live (2026-10-24)** in resource group `rg-requiem`, West US 3, as container app `ca-requiem-octvib`. Pushes to `main` test and deploy. The first account (now the site admin) is created.
+- **Hosting: moved to AWS serverless on 2026-10-25 ([SERVERLESS.md](SERVERLESS.md), [DEPLOY.md](DEPLOY.md)).** The Azure notes below are history; that deployment is being shut down. **Azure hosting: live (2026-10-24)** in resource group `rg-requiem`, West US 3, as container app `ca-requiem-octvib`. Pushes to `main` test and deploy. The first account (now the site admin) is created.
   - `infra/main.bicep`: West US 3, free tier. **Azure Container Apps**, since the subscription allows no App Service VMs. Passwordless SQL, Key Vault and Application Insights.
   - The GitHub Actions workflow publishes the container to ghcr.io and rolls it out.
   - The app migrates and seeds on start when `Database:MigrateOnStartup` is set, keeps its sign-in keys in the database, and has a `/healthz` endpoint.
