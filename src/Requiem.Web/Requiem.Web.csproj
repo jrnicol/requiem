@@ -7,6 +7,11 @@
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
   </PropertyGroup>
 
+  <!-- The Lambda build (buildspec.yml): compile ahead of time, so a cold start doesn't wait on the JIT. -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'linux-arm64'">
+    <PublishReadyToRun>true</PublishReadyToRun>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Amazon.Lambda.AspNetCoreServer.Hosting" Version="2.2.1" />
     <ProjectReference Include="..\Requiem.Web.Client\Requiem.Web.Client.csproj" />

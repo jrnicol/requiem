@@ -1,4 +1,5 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
+using Microsoft.AspNetCore.DataProtection;
 using Requiem.Data.Dynamo;
 using Requiem.Data.Stores;
 using Requiem.Shared.Accounts;
@@ -40,6 +41,15 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Databas
 {
     await using var scope = app.Services.CreateAsyncScope();
     await scope.ServiceProvider.GetRequiredService<IDatabaseSetup>().InitializeAsync(CancellationToken.None);
+}
+
+// On Lambda, do the first request's one-time work while the function starts, not while someone waits:
+// load the rules catalog and the sign-in key ring (both from DynamoDB) and run their code once.
+if (!string.IsNullOrEmpty(Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION_NAME")))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    await scope.ServiceProvider.GetRequiredService<ICatalogStore>().GetAsync(CancellationToken.None);
+    scope.ServiceProvider.GetRequiredService<IDataProtectionProvider>().CreateProtector("warm-up").Protect("warm-up");
 }
 
 // Configure the HTTP request pipeline. The API answers errors with problem details, never HTML pages.
