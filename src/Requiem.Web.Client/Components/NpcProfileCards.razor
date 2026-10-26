@@ -28,9 +28,14 @@
                         <div style="min-width:0">
                             @* Room on the right for the corner chip. *@
                             <MudText Typo="Typo.h6" Style="@(IsShared?.Invoke(npc.Id) == true ? "padding-right:5.5rem" : null)">@npc.Name</MudText>
-                            @if (Facts(npc) is { Length: > 0 } facts)
+                            @* The type, when known and not plain Mortal, sits in red under the name; every other trait has a labelled line. *@
+                            @if (ShownKind(npc) is { } kind)
                             {
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">@facts</MudText>
+                                <MudText Typo="Typo.body2" Color="Color.Primary">@kind</MudText>
+                            }
+                            @foreach (var (label, value) in Traits(npc))
+                            {
+                                <MudText Typo="Typo.caption" Class="d-block"><span class="trait-label">@label:</span> @value</MudText>
                             }
                         </div>
                     </MudStack>
@@ -55,13 +60,16 @@
     /// <summary>On the Storyteller's full view: whether an NPC is shared, shown as a chip in its card's upper right corner.</summary>
     [Parameter] public Func<Guid, bool>? IsShared { get; set; }
 
-    public static string Facts(KnownNpc npc) => string.Join(" · ", new[]
+    /// <summary>The trait lines after the type, on cards and profiles: only those it has.</summary>
+    public static IEnumerable<(string Label, string Value)> Traits(KnownNpc npc)
     {
-        npc.Kind?.ToString(),
-        npc.Faction,
-        npc.Bloodline,
-        npc.Generation is { } generation ? $"Generation {generation}" : null,
-    }.OfType<string>());
+        if (npc.Faction is { } faction) yield return ("Faction", faction);
+        if (npc.Bloodline is { } bloodline) yield return ("Bloodline", bloodline);
+        if (npc.Generation is { } generation) yield return ("Generation", generation.ToString());
+    }
+
+    /// <summary>The type worth showing: vampires and ghouls. Mortal is the default, so it isn't shown.</summary>
+    public static CharacterKind? ShownKind(KnownNpc npc) => npc.Kind is CharacterKind.Mortal ? null : npc.Kind;
 
     public static string EditUrl(KnownNpc npc) => npc.Tier == CharacterTier.FullSheet ? $"sheets/{npc.Id}" : $"npcs/{npc.Id}";
 

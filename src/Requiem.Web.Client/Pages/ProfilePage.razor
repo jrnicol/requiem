@@ -38,7 +38,14 @@ else
 {
     <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap" Class="mb-4">
         <BackButton Label="Back" />
-        <MudText Typo="Typo.h4" Class="brand-font" Style="flex:1; min-width:10rem">@_npc.Name</MudText>
+        @* As on the cards: the type, when known and not plain Mortal, in red under the name. *@
+        <div style="flex:1; min-width:10rem">
+            <MudText Typo="Typo.h4" Class="brand-font">@_npc.Name</MudText>
+            @if (NpcProfileCards.ShownKind(_npc) is { } kind)
+            {
+                <MudText Typo="Typo.subtitle1" Color="Color.Primary">@kind</MudText>
+            }
+        </div>
         @* Only the campaign's Storytellers get the tier, and with it the links. *@
         @if (_npc.Tier is { } tier)
         {
@@ -63,9 +70,14 @@ else
         }
         <MudItem xs="12" sm="@(_npc.PortraitUrl is null ? 12 : 7)" md="@(_npc.PortraitUrl is null ? 12 : 8)">
             <MudStack Spacing="3">
-                @if (NpcProfileCards.Facts(_npc) is { Length: > 0 } facts)
+                @if (NpcProfileCards.Traits(_npc).Any())
                 {
-                    <MudText Typo="Typo.subtitle1" Color="Color.Secondary">@facts</MudText>
+                    <div>
+                        @foreach (var (label, value) in NpcProfileCards.Traits(_npc))
+                        {
+                            <MudText Typo="Typo.body1"><span class="trait-label">@label:</span> @value</MudText>
+                        }
+                    </div>
                 }
                 @foreach (var (label, text) in Texts(_npc))
                 {

@@ -733,3 +733,8 @@ body:has(.mud-layout) .boot-splash {
     z-index: 1;
     pointer-events: none;
 }
+
+/* A trait's name before its value on NPC cards and profiles (Faction: Invictus). */
+.trait-label {
+    color: var(--mud-palette-text-secondary);
+}
