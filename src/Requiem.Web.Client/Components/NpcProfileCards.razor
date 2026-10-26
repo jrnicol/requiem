@@ -1,20 +1,18 @@
-@* NPC profile cards: the portrait, name and facts, opening the full profile. They show whatever details they're given:
-   only the revealed ones on Known NPCs, everything on the Storyteller's NPCs tab. With ShowLinks, each card and
-   profile also links to the NPC's editor and its play view. *@
-@inject IDialogService Dialogs
+@* NPC profile cards: the portrait, name and facts, linking to the NPC's profile page. They show whatever details
+   they're given: only the revealed ones on Known NPCs and in the Players' View, everything on the Storyteller's NPCs tab.
+   With ShowLinks, each card also links to the NPC's editor and its play view. *@
 
 <MudGrid Spacing="2">
     @foreach (var npc in Npcs)
     {
         <MudItem xs="12" sm="6" lg="4" @key="npc.Id">
             <MudPaper Outlined="true" Class="known-npc" Style="height:100%">
-                <div class="known-npc-open pa-3" role="button" tabindex="0" aria-label="@($"Profile of {npc.Name}")"
-                     @onclick="() => OpenAsync(npc)" @onkeydown="e => OnKeyAsync(e, npc)">
+                <a class="known-npc-open pa-3" href="@CharacterLinks.ProfileUrl(npc.Id, PlayersView)" aria-label="@($"Profile of {npc.Name}")">
                     <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
                         <div class="portrait-box" style="max-width:72px; flex:none">
                             @if (npc.PortraitUrl is { } url)
                             {
-                                <img src="@url" alt="Portrait of @npc.Name" class="portrait" />
+                                <img src="@url" alt="" class="portrait" />
                             }
                             else
                             {
@@ -30,7 +28,7 @@
                             @Badges?.Invoke(npc)
                         </div>
                     </MudStack>
-                </div>
+                </a>
                 @if (ShowLinks)
                 {
                     <MudStack Row="true" Spacing="1" Class="px-2 pb-2">
@@ -46,8 +44,8 @@
 @code {
     [Parameter, EditorRequired] public IReadOnlyList<KnownNpc> Npcs { get; set; } = [];
     [Parameter] public bool ShowLinks { get; set; }
-    /// <summary>Shown when there's no appearance, reputation or backstory.</summary>
-    [Parameter] public string EmptyText { get; set; } = "Nothing more is known yet.";
+    /// <summary>The cards come from the Storyteller's Players' View, so their profiles open in it too.</summary>
+    [Parameter] public bool PlayersView { get; set; }
     /// <summary>Extra chips under a card's facts, such as Shared.</summary>
     [Parameter] public RenderFragment<KnownNpc>? Badges { get; set; }
 
@@ -62,19 +60,4 @@
     public static string EditUrl(KnownNpc npc) => npc.Tier == CharacterTier.FullSheet ? $"sheets/{npc.Id}" : $"npcs/{npc.Id}";
 
     public static string PlayUrl(KnownNpc npc) => $"play/{npc.Id}";
-
-    private async Task OpenAsync(KnownNpc npc)
-    {
-        var parameters = new DialogParameters<NpcProfileDialog>
-        {
-            { d => d.Npc, npc },
-            { d => d.ShowLinks, ShowLinks },
-            { d => d.EmptyText, EmptyText },
-        };
-        await Dialogs.ShowAsync<NpcProfileDialog>(npc.Name, parameters,
-            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
-    }
-
-    private Task OnKeyAsync(KeyboardEventArgs e, KnownNpc npc) =>
-        e.Key is "Enter" or " " ? OpenAsync(npc) : Task.CompletedTask;
 }

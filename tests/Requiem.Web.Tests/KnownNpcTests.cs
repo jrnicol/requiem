@@ -61,6 +61,40 @@ public class KnownNpcTests(RequiemWebFactory factory) : IClassFixture<RequiemWeb
     }
 
     [Fact]
+    public async Task Profile_pages_show_storytellers_everything_and_players_what_is_revealed()
+    {
+        var table = await PlayerTable.CreateAsync(factory);
+        var marcel = await CreateNpcAsync(table, "Marcel Dubois", shared: true, NpcReveal.Faction | NpcReveal.Appearance);
+        var harriet = await CreateNpcAsync(table, "Hidden Harriet", shared: false, NpcReveal.Faction);
+
+        var full = await ProfileAsync(table.Storyteller, marcel.Id);
+        Assert.Equal("Sired in Paris in 1789.", full.Backstory);
+        Assert.Equal(CharacterKind.Vampire, full.Kind);
+        Assert.Equal(CharacterTier.SupportingCast, full.Tier);
+        Assert.Equal("Sired in Paris in 1789.", (await ProfileAsync(table.Storyteller, harriet.Id)).Backstory);
+
+        // The Storyteller's Players' View is exactly the players' page, plus the tier for the links.
+        var asPlayers = await ProfileAsync(table.Storyteller, marcel.Id, playersView: true);
+        var player = await ProfileAsync(table.Player, marcel.Id);
+        Assert.Equal(player with { Tier = CharacterTier.SupportingCast }, asPlayers);
+        Assert.Equal("Silver cane, older suit", player.Appearance);
+        Assert.Null(player.Backstory);
+        Assert.Null(player.Kind);
+        Assert.Null(player.Tier);
+
+        // Unshared NPCs aren't there for players, nor in the Storyteller's Players' View.
+        Assert.Equal(HttpStatusCode.NotFound, (await table.Player.GetAsync($"/api/characters/{harriet.Id}/profile")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await table.Storyteller.GetAsync($"/api/characters/{harriet.Id}/profile?playersView=true")).StatusCode);
+
+        var outsider = await factory.CreateMemberClientAsync($"outsider-{Guid.NewGuid():N}@example.test");
+        Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"/api/characters/{marcel.Id}/profile")).StatusCode);
+
+        // Player characters have no profile page.
+        var pc = await PlayerTable.CreateCharacterAsync(table.Player, table.CampaignId, PlayerTable.CompleteMortal());
+        Assert.Equal(HttpStatusCode.NotFound, (await table.Storyteller.GetAsync($"/api/characters/{pc.Sheet.Id}/profile")).StatusCode);
+    }
+
+    [Fact]
     public async Task Outsiders_see_no_cards_and_player_characters_are_never_shared()
     {
         var table = await PlayerTable.CreateAsync(factory);
@@ -89,6 +123,9 @@ public class KnownNpcTests(RequiemWebFactory factory) : IClassFixture<RequiemWeb
         Assert.True(response.StatusCode == HttpStatusCode.Created, await response.Content.ReadAsStringAsync());
         return (await response.Content.ReadFromJsonAsync<SupportingCastForm>(RequiemJson.Options))!;
     }
+
+    private static async Task<KnownNpc> ProfileAsync(HttpClient client, Guid? id, bool playersView = false) =>
+        (await client.GetFromJsonAsync<KnownNpc>($"/api/characters/{id}/profile{(playersView ? "?playersView=true" : "")}", RequiemJson.Options))!;
 
     private static async Task<List<KnownNpc>> KnownAsync(HttpClient client, Guid campaignId) =>
         (await client.GetFromJsonAsync<List<KnownNpc>>($"/api/campaigns/{campaignId}/known-npcs", RequiemJson.Options))!;

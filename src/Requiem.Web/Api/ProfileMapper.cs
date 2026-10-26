@@ -49,6 +49,11 @@ internal static class ProfileMapper
             forStoryteller ? c.Tier : null);
     }
 
+    /// <summary>An NPC's whole profile, for the campaign's Storytellers: every detail, revealed or not.</summary>
+    public static KnownNpc ToFullProfile(Character c) => new(
+        c.Id, c.Name, c.PortraitUrl, c.Faction, c.Bloodline?.Name, c.Generation,
+        c.Appearance, c.Reputation, c.Backstory, c.Kind, c.Tier);
+
     private static readonly NpcReveal AllReveals = Enum.GetValues<NpcReveal>().Aggregate(NpcReveal.None, (all, r) => all | r);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

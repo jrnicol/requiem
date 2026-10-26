@@ -71,11 +71,11 @@ else
     </MudText>
     @if (_playersView)
     {
-        <NpcProfileCards Npcs="_profiles" ShowLinks="true" />
+        <NpcProfileCards Npcs="_profiles" ShowLinks="true" PlayersView="true" />
     }
     else
     {
-        <NpcProfileCards Npcs="_profiles" ShowLinks="true" EmptyText="No appearance, reputation or backstory yet.">
+        <NpcProfileCards Npcs="_profiles" ShowLinks="true">
             <Badges>
                 @if (_byId[context.Id].IsShared)
                 {

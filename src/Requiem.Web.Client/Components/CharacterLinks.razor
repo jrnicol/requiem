@@ -1,0 +1,43 @@
+@* Links between a character's pages, as icons at the top of each: its profile, its editor and its play view.
+   The current page's icon is highlighted rather than linked. Player characters have no profile page. *@
+
+<MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="character-links" role="navigation" aria-label="Character pages">
+    @foreach (var link in Links)
+    {
+        <MudTooltip Text="@link.Label">
+            @if (link.Page == Current)
+            {
+                <MudIconButton Icon="@link.Icon" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Medium"
+                               aria-label="@link.Label" aria-current="page" />
+            }
+            else
+            {
+                <MudIconButton Icon="@link.Icon" Href="@link.Url" Size="Size.Medium" aria-label="@link.Label" />
+            }
+        </MudTooltip>
+    }
+</MudStack>
+
+@code {
+    public enum Page { Profile, Edit, Play }
+
+    [Parameter, EditorRequired] public Guid Id { get; set; }
+    [Parameter, EditorRequired] public Page Current { get; set; }
+    [Parameter] public bool IsFullSheet { get; set; }
+    [Parameter] public bool IsPlayerCharacter { get; set; }
+    /// <summary>Link the profile in the players' view (from a players'-view page).</summary>
+    [Parameter] public bool PlayersView { get; set; }
+
+    public static string ProfileUrl(Guid id, bool playersView = false) => $"profile/{id}{(playersView ? "?view=players" : "")}";
+
+    private IEnumerable<(Page Page, string Label, string Icon, string Url)> Links
+    {
+        get
+        {
+            if (!IsPlayerCharacter) yield return (Page.Profile, "Profile", Icons.Material.Outlined.AccountBox, ProfileUrl(Id, PlayersView));
+            yield return (Page.Edit, "Edit", Icons.Material.Outlined.Edit,
+                IsPlayerCharacter ? $"characters/{Id}" : IsFullSheet ? $"sheets/{Id}" : $"npcs/{Id}");
+            yield return (Page.Play, "At the table", Icons.Material.Filled.Casino, $"play/{Id}");
+        }
+    }
+}

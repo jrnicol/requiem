@@ -28,16 +28,16 @@ else if (_form is null || _editContext is null)
 }
 else
 {
-    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap" Class="mb-4">
         <BackButton Fallback="@CampaignUrl" Label="Back" />
-        <MudText Typo="Typo.h5" Class="brand-font" Style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
+        <MudText Typo="Typo.h5" Class="brand-font" Style="flex:1; min-width:8rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">
             @(IsNew ? "New Supporting Cast" : string.IsNullOrWhiteSpace(_form.Name) ? "Unnamed NPC" : _form.Name)
         </MudText>
         @if (!IsNew)
         {
+            <CharacterLinks Id="Id!.Value" Current="CharacterLinks.Page.Edit" />
             <MudMenu Icon="@Icons.Material.Filled.MoreVert" AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight"
                      aria-label="More actions">
-                <MudMenuItem Icon="@Icons.Material.Filled.Casino" Href="@($"play/{Id}")">Run at the table</MudMenuItem>
                 <MudMenuItem Icon="@Icons.Material.Outlined.Upgrade" OnClick="PromoteAsync">
                     Promote to full sheet…
                 </MudMenuItem>

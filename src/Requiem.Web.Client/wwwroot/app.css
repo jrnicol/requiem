@@ -695,9 +695,11 @@ body:has(.mud-layout) .boot-splash {
     color: var(--mud-palette-text-disabled);
 }
 
-/* Known NPC cards (KnownNpcCards): the top of the card opens the full profile. */
+/* NPC profile cards (NpcProfileCards): the top of the card links to the profile page. */
 .known-npc-open {
-    cursor: pointer;
+    display: block;
+    color: inherit;
+    text-decoration: none;
     border-radius: inherit;
 }
 

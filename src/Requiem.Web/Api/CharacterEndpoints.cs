@@ -23,8 +23,25 @@ public static class CharacterEndpoints
         characters.MapPut("/{id:guid}/supporting-cast", UpdateSupportingCastAsync);
         characters.MapDelete("/{id:guid}", DeleteAsync);
         characters.MapPost("/{id:guid}/move", MoveAsync);
+        characters.MapGet("/{id:guid}/profile", GetProfileAsync);
 
         return api;
+    }
+
+    /// <summary>
+    /// An NPC's profile page. The campaign's Storytellers get every detail, or with <paramref name="playersView"/> exactly
+    /// what the players see; players get a shared NPC's revealed details. Anything else, player characters included,
+    /// reads as not found.
+    /// </summary>
+    private static async Task<Results<Ok<KnownNpc>, NotFound>> GetProfileAsync(
+        Guid id, bool? playersView, ICharacterStore characters, CampaignAccess access, CancellationToken ct)
+    {
+        if (await characters.GetAsync(id, ct) is not { IsPlayerCharacter: false, CampaignId: { } campaignId } character)
+            return TypedResults.NotFound();
+        var role = await access.RoleInAsync(campaignId, ct);
+        if (role == CampaignRole.Storyteller && playersView != true) return TypedResults.Ok(ProfileMapper.ToFullProfile(character));
+        if (role is null || character.Visibility != NpcVisibility.Known) return TypedResults.NotFound();
+        return TypedResults.Ok(ProfileMapper.ToKnownNpc(character, role == CampaignRole.Storyteller));
     }
 
     /// <summary>

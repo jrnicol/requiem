@@ -1,0 +1,135 @@
+@page "/profile/{Id:guid}"
+@* An NPC's profile, with a link of its own. The campaign's Storytellers see everything, or with ?view=players exactly
+   what the players see; players see what's been revealed. *@
+@inject RequiemApi Api
+@inject NavigationManager Navigation
+
+<PageTitle>@(_npc?.Name ?? "Profile") · Requiem</PageTitle>
+
+@if (_loadFailed)
+{
+    <MudAlert Severity="Severity.Error" Variant="Variant.Outlined" Class="mt-4">
+        Couldn't load this profile.
+        <MudButton Variant="Variant.Text" Color="Color.Inherit" OnClick="LoadAsync">Try again</MudButton>
+    </MudAlert>
+}
+else if (_notFound)
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-4">
+        <BackButton Label="Back" />
+    </MudStack>
+    @if (PlayersView)
+    {
+        <MudAlert Severity="Severity.Info" Variant="Variant.Outlined">
+            Your players can't see this NPC: it isn't shared with them.
+            <MudLink Href="@CharacterLinks.ProfileUrl(Id)">See the whole profile</MudLink>
+        </MudAlert>
+    }
+    else
+    {
+        <MudAlert Severity="Severity.Warning" Variant="Variant.Outlined">This profile doesn't exist, or isn't shared with you.</MudAlert>
+    }
+}
+else if (_npc is null)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+}
+else
+{
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap" Class="mb-4">
+        <BackButton Label="Back" />
+        <MudText Typo="Typo.h4" Class="brand-font" Style="flex:1; min-width:10rem">@_npc.Name</MudText>
+        @* Only the campaign's Storytellers get the tier, and with it the links. *@
+        @if (_npc.Tier is { } tier)
+        {
+            <CharacterLinks Id="Id" Current="CharacterLinks.Page.Profile" IsFullSheet="tier == CharacterTier.FullSheet" PlayersView="PlayersView" />
+        }
+    </MudStack>
+
+    @if (_npc.Tier is not null)
+    {
+        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-3">
+            <MudSwitch T="bool" Value="PlayersView" ValueChanged="SetPlayersView" Color="Color.Primary" Label="Players' View" />
+            @if (PlayersView)
+            {
+                <MudText Typo="Typo.body2" Color="Color.Secondary">Exactly what your players see.</MudText>
+            }
+        </MudStack>
+    }
+
+    <MudGrid Spacing="4">
+        @if (_npc.PortraitUrl is { } url)
+        {
+            <MudItem xs="12" sm="5" md="4">
+                <div class="portrait-box" style="max-width:320px; margin:0 auto">
+                    <img src="@url" alt="Portrait of @_npc.Name" class="portrait" />
+                </div>
+            </MudItem>
+        }
+        <MudItem xs="12" sm="@(_npc.PortraitUrl is null ? 12 : 7)" md="@(_npc.PortraitUrl is null ? 12 : 8)">
+            <MudStack Spacing="3">
+                @if (NpcProfileCards.Facts(_npc) is { Length: > 0 } facts)
+                {
+                    <MudText Typo="Typo.subtitle1" Color="Color.Secondary">@facts</MudText>
+                }
+                @foreach (var (label, text) in Texts(_npc))
+                {
+                    <div>
+                        <MudText Typo="Typo.h6">@label</MudText>
+                        <MudText Typo="Typo.body1" Style="white-space: pre-line">@text</MudText>
+                    </div>
+                }
+                @if (!Texts(_npc).Any())
+                {
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">
+                        @(_npc.Tier is not null && !PlayersView ? "No appearance, reputation or backstory yet." : "Nothing more is known yet.")
+                    </MudText>
+                }
+            </MudStack>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+
+    private bool PlayersView => View == "players";
+
+    private KnownNpc? _npc;
+    private bool _notFound;
+    private bool _loadFailed;
+    private (Guid, bool)? _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded == (Id, PlayersView)) return;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loaded = (Id, PlayersView);
+        _npc = null;
+        _notFound = _loadFailed = false;
+        try
+        {
+            _npc = await Api.GetProfileAsync(Id, PlayersView);
+            _notFound = _npc is null;
+        }
+        catch (HttpRequestException)
+        {
+            _loadFailed = true;
+        }
+    }
+
+    // Each view has its own address; switching doesn't add to the back arrow's history.
+    private void SetPlayersView(bool on) => Navigation.NavigateTo(CharacterLinks.ProfileUrl(Id, on), replace: true);
+
+    private static IEnumerable<(string Label, string Text)> Texts(KnownNpc npc)
+    {
+        if (npc.Appearance is { } appearance) yield return ("Appearance", appearance);
+        if (npc.Reputation is { } reputation) yield return ("Reputation", reputation);
+        if (npc.Backstory is { } backstory) yield return ("Backstory", backstory);
+    }
+}

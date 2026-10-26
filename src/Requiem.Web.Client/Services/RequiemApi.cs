@@ -344,6 +344,16 @@ public sealed class RequiemApi(HttpClient http)
     }
 
     /// <summary>The campaign's shared NPCs, showing only what the Storyteller has revealed.</summary>
+    /// <summary>An NPC's profile: everything for its Storyteller (unless <paramref name="playersView"/>), the revealed details for players.</summary>
+    /// <returns>Null when it isn't there for this user, e.g. an unshared NPC in the players' view.</returns>
+    public async Task<KnownNpc?> GetProfileAsync(Guid id, bool playersView)
+    {
+        using var response = await http.GetAsync($"api/characters/{id}/profile{(playersView ? "?playersView=true" : "")}");
+        if (response.StatusCode == HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadFromJsonAsync<KnownNpc>(RequiemJson.Options);
+    }
+
     public async Task<IReadOnlyList<KnownNpc>> GetKnownNpcsAsync(Guid campaignId) =>
         await GetAsync<List<KnownNpc>>($"api/campaigns/{campaignId}/known-npcs");
 

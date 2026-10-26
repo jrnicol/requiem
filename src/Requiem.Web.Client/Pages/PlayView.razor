@@ -21,7 +21,7 @@ else
             <MudText Typo="Typo.h4" Class="brand-font">@_npc.Name</MudText>
             <MudText Typo="Typo.caption" Color="Color.Secondary">@Subtitle</MudText>
         </div>
-        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.Edit" Href="@EditUrl">@(_npc.IsPlayerCharacter ? "Character" : "Edit sheet")</MudButton>
+        <CharacterLinks Id="Id" Current="CharacterLinks.Page.Play" IsFullSheet="_npc.IsFullSheet" IsPlayerCharacter="_npc.IsPlayerCharacter" />
     </MudStack>
 
     <MudGrid Spacing="3">
@@ -233,7 +233,6 @@ else
 
     private string BackUrl => Scene is { } scene ? $"scenes/{scene}" : _npc?.IsPlayerCharacter == true ? $"characters/{Id}" : "campaigns";
     // A player character's page works for its player and its Storyteller alike (and links to the full editor).
-    private string EditUrl => _npc?.IsPlayerCharacter == true ? $"characters/{Id}" : _npc?.IsFullSheet == true ? $"sheets/{Id}" : $"npcs/{Id}";
 
     private string Subtitle => string.Join(" · ", new[]
     {
