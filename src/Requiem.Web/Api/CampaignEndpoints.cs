@@ -33,6 +33,7 @@ public static class CampaignEndpoints
         campaigns.MapDelete("/{id:guid}", DeleteAsync);
         campaigns.MapDelete("/{id:guid}/members/{userId}", RemoveMemberAsync);
         campaigns.MapPost("/{id:guid}/invites", CreateInviteAsync);
+        campaigns.MapGet("/{id:guid}/known-npcs", KnownNpcsAsync);
         campaigns.MapDelete("/{id:guid}/invites/{inviteId:guid}", RevokeInviteAsync);
 
         // The join page needs the preview before anyone has an account.
@@ -142,6 +143,21 @@ public static class CampaignEndpoints
 
         await store.DeleteAsync(id, ct);
         return TypedResults.NoContent();
+    }
+
+    /// <summary>
+    /// The NPCs the Storyteller has shared, as every member sees them: the name and only the revealed details.
+    /// Storytellers get the same cards, so they can check what the players see.
+    /// </summary>
+    private static async Task<Results<Ok<List<KnownNpc>>, NotFound>> KnownNpcsAsync(
+        Guid id, ICharacterStore characters, CampaignAccess access, CancellationToken ct)
+    {
+        if (await access.RoleInAsync(id, ct) is null) return TypedResults.NotFound();
+        return TypedResults.Ok((await characters.ListByCampaignAsync(id, ct))
+            .Where(c => !c.IsPlayerCharacter && !c.IsArchived && c.Visibility == NpcVisibility.Known)
+            .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(ProfileMapper.ToKnownNpc)
+            .ToList());
     }
 
     // ---------- Members ----------

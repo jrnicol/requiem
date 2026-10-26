@@ -344,6 +344,30 @@ public sealed class RequiemApi(HttpClient http)
         return errors is { Count: > 0 } ? string.Join(" ", errors.Values.SelectMany(v => v)) : $"Couldn't award it ({(int)response.StatusCode}).";
     }
 
+    /// <summary>The campaign's shared NPCs, showing only what the Storyteller has revealed.</summary>
+    public async Task<IReadOnlyList<KnownNpc>> GetKnownNpcsAsync(Guid campaignId) =>
+        await GetAsync<List<KnownNpc>>($"api/campaigns/{campaignId}/known-npcs");
+
+    /// <summary>Uploads a portrait (already resized in the browser) and returns its address and the character's new version.</summary>
+    public async Task<(PortraitResult? Result, string? Problem)> UploadPortraitAsync(Guid characterId, Stream image, string contentType)
+    {
+        using var content = new StreamContent(image);
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        using var response = await http.PutAsync($"api/characters/{characterId}/portrait", content);
+        return await ReadPortraitAsync(response, "upload the portrait");
+    }
+
+    public async Task<(PortraitResult? Result, string? Problem)> RemovePortraitAsync(Guid characterId)
+    {
+        using var response = await http.DeleteAsync($"api/characters/{characterId}/portrait");
+        return await ReadPortraitAsync(response, "remove the portrait");
+    }
+
+    private static async Task<(PortraitResult?, string?)> ReadPortraitAsync(HttpResponseMessage response, string what) =>
+        response.IsSuccessStatusCode
+            ? (await response.Content.ReadFromJsonAsync<PortraitResult>(RequiemJson.Options), null)
+            : (null, await ReadDetailAsync(response) ?? $"Couldn't {what} ({(int)response.StatusCode}).");
+
     /// <returns>Null when undone; otherwise why not.</returns>
     public async Task<string?> UndoAsync(string auditId)
     {

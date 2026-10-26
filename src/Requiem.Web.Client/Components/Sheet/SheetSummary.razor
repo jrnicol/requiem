@@ -42,7 +42,10 @@
             {
                 <tr><td>Morality</td><td class="text-right"><b>@(Form.Morality ?? 0)</b></td></tr>
             }
-            <tr><td>XP available</td><td class="text-right"><b>@Form.ExperienceAvailable</b></td></tr>
+            @if (Form.IsPlayerCharacter)
+            {
+                <tr><td>XP available</td><td class="text-right"><b>@Form.ExperienceAvailable</b></td></tr>
+            }
         </tbody>
     </MudSimpleTable>
 
@@ -90,7 +93,7 @@
                 yield return $"Humanity {humanity} + Blood Potency {BloodPotency} exceeds Generation {generation}'s strength of {strength}; " +
                              $"Humanity should drop to {HumanityRules.ClampToGeneration(humanity, BloodPotency, generation)}.";
 
-            if (Form.Experience.Any(e => e.Amount < 0) && !ExperienceRules.IsXpUnlocked(Form.CorruptionMarks.Count))
+            if (Form.IsPlayerCharacter && Form.Experience.Any(e => e.Amount < 0) && !ExperienceRules.IsXpUnlocked(Form.CorruptionMarks.Count))
                 yield return $"XP has been spent with only {Form.CorruptionMarks.Count} of {FullSheetForm.MaxCorruption} Corruption.";
 
             if (Vitae == 0)

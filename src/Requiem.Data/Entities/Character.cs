@@ -20,7 +20,13 @@ public class Character
     /// <summary>Supporting Cast: drives how the NPC approaches situations.</summary>
     public string? Ambition { get; set; }
     public string? Faction { get; set; }
+    /// <summary>The uploaded portrait's address (under /media/), or null.</summary>
     public string? PortraitUrl { get; set; }
+    /// <summary>What others notice: looks, manner, dress.</summary>
+    public string? Appearance { get; set; }
+    /// <summary>What people say about them.</summary>
+    public string? Reputation { get; set; }
+    public string? Backstory { get; set; }
     public string? Notes { get; set; }
     /// <summary>Never shown to players once campaigns exist (Phase 2).</summary>
     public string? GmNotes { get; set; }
@@ -77,8 +83,8 @@ public class Character
     public CharacterStatus Status { get; set; } = CharacterStatus.Active;
     /// <summary>NPCs only: whether players know this NPC (and see its public card).</summary>
     public NpcVisibility Visibility { get; set; } = NpcVisibility.Hidden;
-    /// <summary>What other players see on the character's public card.</summary>
-    public string? PublicDescription { get; set; }
+    /// <summary>NPCs only: what the public card shows beyond the name.</summary>
+    public NpcReveal Reveals { get; set; }
     /// <summary>Ghouls: the vampire whose blood they drink, in the app (DomitorId) or by name.</summary>
     public Guid? DomitorId { get; set; }
     public Character? Domitor { get; set; }

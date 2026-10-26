@@ -1,6 +1,7 @@
 using Amazon.Lambda.AspNetCoreServer.Hosting;
 using Microsoft.AspNetCore.DataProtection;
 using Requiem.Data.Dynamo;
+using Requiem.Data.Media;
 using Requiem.Data.Stores;
 using Requiem.Shared.Accounts;
 using Requiem.Shared.Contracts;
@@ -25,6 +26,7 @@ if (serveClient) builder.WebHost.UseStaticWebAssets();
 
 // Add services to the container. The UI is a standalone WebAssembly app; this host is the API.
 builder.Services.AddRequiemData(builder.Configuration);
+builder.Services.AddRequiemMedia(builder.Configuration, builder.Environment.ContentRootPath);
 builder.Services.AddRequiemAuth(builder.Configuration, builder.Environment);
 builder.Services.AddProblemDetails();
 builder.Services.ConfigureHttpJsonOptions(o => RequiemJson.Configure(o.SerializerOptions));
@@ -78,6 +80,16 @@ if (serveClient)
         return next(context);
     });
 }
+// Uploaded portraits: CloudFront serves them from S3 when hosted; locally, the app serves its media folder.
+if (MediaRegistration.LocalFolder(app.Services) is { } mediaFolder)
+{
+    Directory.CreateDirectory(mediaFolder);
+    app.UseStaticFiles(new StaticFileOptions
+    {
+        FileProvider = new Microsoft.Extensions.FileProviders.PhysicalFileProvider(mediaFolder),
+        RequestPath = MediaOptions.UrlPrefix.TrimEnd('/'),
+    });
+}
 app.UseRouting();
 
 app.UseAuthentication();
@@ -96,7 +108,8 @@ app.MapGroup("/api")
     .MapPlayEndpoints()
     .MapCampaignEndpoints()
     .MapPlayerCharacterEndpoints()
-    .MapAdvancementEndpoints();
+    .MapAdvancementEndpoints()
+    .MapPortraitEndpoints();
 
 // Answers 200 while the app is up. Holds no data, so it's open.
 app.MapHealthChecks("/healthz").AllowAnonymous();

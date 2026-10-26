@@ -7,7 +7,7 @@ namespace Requiem.Web.Api;
 /// <summary>Maps between the Supporting Cast form and the character entity.</summary>
 internal static class SupportingCastMapper
 {
-    public static SupportingCastForm ToForm(Character c) => new()
+    public static SupportingCastForm ToForm(Character c) => new SupportingCastForm
     {
         Id = c.Id,
         CampaignId = c.CampaignId,
@@ -31,7 +31,7 @@ internal static class SupportingCastMapper
         GmNotes = c.GmNotes,
         IsArchived = c.IsArchived,
         Version = c.Version,
-    };
+    }.WithProfile(c);
 
     /// <summary>Copies the form onto the entity. Call after validation; trims text and replaces lists.</summary>
     public static void Apply(SupportingCastForm form, Character c)
@@ -57,6 +57,7 @@ internal static class SupportingCastMapper
         c.Notes = Clean(form.Notes);
         c.GmNotes = Clean(form.GmNotes);
         c.IsArchived = form.IsArchived;
+        ProfileMapper.ApplyProfile(form, c);
 
         var specialties = form.Specialties.Select(s => s.Trim()).ToList();
         if (!c.Specialties.Where(s => s.Skill is null).Select(s => s.Name).SequenceEqual(specialties))

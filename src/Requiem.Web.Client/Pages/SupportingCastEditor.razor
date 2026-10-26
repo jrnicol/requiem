@@ -233,6 +233,11 @@ else
                     }
 
                     <MudPaper Outlined="true" Class="pa-4">
+                        <MudText Typo="Typo.h6" Class="mb-2">Profile</MudText>
+                        <ProfilePanel Form="_form" CharacterId="Id" Name="@_form.Name" IsNpc="true" Changed="StateHasChanged" />
+                    </MudPaper>
+
+                    <MudPaper Outlined="true" Class="pa-4">
                         <MudText Typo="Typo.h6" Class="mb-2">Notes</MudText>
                         <MudStack Spacing="2">
                             <MudTextField @bind-Value="_form.Notes" For="() => _form.Notes" Label="Notes"

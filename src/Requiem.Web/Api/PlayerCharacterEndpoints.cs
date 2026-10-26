@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using Requiem.Data.Entities;
+using Requiem.Data.Media;
 using Requiem.Data.Stores;
 using Requiem.Shared.Campaigns;
 using Requiem.Shared.Characters;
@@ -152,7 +153,7 @@ public static class PlayerCharacterEndpoints
 
     /// <summary>A player can throw away a Draft; anything further along is the Storyteller's to retire.</summary>
     private static async Task<Results<NoContent, NotFound, Conflict<ProblemDetailsBody>>> DeleteAsync(
-        Guid id, ICharacterStore characters, CampaignAccess access, AuditLog audit, CancellationToken ct)
+        Guid id, ICharacterStore characters, IMediaStore media, CampaignAccess access, AuditLog audit, CancellationToken ct)
     {
         var character = await access.OwnCharacterAsync(id, ct);
         if (character is null) return TypedResults.NotFound();
@@ -161,6 +162,7 @@ public static class PlayerCharacterEndpoints
 
         audit.Record(character.CampaignId, null, "character.delete", $"Deleted the draft character {character.Name}.");
         await characters.DeleteAsync(id, ct);
+        await media.DeleteAsync(character.PortraitUrl, ct);
         return TypedResults.NoContent();
     }
 
@@ -316,8 +318,8 @@ public static class PlayerCharacterEndpoints
 
     /// <summary>
     /// Once a character is in play its stats change through XP and its trackers through the play view, so a
-    /// player's save only touches its story: Virtue and Vice details, the Beast, relationships, their own
-    /// Scripts' wording, notes and equipment.
+    /// player's save only touches its story: Virtue and Vice details, the Beast, relationships, appearance,
+    /// reputation and backstory, their own Scripts' wording, notes and equipment.
     /// </summary>
     private static FullSheetForm StoryOnly(FullSheetForm form, FullSheetForm current, Campaign campaign)
     {
@@ -325,6 +327,9 @@ public static class PlayerCharacterEndpoints
         current.ViceDetail = form.ViceDetail;
         current.BeastDescription = form.BeastDescription;
         current.Relationships = form.Relationships;
+        current.Appearance = form.Appearance;
+        current.Reputation = form.Reputation;
+        current.Backstory = form.Backstory;
         current.Notes = form.Notes;
         current.Equipment = form.Equipment;
         foreach (var script in current.Scripts.Where(s => s.Kind is not (ScriptKind.Coterie or ScriptKind.ChronicleTenet)))

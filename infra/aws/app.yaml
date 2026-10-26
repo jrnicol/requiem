@@ -119,6 +119,15 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub '${ApiLogGroup.Arn}:*'
+        - PolicyName: media
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${MediaBucket.Arn}/media/*'
 
   ApiFunction:
     Type: AWS::Lambda::Function
@@ -152,6 +161,7 @@ Resources:
           DynamoDB__Region: !Ref AWS::Region
           Database__SetupOnStartup: 'true'
           Hosting__ServeClient: 'false'
+          Media__Bucket: !Ref MediaBucket
           # A one-time code, useless once the first account exists; visible only to the project's admins.
           Auth__SetupCode: !Sub '{{resolve:secretsmanager:${SetupCode}:SecretString}}'
 
@@ -262,6 +272,60 @@ Resources:
             Condition:
               Bool: { aws:SecureTransport: 'false' }
 
+  MediaBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: >-
+          Uploaded images (character portraits) under media/, written by the API and served by CloudFront at
+          /media/*. Each upload gets a new, unguessable name, so files are cached for good.
+        must: >-
+          Kept when the stack is deleted: these are users' uploads, not build output. Never synced by the
+          pipeline (unlike SiteBucket).
+    Properties:
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault: { SSEAlgorithm: AES256 }
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: replaced-portraits
+            Status: Enabled
+            NoncurrentVersionExpiration: { NoncurrentDays: 30 }
+
+  MediaBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref MediaBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: CloudFrontReads
+            Effect: Allow
+            Principal: { Service: cloudfront.amazonaws.com }
+            Action: s3:GetObject
+            Resource: !Sub '${MediaBucket.Arn}/media/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+          - Sid: HttpsOnly
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt MediaBucket.Arn
+              - !Sub '${MediaBucket.Arn}/*'
+            Condition:
+              Bool: { aws:SecureTransport: 'false' }
+
   SiteAccess:
     Type: AWS::CloudFront::OriginAccessControl
     Properties:
@@ -316,6 +380,11 @@ Resources:
             OriginAccessControlId: !GetAtt SiteAccess.Id
             S3OriginConfig:
               OriginAccessIdentity: ''
+          - Id: media
+            DomainName: !GetAtt MediaBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt SiteAccess.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
           - Id: api
             DomainName: !Select [2, !Split ['/', !GetAtt HttpApi.ApiEndpoint]]
             CustomOriginConfig:
@@ -333,6 +402,14 @@ Resources:
             - EventType: viewer-request
               FunctionARN: !GetAtt AppPaths.FunctionMetadata.FunctionARN
         CacheBehaviors:
+          - PathPattern: /media/*
+            TargetOriginId: media
+            ViewerProtocolPolicy: redirect-to-https
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 658327ea-f89d-4fab-a63d-7e88639e58f6 # Managed-CachingOptimized
+            ResponseHeadersPolicyId: 67f7725c-6f97-4210-82d7-5512b31e9d03 # Managed-SecurityHeadersPolicy
+            Compress: true
           - PathPattern: /api/*
             TargetOriginId: api
             ViewerProtocolPolicy: redirect-to-https

@@ -11,8 +11,10 @@ Built tablet-first and usable on a phone. Its data is in DynamoDB (DynamoDB Loca
 - **Advancement.** Players log Corruption (vampires) or Links (mortals and ghouls), mark their Scripts, and spend XP at the book's prices once unlocked. Storytellers award XP and can undo any spend, award or logged act from the character's history.
 - **NPC roster,** per campaign. Two tiers of NPC:
   - **Supporting Cast:** quick stat blocks (Physical / Mental / Social, Edges, Specialties, Assets).
-  - **Full sheets:** the whole paper sheet, covering attributes, skills, Disciplines, merits and flaws, health and wounds, compels, Scripts, Milestones and XP.
+  - **Full sheets:** the whole paper sheet, covering attributes, skills, Disciplines, merits and flaws, health and wounds, and compels. Scripts, Milestones, Corruption and XP are for player characters only.
   - A Supporting Cast NPC can be promoted to a full sheet.
+- **Profiles.** Every character (NPC or player character) has a portrait, uploaded and shrunk in the browser, plus appearance, reputation and backstory.
+- **Known NPCs.** A Storyteller can share an NPC with the campaign's players, then reveal details one at a time as the players find out: portrait, faction, bloodline, generation, appearance, reputation and backstory. Players see only what's revealed, on the campaign's **Known NPCs** tab.
 - **Rules engine.** The house rules are coded and tested:
   - Wounds, with a dice penalty set by the worst wound's type.
   - Blood Potency, Vitae, Bloodlust and Hunger dice.

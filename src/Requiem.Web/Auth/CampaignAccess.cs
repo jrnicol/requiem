@@ -99,9 +99,6 @@ public sealed class CampaignAccess(ICampaignStore campaigns, ICharacterStore cha
         return all;
     }
 
-    public async Task<bool> CanManageCharacterAsync(Guid id, CancellationToken ct) =>
-        await ManagedCharacterAsync(id, ct) is not null;
-
     /// <summary>True when every one of <paramref name="ids"/> is a character of <paramref name="campaignId"/> the user runs.</summary>
     public async Task<bool> AllInCampaignAsync(Guid? campaignId, IReadOnlyCollection<Guid> ids, CancellationToken ct)
     {

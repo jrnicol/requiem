@@ -30,6 +30,9 @@ public sealed class RequiemWebFactory : WebApplicationFactory<Program>
 
     private readonly string _table = $"requiem-test-{Guid.NewGuid():N}";
 
+    /// <summary>Where this factory's uploaded portraits go (the app serves them under /media/).</summary>
+    public string MediaFolder { get; } = Path.Combine(Path.GetTempPath(), "requiem-tests", $"media-{Guid.NewGuid():N}");
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -37,6 +40,7 @@ public sealed class RequiemWebFactory : WebApplicationFactory<Program>
         builder.UseSetting("DynamoDB:TableName", _table);
         builder.UseSetting("DynamoDB:CreateTable", "true");
         builder.UseSetting("Auth:SetupCode", SetupCode);
+        builder.UseSetting("Media:LocalPath", MediaFolder);
     }
 
     protected override IHost CreateHost(IHostBuilder builder)
@@ -92,5 +96,11 @@ public sealed class RequiemWebFactory : WebApplicationFactory<Program>
         if (response.StatusCode != HttpStatusCode.OK)
             throw new InvalidOperationException($"Sign-in as {email} failed: {(int)response.StatusCode}");
         return client;
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (Directory.Exists(MediaFolder)) Directory.Delete(MediaFolder, recursive: true);
     }
 }

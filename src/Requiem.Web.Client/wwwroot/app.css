@@ -679,3 +679,26 @@ body:has(.mud-layout) .boot-splash {
     color: var(--mud-palette-primary);
     letter-spacing: 0.1em;
 }
+/* Character portraits (ProfilePanel, known-NPC cards): square, cropped to fill. */
+.portrait-box {
+    aspect-ratio: 1;
+    width: 100%;
+    max-width: 240px;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--mud-palette-background-gray);
+}
+
+.portrait {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.portrait-empty {
+    font-size: 4rem !important;
+    color: var(--mud-palette-text-disabled);
+}

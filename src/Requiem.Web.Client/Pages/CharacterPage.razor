@@ -97,6 +97,12 @@ else
                         case CreationStep.Relationships:
                             <RelationshipsStep Form="_form" Changed="OnChangedAsync" />
                             break;
+                        case CreationStep.Profile:
+                            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+                                Optional, and yours to change any time: how they look, what people say about them, and where they come from.
+                            </MudText>
+                            <ProfilePanel Form="_form" CharacterId="_form.Id" Name="@_form.Name" Changed="OnChangedAsync" />
+                            break;
                         case CreationStep.Scripts:
                             <ScriptsStep Form="_form" Changed="OnChangedAsync" />
                             break;
@@ -255,7 +261,9 @@ else
                                 Once in play, stats change through experience; the story is yours to keep up to date.
                             </MudText>
                         }
-                        <MudText Typo="Typo.subtitle1">Relationships</MudText>
+                        <MudText Typo="Typo.subtitle1">Profile</MudText>
+                        <ProfilePanel Form="_form" CharacterId="_form.Id" Name="@_form.Name" Changed="OnChangedAsync" ReadOnly="!editable" />
+                        <MudText Typo="Typo.subtitle1" Class="mt-4">Relationships</MudText>
                         <RelationshipsStep Form="_form" Changed="OnChangedAsync" ReadOnly="!editable" />
                         <MudText Typo="Typo.subtitle1" Class="mt-4">Scripts</MudText>
                         <ScriptsStep Form="_form" Changed="OnChangedAsync" ReadOnly="!editable" />
@@ -380,7 +388,7 @@ else
                 }
                 var kind = Allowed.HasFlag(CharacterTemplates.Vampire) ? CharacterKind.Vampire
                     : Allowed.HasFlag(CharacterTemplates.Ghoul) ? CharacterKind.Ghoul : CharacterKind.Mortal;
-                var form = new FullSheetForm { CampaignId = _campaign.Id, Kind = kind, Scripts = FullSheetForm.DefaultScripts(kind) };
+                var form = new FullSheetForm { CampaignId = _campaign.Id, Kind = kind, Scripts = FullSheetForm.DefaultScripts(kind), IsPlayerCharacter = true };
                 foreach (var script in form.Scripts)
                 {
                     if (script.Kind == ScriptKind.Coterie) script.Text = _campaign.CoterieScript ?? "";
@@ -574,6 +582,7 @@ else
         CreationStep.Concept => "Concept",
         CreationStep.VirtueAndVice => "Virtue & Vice",
         CreationStep.Relationships => "Relationships",
+        CreationStep.Profile => "Profile",
         CreationStep.Scripts => "Scripts",
         CreationStep.Milestones => "Milestones",
         CreationStep.Attributes => "Attributes",

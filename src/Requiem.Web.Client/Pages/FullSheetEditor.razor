@@ -193,6 +193,10 @@ else
                                        Label="Archived (hidden from the roster by default)" />
                         </MudStack>
                     </MudTabPanel>
+
+                    <MudTabPanel Text="Profile" Icon="@Icons.Material.Outlined.AccountBox">
+                        <ProfilePanel Form="_form" CharacterId="Id" Name="@_form.Name" IsNpc="!_form.IsPlayerCharacter" Changed="StateHasChanged" />
+                    </MudTabPanel>
                 </MudTabs>
             </MudItem>
 
@@ -276,7 +280,7 @@ else
                 Navigation.NavigateTo("campaigns", replace: true);
                 return;
             }
-            var form = Id is { } id ? await Api.GetFullSheetAsync(id) : new FullSheetForm { CampaignId = Campaign };
+            var form = Id is { } id ? await Api.GetFullSheetAsync(id) : new FullSheetForm { CampaignId = Campaign, Scripts = [] };
             if (form is null)
             {
                 _notFound = true;

@@ -32,5 +32,22 @@ public enum CharacterStatus
 /// <summary>Whether players know an NPC exists. Known NPCs show players a public card, never the sheet.</summary>
 public enum NpcVisibility { Hidden, Known }
 
+/// <summary>
+/// What a Known NPC's public card shows players, beyond its name. The Storyteller reveals more as the players
+/// find out; anything not revealed stays off the card.
+/// </summary>
+[Flags]
+public enum NpcReveal
+{
+    None = 0,
+    Portrait = 1,
+    Faction = 2,
+    Bloodline = 4,
+    Generation = 8,
+    Appearance = 16,
+    Reputation = 32,
+    Backstory = 64,
+}
+
 /// <summary>The three ways to earn a Link with other player characters (WoD Core p.75).</summary>
 public enum LinkKind { Camaraderie, Support, CedeSpotlight }

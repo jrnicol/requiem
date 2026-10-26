@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
+using Requiem.Shared.Campaigns;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Contracts;
 using Requiem.Shared.Rules;
@@ -73,6 +74,11 @@ public class FullSheetApiTests(RequiemWebFactory factory) : IClassFixture<Requie
             CorruptionMarks = ["Drank a scab dry"],
             Equipment = ["Crowbar", "Union card"],
             Experience = [new() { Amount = 5, Reason = "Session 1" }, new() { Amount = -3, Reason = "Brawl 1" }],
+            Appearance = "Broad shoulders, union pin",
+            Reputation = "Keeps her word on the docks",
+            Backstory = "Embraced during the 1919 strike.",
+            IsShared = true,
+            Reveals = NpcReveal.Faction | NpcReveal.Appearance,
         };
         form.Attributes[CharacterAttribute.Strength] = 4;
         form.Attributes[CharacterAttribute.Stamina] = 3;
@@ -92,13 +98,18 @@ public class FullSheetApiTests(RequiemWebFactory factory) : IClassFixture<Requie
         Assert.Equal("Hates the Docks", loaded.Merits.Single(m => m.Kind == MeritKind.Flaw).Name);
         Assert.Equal(DamageType.Bashing, Assert.Single(loaded.Wounds).Type);
         Assert.Equal(6, Assert.Single(loaded.Compels).Rating);
-        Assert.Equal(MilestoneStage.Risk, Assert.Single(loaded.Milestones).Stage);
-        Assert.Single(loaded.CorruptionMarks);
         Assert.Equal(["Crowbar", "Union card"], loaded.Equipment);
-        Assert.Equal(2, loaded.ExperienceAvailable);
-        Assert.Equal(4, loaded.Scripts.Count);
-        Assert.True(loaded.Scripts.Single(s => s.Slot == 1).IsMarked);
         Assert.Equal(8, loaded.Health); // Stamina 3 + Size 5
+        // Milestones, Corruption, XP and Scripts are how player characters grow; an NPC keeps none.
+        Assert.False(loaded.IsPlayerCharacter);
+        Assert.Empty(loaded.Milestones);
+        Assert.Empty(loaded.CorruptionMarks);
+        Assert.Empty(loaded.Experience);
+        Assert.Empty(loaded.Scripts);
+        Assert.Equal(("Broad shoulders, union pin", "Keeps her word on the docks", "Embraced during the 1919 strike."),
+            (loaded.Appearance, loaded.Reputation, loaded.Backstory));
+        Assert.True(loaded.IsShared);
+        Assert.Equal(NpcReveal.Faction | NpcReveal.Appearance, loaded.Reveals);
 
         var row = Assert.Single(await GetAsync<List<CharacterSummary>>("/api/characters?search=ilsa"));
         Assert.Equal(CharacterTier.FullSheet, row.Tier);
@@ -234,7 +245,7 @@ public class FullSheetApiTests(RequiemWebFactory factory) : IClassFixture<Requie
         Assert.Equal(["Warehouse 9"], sheet.Equipment);
         Assert.Contains("Intimidation", sheet.Notes);
         Assert.Contains("Tough", sheet.Notes);
-        Assert.Equal(4, sheet.Scripts.Count);
+        Assert.Empty(sheet.Scripts); // an NPC still: no Scripts
 
         Assert.Equal(HttpStatusCode.NotFound, (await _http.GetAsync($"/api/characters/{npc.Id}/supporting-cast")).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await _http.GetAsync($"/api/characters/{npc.Id}/full-sheet")).StatusCode);

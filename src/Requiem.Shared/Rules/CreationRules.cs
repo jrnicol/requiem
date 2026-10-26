@@ -7,7 +7,7 @@ namespace Requiem.Shared.Rules;
 /// <summary>The creation wizard's steps, in the book's order (WoD Core p.55, then VtR p.136).</summary>
 public enum CreationStep
 {
-    Template, Concept, VirtueAndVice, Relationships, Scripts, Milestones, Attributes, Skills, Merits, Blood, Review,
+    Template, Concept, VirtueAndVice, Relationships, Profile, Scripts, Milestones, Attributes, Skills, Merits, Blood, Review,
 }
 
 public enum CreationIssueLevel

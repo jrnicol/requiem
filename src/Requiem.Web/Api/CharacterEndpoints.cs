@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Requiem.Data.Entities;
+using Requiem.Data.Media;
 using Requiem.Data.Stores;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Contracts;
@@ -124,10 +125,13 @@ public static class CharacterEndpoints
     }
 
     private static async Task<Results<NoContent, NotFound>> DeleteAsync(
-        Guid id, ICharacterStore characters, CampaignAccess access, CancellationToken ct) =>
-        await access.CanManageCharacterAsync(id, ct) && await characters.DeleteAsync(id, ct)
-            ? TypedResults.NoContent()
-            : TypedResults.NotFound();
+        Guid id, ICharacterStore characters, IMediaStore media, CampaignAccess access, CancellationToken ct)
+    {
+        if (await access.ManagedCharacterAsync(id, ct) is not { } character || !await characters.DeleteAsync(id, ct))
+            return TypedResults.NotFound();
+        await media.DeleteAsync(character.PortraitUrl, ct);
+        return TypedResults.NoContent();
+    }
 
     private static async Task<Character?> LoadSupportingCastAsync(CampaignAccess access, Guid id, CancellationToken ct) =>
         await access.ManagedCharacterAsync(id, ct) is { Tier: CharacterTier.SupportingCast } character ? character : null;

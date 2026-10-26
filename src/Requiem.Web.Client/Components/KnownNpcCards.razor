@@ -1,0 +1,65 @@
+@* The campaign's shared NPCs as players see them: the name, and only the details the Storyteller has revealed. *@
+
+@if (Npcs.Count == 0)
+{
+    <MudText Typo="Typo.body2" Color="Color.Secondary">
+        @(IsStoryteller
+            ? "No NPCs are shared yet. Open an NPC, and under Profile switch on \"Share with players\"."
+            : "Nobody yet. NPCs appear here as the Storyteller introduces them.")
+    </MudText>
+}
+else
+{
+    @if (IsStoryteller)
+    {
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">This is exactly what your players see.</MudText>
+    }
+    <MudGrid Spacing="2">
+        @foreach (var npc in Npcs)
+        {
+            <MudItem xs="12" sm="6" lg="4">
+                <MudPaper Outlined="true" Class="pa-3 known-npc">
+                    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
+                        @if (npc.PortraitUrl is { } url)
+                        {
+                            <div class="portrait-box" style="max-width:96px; flex:none">
+                                <img src="@url" alt="Portrait of @npc.Name" class="portrait" />
+                            </div>
+                        }
+                        <div style="min-width:0">
+                            <MudText Typo="Typo.h6">@npc.Name</MudText>
+                            @if (Facts(npc) is { Length: > 0 } facts)
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Secondary">@facts</MudText>
+                            }
+                        </div>
+                    </MudStack>
+                    @foreach (var (label, text) in Texts(npc))
+                    {
+                        <MudText Typo="Typo.subtitle2" Class="mt-2">@label</MudText>
+                        <MudText Typo="Typo.body2" Style="white-space: pre-line">@text</MudText>
+                    }
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<KnownNpc> Npcs { get; set; } = [];
+    [Parameter] public bool IsStoryteller { get; set; }
+
+    private static string Facts(KnownNpc npc) => string.Join(" · ", new[]
+    {
+        npc.Faction,
+        npc.Bloodline,
+        npc.Generation is { } generation ? $"Generation {generation}" : null,
+    }.OfType<string>());
+
+    private static IEnumerable<(string Label, string Text)> Texts(KnownNpc npc)
+    {
+        if (npc.Appearance is { } appearance) yield return ("Appearance", appearance);
+        if (npc.Reputation is { } reputation) yield return ("Reputation", reputation);
+        if (npc.Backstory is { } backstory) yield return ("Backstory", backstory);
+    }
+}

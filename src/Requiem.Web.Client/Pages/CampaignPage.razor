@@ -169,6 +169,17 @@ else
             </MudPaper>
         </MudTabPanel>
 
+        <MudTabPanel Text="Known NPCs" Icon="@Icons.Material.Outlined.Badge">
+            @if (_knownNpcs is null)
+            {
+                <MudProgressLinear Indeterminate="true" Color="Color.Primary" />
+            }
+            else
+            {
+                <KnownNpcCards Npcs="_knownNpcs" IsStoryteller="_campaign.IsStoryteller" />
+            }
+        </MudTabPanel>
+
         @if (_campaign.IsStoryteller)
         {
             <MudTabPanel Text="Invites" Icon="@Icons.Material.Outlined.Link">
@@ -289,6 +300,7 @@ else
     private List<SceneSummary>? _scenes;
     private string? _sceneName;
     private List<PlayerCharacterSummary>? _characters;
+    private IReadOnlyList<KnownNpc>? _knownNpcs;
 
     /// <summary>A Storyteller sees how many characters wait for approval.</summary>
     private string CharactersTabTitle =>
@@ -301,6 +313,7 @@ else
         Show(await Api.GetCampaignAsync(Id));
         if (_campaign is null) return;
         _characters = await Api.ListPlayerCharactersAsync(Id);
+        _knownNpcs = await Api.GetKnownNpcsAsync(Id);
         if (_campaign.IsStoryteller) await LoadStorytellerDataAsync();
     }
 

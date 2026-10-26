@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Requiem.Shared.Campaigns;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Rules;
 
@@ -8,7 +9,7 @@ namespace Requiem.Shared.Contracts;
 /// Create/edit model for a Supporting Cast NPC. The same validation runs in the browser
 /// (EditForm + DataAnnotationsValidator) and on the server.
 /// </summary>
-public sealed class SupportingCastForm : IValidatableObject
+public sealed class SupportingCastForm : IValidatableObject, ICharacterProfile
 {
     public const int MaxListItemLength = 200;
 
@@ -48,6 +49,13 @@ public sealed class SupportingCastForm : IValidatableObject
 
     [StringLength(4000)] public string? Notes { get; set; }
     [StringLength(4000)] public string? GmNotes { get; set; }
+
+    [StringLength(CharacterProfile.MaxDescriptionLength)] public string? Appearance { get; set; }
+    [StringLength(CharacterProfile.MaxDescriptionLength)] public string? Reputation { get; set; }
+    [StringLength(CharacterProfile.MaxBackstoryLength)] public string? Backstory { get; set; }
+    public string? PortraitUrl { get; set; }
+    public bool IsShared { get; set; }
+    public NpcReveal Reveals { get; set; }
 
     public bool IsArchived { get; set; }
 

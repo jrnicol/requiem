@@ -1,0 +1,153 @@
+@* Who they are to look at and to hear of: portrait, appearance, reputation, backstory. For NPCs, also what
+   the campaign's players may see (their public card), revealed one detail at a time as the players find out. *@
+@inject RequiemApi Api
+@inject ISnackbar Snackbar
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" sm="4" md="3">
+        <div class="portrait-box">
+            @if (Form.PortraitUrl is { } url)
+            {
+                <img src="@url" alt="Portrait of @Name" class="portrait" />
+            }
+            else
+            {
+                <MudIcon Icon="@Icons.Material.Outlined.Person" Class="portrait-empty" />
+            }
+        </div>
+        @if (!ReadOnly)
+        {
+            @if (CharacterId is null)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Save the character first, then add a portrait.</MudText>
+            }
+            else
+            {
+                <MudStack Row="true" Spacing="1" Class="mt-1">
+                    <MudFileUpload T="IBrowserFile" Accept=".jpg,.jpeg,.png,.webp" FilesChanged="UploadAsync" Disabled="_busy">
+                        <CustomContent Context="upload">
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Disabled="_busy"
+                                       StartIcon="@Icons.Material.Outlined.Upload" OnClick="upload.OpenFilePickerAsync">
+                                @(Form.PortraitUrl is null ? "Add portrait" : "Replace")
+                            </MudButton>
+                        </CustomContent>
+                    </MudFileUpload>
+                    @if (Form.PortraitUrl is not null)
+                    {
+                        <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="_busy" OnClick="RemoveAsync">Remove</MudButton>
+                    }
+                </MudStack>
+            }
+        }
+    </MudItem>
+    <MudItem xs="12" sm="8" md="9">
+        <MudTextField T="string" Value="Form.Appearance" ValueChanged="v => Update(() => Form.Appearance = v)" Label="Appearance"
+                      HelperText="What others notice: looks, manner, dress." Lines="3" Sizing="InputSizing.Auto" ReadOnly="ReadOnly"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="CharacterProfile.MaxDescriptionLength" Class="mb-2" />
+        <MudTextField T="string" Value="Form.Reputation" ValueChanged="v => Update(() => Form.Reputation = v)" Label="Reputation"
+                      HelperText="What people say about them." Lines="2" Sizing="InputSizing.Auto" ReadOnly="ReadOnly"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="CharacterProfile.MaxDescriptionLength" Class="mb-2" />
+        <MudTextField T="string" Value="Form.Backstory" ValueChanged="v => Update(() => Form.Backstory = v)" Label="Backstory"
+                      Lines="5" Sizing="InputSizing.Auto" ReadOnly="ReadOnly"
+                      Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="CharacterProfile.MaxBackstoryLength" />
+    </MudItem>
+</MudGrid>
+
+@if (IsNpc)
+{
+    <MudDivider Class="my-3" />
+    <MudSwitch T="bool" Value="Form.IsShared" ValueChanged="v => Update(() => Form.IsShared = v)" Color="Color.Primary" Disabled="ReadOnly"
+               Label="Share with players" />
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">
+        Players in this campaign see this NPC's name, plus what you reveal below. Reveal more as they find out.
+    </MudText>
+    @if (Form.IsShared)
+    {
+        <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="0">
+            @foreach (var (reveal, label) in Reveals)
+            {
+                <MudCheckBox T="bool" Value="Form.Reveals.HasFlag(reveal)" Disabled="ReadOnly" Dense="true" Label="@label"
+                             ValueChanged="on => Update(() => Form.Reveals = on ? Form.Reveals | reveal : Form.Reveals & ~reveal)" />
+            }
+        </MudStack>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public ICharacterProfile Form { get; set; } = null!;
+    /// <summary>Null until the character has been saved; portraits attach to a saved character.</summary>
+    [Parameter] public Guid? CharacterId { get; set; }
+    [Parameter] public string? Name { get; set; }
+    /// <summary>NPCs can be shared with players; player characters can't.</summary>
+    [Parameter] public bool IsNpc { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+
+    /// <summary>Phone photos are big; the browser shrinks them to this before uploading.</summary>
+    private const int PortraitSize = 512;
+    private const long MaxUpload = 2 * 1024 * 1024;
+
+    private static readonly (NpcReveal Reveal, string Label)[] Reveals =
+    [
+        (NpcReveal.Portrait, "Portrait"), (NpcReveal.Faction, "Faction"), (NpcReveal.Bloodline, "Bloodline"),
+        (NpcReveal.Generation, "Generation"), (NpcReveal.Appearance, "Appearance"), (NpcReveal.Reputation, "Reputation"),
+        (NpcReveal.Backstory, "Backstory"),
+    ];
+
+    private bool _busy;
+
+    private async Task UploadAsync(IBrowserFile? file)
+    {
+        if (file is null || CharacterId is not { } id) return;
+        _busy = true;
+        try
+        {
+            var resized = await file.RequestImageFileAsync("image/jpeg", PortraitSize, PortraitSize);
+            await using var stream = resized.OpenReadStream(MaxUpload);
+            var (result, problem) = await Api.UploadPortraitAsync(id, stream, "image/jpeg");
+            await ApplyAsync(result, problem);
+        }
+        catch (IOException)
+        {
+            Snackbar.Add("That image is too large even after shrinking it. Try a smaller one.", Severity.Warning);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task RemoveAsync()
+    {
+        if (CharacterId is not { } id) return;
+        _busy = true;
+        try
+        {
+            var (result, problem) = await Api.RemovePortraitAsync(id);
+            await ApplyAsync(result, problem);
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ApplyAsync(PortraitResult? result, string? problem)
+    {
+        if (result is null)
+        {
+            Snackbar.Add(problem ?? "Couldn't change the portrait.", Severity.Warning);
+            return;
+        }
+        // The upload saved the character, so the open sheet takes its new version (or its next save would conflict).
+        Form.PortraitUrl = result.PortraitUrl;
+        Form.Version = result.Version;
+        await Changed.InvokeAsync();
+    }
+
+    private async Task Update(Action change)
+    {
+        change();
+        await Changed.InvokeAsync();
+    }
+}

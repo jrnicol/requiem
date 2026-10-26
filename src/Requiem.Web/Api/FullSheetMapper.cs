@@ -8,7 +8,7 @@ namespace Requiem.Web.Api;
 /// <summary>Maps between the full sheet form and the character entity (with all its parts loaded).</summary>
 internal static class FullSheetMapper
 {
-    public static FullSheetForm ToForm(Character c) => new()
+    public static FullSheetForm ToForm(Character c) => new FullSheetForm
     {
         Id = c.Id,
         CampaignId = c.CampaignId,
@@ -60,7 +60,7 @@ internal static class FullSheetMapper
         Compels = c.Compels.OrderBy(x => x.Id)
             .Select(x => new CompelEntry { Name = x.Name, Rating = x.Rating, EndsWhen = x.EndsWhen }).ToList(),
         Conditions = c.Conditions.OrderBy(x => x.Id).Select(x => x.Name).ToList(),
-        Scripts = c.Scripts.Count == 0
+        Scripts = c.Scripts.Count == 0 && c.IsPlayerCharacter
             ? FullSheetForm.DefaultScripts(c.Kind)
             : c.Scripts.OrderBy(s => s.Slot)
                 .Select(s => new ScriptEntry { Slot = s.Slot, Kind = s.Kind, Text = s.Text, IsMarked = s.IsMarked }).ToList(),
@@ -75,14 +75,24 @@ internal static class FullSheetMapper
             .Select(x => new XpLedgerEntry { Amount = x.Amount, Reason = x.Reason, CreatedAt = x.CreatedAt }).ToList(),
         Notes = c.Notes,
         GmNotes = c.GmNotes,
+        IsPlayerCharacter = c.IsPlayerCharacter,
         IsArchived = c.IsArchived,
         Version = c.Version,
-    };
+    }.WithProfile(c);
 
     /// <summary>Copies a validated form onto the entity. Lists are only rewritten when they changed.</summary>
     public static void Apply(FullSheetForm form, Character c, DateTimeOffset now)
     {
         form.NormalizeForKind();
+        // Scripts, Milestones, Corruption and XP are how player characters grow; NPCs have none.
+        if (!c.IsPlayerCharacter)
+        {
+            form.Scripts = [];
+            form.Milestones = [];
+            form.CorruptionMarks = [];
+            form.Experience = [];
+        }
+        ProfileMapper.ApplyProfile(form, c);
 
         c.Tier = CharacterTier.FullSheet;
         c.Name = form.Name.Trim();
@@ -278,9 +288,6 @@ internal static class FullSheetMapper
             var note = $"Promoted from Supporting Cast. {string.Join(". ", carried)}.";
             c.Notes = string.IsNullOrWhiteSpace(c.Notes) ? note : $"{c.Notes}\n\n{note}";
         }
-
-        if (c.Scripts.Count == 0)
-            c.Scripts.AddRange(FullSheetForm.DefaultScripts().Select(s => new CharacterScript { Slot = s.Slot, Kind = s.Kind, Text = "" }));
 
         c.Physical = c.Mental = c.Social = null;
         c.Edges = NpcEdge.None;

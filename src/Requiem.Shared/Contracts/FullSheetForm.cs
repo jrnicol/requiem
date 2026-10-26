@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Requiem.Shared.Campaigns;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Rules;
 
@@ -83,7 +84,7 @@ public sealed class XpLedgerEntry
 /// hard limits; the rules engine's softer checks (Discipline dots vs Blood Potency, etc.) are
 /// warnings the editor shows without blocking a save.
 /// </summary>
-public sealed class FullSheetForm : IValidatableObject
+public sealed class FullSheetForm : IValidatableObject, ICharacterProfile
 {
     public const int MaxTextLength = 200;
     public const int MaxCorruption = ExperienceRules.ProgressPointsToUnlockXp;
@@ -160,6 +161,20 @@ public sealed class FullSheetForm : IValidatableObject
 
     [StringLength(4000)] public string? Notes { get; set; }
     [StringLength(4000)] public string? GmNotes { get; set; }
+
+    [StringLength(CharacterProfile.MaxDescriptionLength)] public string? Appearance { get; set; }
+    [StringLength(CharacterProfile.MaxDescriptionLength)] public string? Reputation { get; set; }
+    [StringLength(CharacterProfile.MaxBackstoryLength)] public string? Backstory { get; set; }
+    public string? PortraitUrl { get; set; }
+    public bool IsShared { get; set; }
+    public NpcReveal Reveals { get; set; }
+
+    /// <summary>
+    /// Set by the server. Scripts, Milestones, Corruption and XP belong to player characters; a full-sheet
+    /// NPC has none, and they're cleared when one is saved.
+    /// </summary>
+    public bool IsPlayerCharacter { get; set; }
+
     public bool IsArchived { get; set; }
     public Guid Version { get; set; }
 
