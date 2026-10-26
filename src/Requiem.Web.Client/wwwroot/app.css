@@ -706,3 +706,19 @@ body:has(.mud-layout) .boot-splash {
     background: var(--mud-palette-action-default-hover);
     outline: none;
 }
+
+/* Tab strips (every MudTabs) scroll natively: swipe on a tablet, or the thin scrollbar with a mouse. MudBlazor slides
+   the strip with a transform instead, but tapping a tab also makes the browser scroll it into view, and the two
+   together pushed the tabs out of sight. tabs.js keeps the active tab in view. */
+.mud-tabs-tabbar-wrapper {
+    transform: none !important;
+}
+
+.mud-tabs-tabbar-content {
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.mud-tabs-scroll-button {
+    display: none !important;
+}
