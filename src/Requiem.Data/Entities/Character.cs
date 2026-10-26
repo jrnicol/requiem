@@ -91,7 +91,6 @@ public class Character
     public string? DomitorName { get; set; }
     /// <summary>The Storyteller's note when they return a submitted character to its player.</summary>
     public string? ReviewNote { get; set; }
-    public bool IsArchived { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     /// <summary>Optimistic concurrency token, regenerated on every save.</summary>

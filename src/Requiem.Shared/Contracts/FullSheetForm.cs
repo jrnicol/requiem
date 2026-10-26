@@ -175,7 +175,6 @@ public sealed class FullSheetForm : IValidatableObject, ICharacterProfile
     /// </summary>
     public bool IsPlayerCharacter { get; set; }
 
-    public bool IsArchived { get; set; }
     public Guid Version { get; set; }
 
     public bool IsVampire => Kind == CharacterKind.Vampire;

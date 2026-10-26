@@ -22,14 +22,8 @@
                 }
             </MudChipSet>
             <MudSpacer />
-            @* Players never see archived NPCs, so the players' view has nothing to switch. *@
-            @if (!_playersView)
-            {
-                <MudSwitch T="bool" Value="_includeArchived" ValueChanged="OnIncludeArchivedChanged"
-                           Color="Color.Primary" Label="Archived" />
-            }
             <MudSwitch T="bool" Value="_playersView" ValueChanged="OnPlayersViewChanged"
-                       Color="Color.Primary" Label="Players' view" />
+                       Color="Color.Primary" Label="Players' View" />
         </MudStack>
     </MudItem>
 </MudGrid>
@@ -83,18 +77,9 @@ else
     {
         <NpcProfileCards Npcs="_profiles" ShowLinks="true" EmptyText="No appearance, reputation or backstory yet.">
             <Badges>
-                @if (_byId[context.Id] is { IsArchived: var archived, IsShared: var shared } && (archived || shared))
+                @if (_byId[context.Id].IsShared)
                 {
-                    <MudStack Row="true" Spacing="1" Class="mt-1">
-                        @if (archived)
-                        {
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Outlined.Archive" Class="ma-0">Archived</MudChip>
-                        }
-                        @if (shared)
-                        {
-                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Outlined.Badge" Class="ma-0">Shared</MudChip>
-                        }
-                    </MudStack>
+                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Outlined.Badge" Class="ma-0 mt-1">Shared</MudChip>
                 }
             </Badges>
         </NpcProfileCards>
@@ -111,11 +96,10 @@ else
     private bool _loadFailed;
     private string? _search;
     private string _kindFilter = "All";
-    private bool _includeArchived;
     private bool _playersView;
     private int _loads;
 
-    private bool IsFiltered => !string.IsNullOrWhiteSpace(_search) || _kindFilter != "All" || (_includeArchived && !_playersView);
+    private bool IsFiltered => !string.IsNullOrWhiteSpace(_search) || _kindFilter != "All";
 
     private string CountText => _profiles!.Count == 1 ? "1 NPC" : $"{_profiles.Count} NPCs";
 
@@ -143,7 +127,7 @@ else
             }
             else
             {
-                var characters = await Api.ListCharactersAsync(new CharacterQuery(_search, Kind: kind, IncludeArchived: _includeArchived, CampaignId: CampaignId));
+                var characters = await Api.ListCharactersAsync(new CharacterQuery(_search, Kind: kind, CampaignId: CampaignId));
                 if (load != _loads) return;
                 _profiles = characters.Select(Profile).ToList();
                 _byId = characters.ToDictionary(c => c.Id);
@@ -161,12 +145,6 @@ else
     private async Task OnKindFilterChanged(string? value)
     {
         _kindFilter = value ?? "All";
-        await LoadAsync();
-    }
-
-    private async Task OnIncludeArchivedChanged(bool value)
-    {
-        _includeArchived = value;
         await LoadAsync();
     }
 

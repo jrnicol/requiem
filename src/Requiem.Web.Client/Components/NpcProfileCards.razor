@@ -48,7 +48,7 @@
     [Parameter] public bool ShowLinks { get; set; }
     /// <summary>Shown when there's no appearance, reputation or backstory.</summary>
     [Parameter] public string EmptyText { get; set; } = "Nothing more is known yet.";
-    /// <summary>Extra chips under a card's facts, such as Archived.</summary>
+    /// <summary>Extra chips under a card's facts, such as Shared.</summary>
     [Parameter] public RenderFragment<KnownNpc>? Badges { get; set; }
 
     public static string Facts(KnownNpc npc) => string.Join(" · ", new[]

@@ -308,7 +308,6 @@ public static class PlayerCharacterEndpoints
         form.CorruptionMarks = current?.CorruptionMarks ?? [];
         form.Compels = current?.Compels ?? [];
         form.Conditions = current?.Conditions ?? [];
-        form.IsArchived = false;
         // A draft starts with full trackers.
         form.WillpowerCurrent = form.WillpowerDots;
         if (form.VitaeCapacity is { } vitae) form.VitaeCurrent = vitae;

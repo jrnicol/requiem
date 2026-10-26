@@ -170,17 +170,6 @@ public class ApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebFacto
     }
 
     [Fact]
-    public async Task Archived_npcs_are_hidden_unless_requested()
-    {
-        var form = await CreateAsync(new SupportingCastForm { Name = "Retired Hound" });
-        form.IsArchived = true;
-        await UpdateAsync(form);
-
-        Assert.DoesNotContain(await ListAsync(), c => c.Id == form.Id);
-        Assert.Contains(await ListAsync("includeArchived=true"), c => c.Id == form.Id && c.IsArchived);
-    }
-
-    [Fact]
     public async Task Kind_filter_narrows_the_roster()
     {
         await CreateAsync(new SupportingCastForm { Name = "Ghoul Driver", Kind = CharacterKind.Ghoul });

@@ -29,7 +29,6 @@ internal static class SupportingCastMapper
         Assets = c.Items.Where(i => i.Kind == ItemKind.Asset).OrderBy(i => i.SortOrder).Select(i => i.Name).ToList(),
         Notes = c.Notes,
         GmNotes = c.GmNotes,
-        IsArchived = c.IsArchived,
         Version = c.Version,
     }.WithProfile(c);
 
@@ -56,7 +55,6 @@ internal static class SupportingCastMapper
         c.VitaeCurrent = form.VitaeCurrent;
         c.Notes = Clean(form.Notes);
         c.GmNotes = Clean(form.GmNotes);
-        c.IsArchived = form.IsArchived;
         ProfileMapper.ApplyProfile(form, c);
 
         var specialties = form.Specialties.Select(s => s.Trim()).ToList();

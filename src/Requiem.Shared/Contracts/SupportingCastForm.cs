@@ -57,7 +57,6 @@ public sealed class SupportingCastForm : IValidatableObject, ICharacterProfile
     public bool IsShared { get; set; }
     public NpcReveal Reveals { get; set; }
 
-    public bool IsArchived { get; set; }
 
     /// <summary>Concurrency token from the last load; the save is rejected if someone else saved since.</summary>
     public Guid Version { get; set; }

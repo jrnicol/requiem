@@ -59,7 +59,6 @@ public static class CharacterEndpoints
     {
         IEnumerable<Character> characters = (await access.ManagedCharactersAsync(query.CampaignId, ct))
             .Where(c => c.IsPlayerCharacter == query.PlayerCharacters);
-        if (!query.IncludeArchived) characters = characters.Where(c => !c.IsArchived);
         if (query.Tier is { } tier) characters = characters.Where(c => c.Tier == tier);
         if (query.Kind is { } kind) characters = characters.Where(c => c.Kind == kind);
         if (!string.IsNullOrWhiteSpace(query.Search))
@@ -74,7 +73,7 @@ public static class CharacterEndpoints
         return characters
             .Select(c => new CharacterSummary(
                 c.Id, c.Name, c.Tier, c.Kind, c.Concept, c.Faction, c.Bloodline?.Name,
-                c.Physical, c.Mental, c.Social, c.Edges, c.BloodPotency, c.IsArchived, c.UpdatedAt,
+                c.Physical, c.Mental, c.Social, c.Edges, c.BloodPotency, c.UpdatedAt,
                 c.Tier == CharacterTier.FullSheet
                     ? c.Attributes.Where(a => a.Attribute == Shared.Rules.CharacterAttribute.Stamina)
                         .Select(a => (int?)a.Dots).FirstOrDefault() + c.Size

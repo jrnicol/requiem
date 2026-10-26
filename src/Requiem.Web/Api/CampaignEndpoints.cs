@@ -154,7 +154,7 @@ public static class CampaignEndpoints
     {
         if (await access.RoleInAsync(id, ct) is not { } role) return TypedResults.NotFound();
         return TypedResults.Ok((await characters.ListByCampaignAsync(id, ct))
-            .Where(c => !c.IsPlayerCharacter && !c.IsArchived && c.Visibility == NpcVisibility.Known)
+            .Where(c => !c.IsPlayerCharacter && c.Visibility == NpcVisibility.Known)
             .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
             .Select(c => ProfileMapper.ToKnownNpc(c, role == CampaignRole.Storyteller))
             .ToList());

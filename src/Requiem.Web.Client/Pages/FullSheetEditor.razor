@@ -193,8 +193,6 @@ else
                                           HelperText="Hidden from players once campaigns arrive."
                                           Variant="Variant.Outlined" Lines="3" Sizing="InputSizing.Auto" MaxLength="4000"
                                           Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Outlined.Lock" />
-                            <MudSwitch T="bool" @bind-Value="_form.IsArchived" Color="Color.Primary"
-                                       Label="Archived (hidden from the roster by default)" />
                         </MudStack>
                     </MudTabPanel>
 
@@ -291,7 +289,7 @@ else
                 return;
             }
             // A sire comes from the same campaign.
-            _roster = await Api.ListCharactersAsync(new CharacterQuery(IncludeArchived: true, CampaignId: form.CampaignId));
+            _roster = await Api.ListCharactersAsync(new CharacterQuery(CampaignId: form.CampaignId));
             SetForm(form);
         }
         catch (HttpRequestException)

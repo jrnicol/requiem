@@ -85,7 +85,6 @@ public sealed class RequiemApi(HttpClient http)
         if (!string.IsNullOrWhiteSpace(query.Search)) parameters.Add($"search={Uri.EscapeDataString(query.Search.Trim())}");
         if (query.Tier is { } tier) parameters.Add($"tier={tier}");
         if (query.Kind is { } kind) parameters.Add($"kind={kind}");
-        if (query.IncludeArchived) parameters.Add("includeArchived=true");
         if (query.CampaignId is { } campaignId) parameters.Add($"campaignId={campaignId}");
         if (query.PlayerCharacters) parameters.Add("playerCharacters=true");
         var url = parameters.Count == 0 ? "api/characters" : $"api/characters?{string.Join('&', parameters)}";

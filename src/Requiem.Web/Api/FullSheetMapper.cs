@@ -76,7 +76,6 @@ internal static class FullSheetMapper
         Notes = c.Notes,
         GmNotes = c.GmNotes,
         IsPlayerCharacter = c.IsPlayerCharacter,
-        IsArchived = c.IsArchived,
         Version = c.Version,
     }.WithProfile(c);
 
@@ -123,7 +122,6 @@ internal static class FullSheetMapper
         c.FortitudeBoost = form.FortitudeBoost;
         c.Notes = Clean(form.Notes);
         c.GmNotes = Clean(form.GmNotes);
-        c.IsArchived = form.IsArchived;
 
         // Supporting Cast fields don't apply to a full sheet.
         c.Physical = c.Mental = c.Social = null;

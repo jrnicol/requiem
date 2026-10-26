@@ -240,11 +240,11 @@ Built Azure-ready from day one: managed-identity SQL auth, health checks, Applic
 1. Scaffold the solution, Identity, EF migrations, rules engine + tests. *(Done except Identity.)*
 2. Seed the ruleset (traits, bloodlines, predators, merits/flaws, compels, edges). *(Done.)*
 3. Supporting Cast and Full Sheet editors (responsive), with Promote. *(Done 2026-10-23. Full sheet at `/sheets/{id}` with Traits, Powers, Condition and Story tabs. Promote is in the Supporting Cast editor's menu.)*
-4. Roster: search/filter by bloodline, faction, tag, tier; archive; duplicate; templates. *(Search, kind filter and archive done.)*
+4. Roster: search/filter by bloodline, faction, tag, tier; duplicate; templates. *(Search and kind filter done. Archiving was built, then dropped: the filters do its job.)*
 
 **UI as built (2026-10-23):**
 - Blazor WebAssembly with prerendering off, MudBlazor 9 and a dark theme.
-- `/` is the roster: cards, search, kind filter, archived toggle.
+- `/` is the roster: cards, search, kind filter.
 - `/npcs/new` and `/npcs/{id}` are the Supporting Cast editor, with an "At the table" panel computed by the rules engine.
 - The API is under `/api` (`Requiem.Web/Api`), with JSON shared via `RequiemJson`.
 

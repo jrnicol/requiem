@@ -21,7 +21,6 @@ public sealed record CharacterSummary(
     int? Social,
     NpcEdge Edges,
     int? BloodPotency,
-    bool IsArchived,
     DateTimeOffset UpdatedAt,
     int? Health = null,
     int? WillpowerDots = null,
@@ -40,6 +39,5 @@ public sealed record CharacterQuery(
     string? Search = null,
     CharacterTier? Tier = null,
     CharacterKind? Kind = null,
-    bool IncludeArchived = false,
     Guid? CampaignId = null,
     bool PlayerCharacters = false);
