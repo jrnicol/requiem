@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Requiem.Data.Entities;
 using Requiem.Data.Media;
 using Requiem.Data.Stores;
+using Requiem.Shared.Campaigns;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Contracts;
 using Requiem.Web.Auth;
@@ -80,7 +81,9 @@ public static class CharacterEndpoints
                     : null,
                 c.Tier == CharacterTier.FullSheet ? c.WillpowerDots : null,
                 c.Tier == CharacterTier.FullSheet ? c.Humanity ?? c.Morality : null,
-                c.CampaignId))
+                c.CampaignId,
+                c.PortraitUrl, c.Generation, c.Appearance, c.Reputation, c.Backstory,
+                !c.IsPlayerCharacter && c.Visibility == NpcVisibility.Known))
             .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }

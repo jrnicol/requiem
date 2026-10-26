@@ -143,14 +143,6 @@ body:has(.mud-layout) .boot-splash {
     transform: scale(0.99);
 }
 
-.stat-line {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    align-items: center;
-    column-gap: 0.75rem;
-    row-gap: 0.125rem;
-}
-
 /* ---------- Editor ---------- */
 .sticky-summary {
     position: sticky;

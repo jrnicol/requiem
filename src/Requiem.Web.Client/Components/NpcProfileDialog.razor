@@ -1,4 +1,4 @@
-@* A Known NPC's full profile: the portrait, facts and every revealed description. *@
+@* An NPC's full profile: the portrait, facts and descriptions it was given (on Known NPCs, only the revealed ones). *@
 @inject NavigationManager Navigation
 
 <MudDialog>
@@ -10,7 +10,7 @@
                     <img src="@url" alt="Portrait of @Npc.Name" class="portrait" />
                 </div>
             }
-            @if (KnownNpcCards.Facts(Npc) is { Length: > 0 } facts)
+            @if (NpcProfileCards.Facts(Npc) is { Length: > 0 } facts)
             {
                 <MudText Typo="Typo.subtitle1" Color="Color.Secondary">@facts</MudText>
             }
@@ -23,16 +23,16 @@
             }
             @if (!Texts().Any())
             {
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Nothing more is known yet.</MudText>
+                <MudText Typo="Typo.body2" Color="Color.Secondary">@EmptyText</MudText>
             }
         </MudStack>
     </DialogContent>
     @* The title bar's close button closes it; Storytellers also get their links here. *@
     <DialogActions>
-        @if (IsStoryteller)
+        @if (ShowLinks)
         {
-            <MudButton StartIcon="@Icons.Material.Outlined.Edit" OnClick="() => Go(KnownNpcCards.EditUrl(Npc))">Edit character</MudButton>
-            <MudButton StartIcon="@Icons.Material.Filled.Casino" OnClick="() => Go(KnownNpcCards.PlayUrl(Npc))">At the table</MudButton>
+            <MudButton StartIcon="@Icons.Material.Outlined.Edit" OnClick="() => Go(NpcProfileCards.EditUrl(Npc))">Edit character</MudButton>
+            <MudButton StartIcon="@Icons.Material.Filled.Casino" OnClick="() => Go(NpcProfileCards.PlayUrl(Npc))">At the table</MudButton>
         }
     </DialogActions>
 </MudDialog>
@@ -40,7 +40,9 @@
 @code {
     [CascadingParameter] private IMudDialogInstance Dialog { get; set; } = null!;
     [Parameter, EditorRequired] public KnownNpc Npc { get; set; } = null!;
-    [Parameter] public bool IsStoryteller { get; set; }
+    [Parameter] public bool ShowLinks { get; set; }
+    /// <summary>Shown when there's no appearance, reputation or backstory.</summary>
+    [Parameter] public string EmptyText { get; set; } = "Nothing more is known yet.";
 
     private IEnumerable<(string Label, string Text)> Texts()
     {

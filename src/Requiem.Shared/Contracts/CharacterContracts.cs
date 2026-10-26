@@ -7,6 +7,7 @@ namespace Requiem.Shared.Contracts;
 /// <param name="Health">Full sheets only: Stamina + Size.</param>
 /// <param name="WillpowerDots">Full sheets only.</param>
 /// <param name="Morality">Full sheets only: Humanity for vampires, Morality otherwise.</param>
+/// <param name="IsShared">Shown to the campaign's players on its Known NPCs tab.</param>
 public sealed record CharacterSummary(
     Guid Id,
     string Name,
@@ -25,7 +26,13 @@ public sealed record CharacterSummary(
     int? Health = null,
     int? WillpowerDots = null,
     int? Morality = null,
-    Guid? CampaignId = null);
+    Guid? CampaignId = null,
+    string? PortraitUrl = null,
+    int? Generation = null,
+    string? Appearance = null,
+    string? Reputation = null,
+    string? Backstory = null,
+    bool IsShared = false);
 
 /// <param name="CampaignId">Only that campaign's characters; otherwise those of every campaign the user tells.</param>
 /// <param name="PlayerCharacters">Players' characters instead of NPCs.</param>

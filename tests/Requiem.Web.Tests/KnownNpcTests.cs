@@ -43,6 +43,24 @@ public class KnownNpcTests(RequiemWebFactory factory) : IClassFixture<RequiemWeb
     }
 
     [Fact]
+    public async Task The_storytellers_roster_has_every_profile_detail_whatever_is_revealed()
+    {
+        var table = await PlayerTable.CreateAsync(factory);
+        await CreateNpcAsync(table, "Hidden Harriet", shared: false, NpcReveal.None);
+        await CreateNpcAsync(table, "Marcel Dubois", shared: true, NpcReveal.Faction);
+
+        var roster = (await table.Storyteller.GetFromJsonAsync<List<CharacterSummary>>(
+            $"/api/characters?campaignId={table.CampaignId}", RequiemJson.Options))!;
+        var harriet = Assert.Single(roster, c => c.Name == "Hidden Harriet");
+        Assert.False(harriet.IsShared);
+        Assert.Equal(11, harriet.Generation);
+        Assert.Equal("Silver cane, older suit", harriet.Appearance);
+        Assert.Equal("Never forgets a favor", harriet.Reputation);
+        Assert.Equal("Sired in Paris in 1789.", harriet.Backstory);
+        Assert.True(Assert.Single(roster, c => c.Name == "Marcel Dubois").IsShared);
+    }
+
+    [Fact]
     public async Task Outsiders_see_no_cards_and_player_characters_are_never_shared()
     {
         var table = await PlayerTable.CreateAsync(factory);
