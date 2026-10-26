@@ -38,7 +38,7 @@ aws cloudformation deploy --region us-east-2 --stack-name requiem-pipeline --tem
 CloudFormation creates the connection as **Pending**. Only a person can approve it:
 
 1. Open the connections list in the AWS console (https://us-east-2.console.aws.amazon.com/codesuite/settings/connections?region=us-east-2, or search for CodePipeline, then **Settings > Connections**). Choose **requiem-pipeline-github**, then **Update pending connection**. A direct link to the connection itself can show "page not found" after signing in; the list works.
-2. Sign in to GitHub if asked. Install the **AWS Connector for GitHub** app on the `jrnicol` account, limited to the `requiem` repository.
+2. Sign in to GitHub if asked, and install the **AWS Connector for GitHub** app on the `jrnicol` account, limited to the `requiem` repository (or open https://github.com/apps/aws-connector-for-github, **Install**). **Don't skip the install:** without it the connection still turns Available and runs started by hand can still fetch the code, but pushes never start the pipeline.
 3. Back in the console, choose **Connect**. The status turns **Available**.
 
 ### 3. First deploy
@@ -89,7 +89,7 @@ Open `SiteUrl`, which sends you to `/setup`, and enter the code. The account bec
 
 | Symptom | Meaning | Fix |
 | --- | --- | --- |
-| Nothing runs after a push | The GitHub connection isn't approved, or the pipeline's trigger is on another branch. | Step 2; check **CodePipeline > Pipelines** for the run. |
+| Nothing runs after a push | The AWS Connector for GitHub app isn't installed on the repository (the usual cause), or the connection isn't approved. | Install the app (step 2). A run started by a push shows trigger `WebhookV2` in **CodePipeline > Pipelines**. |
 | Build fails in `dotnet test` | A test failed; nothing was deployed. | Read the build log. |
 | `AccessDenied` in the build's deploy step | `app.yaml` uses something the deploy role (`pipeline.yaml`) doesn't allow. | Add it to `DeployRole` and rerun step 1. |
 | 502 from `/api/...` | The Lambda function failed to start. | Check the API log; a missing setting or a startup exception shows there. |
