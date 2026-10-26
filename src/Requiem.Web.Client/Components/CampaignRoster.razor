@@ -72,14 +72,7 @@ else
     }
     else
     {
-        <NpcProfileCards Npcs="_profiles" ShowLinks="true">
-            <Badges>
-                @if (_byId[context.Id].IsShared)
-                {
-                    <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Outlined.Badge" Class="ma-0 mt-1">Shared</MudChip>
-                }
-            </Badges>
-        </NpcProfileCards>
+        <NpcProfileCards Npcs="_profiles" ShowLinks="true" IsShared="id => _byId[id].IsShared" />
     }
 }
 

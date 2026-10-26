@@ -724,3 +724,12 @@ body:has(.mud-layout) .boot-splash {
 .mud-tabs-scroll-button {
     display: none !important;
 }
+
+/* Chips such as Shared sit in a profile card's upper right corner (NpcProfileCards). */
+.known-npc-badges {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 1;
+    pointer-events: none;
+}
