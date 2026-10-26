@@ -1,56 +1,28 @@
-@* Willpower, Humanity/Morality, and the vampire's blood: the right-hand column of the sheet. *@
+@* The pools that go up and down in play: Willpower points and Vitae. The ratings that set them are under Advantages. *@
 
 <MudGrid Spacing="2">
     <MudItem xs="12">
-        <DotRating Label="Willpower" Max="10" Min="0" Value="Form.WillpowerDots" ValueChanged="SetWillpowerDotsAsync" />
         <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
-            <MudText Typo="Typo.body2" Style="min-width:6.5rem">Points</MudText>
+            <MudText Typo="Typo.body2" Style="min-width:6.5rem">Willpower</MudText>
             <TrackerBoxes Label="Willpower" Max="Form.WillpowerDots" Current="Form.WillpowerCurrent" Class="willpower"
                           CurrentChanged="v => AdjustWillpowerAsync(v - Form.WillpowerCurrent)" />
         </MudStack>
-        <MudText Typo="Typo.caption" Color="Color.Secondary">Set at creation from Wits + Resolve; it doesn't follow later changes.</MudText>
-    </MudItem>
-
-    <MudItem xs="12">
-        @if (Form.IsVampire)
-        {
-            <DotRating Label="Humanity" Max="10" Min="0" Value="Form.Humanity ?? 0" ValueChanged="v => Update(() => Form.Humanity = v)" />
-        }
-        else
-        {
-            <DotRating Label="Morality" Max="10" Min="0" Value="Form.Morality ?? 0" ValueChanged="v => Update(() => Form.Morality = v)" />
-        }
-        <MudNumericField T="int" Value="Form.Size" ValueChanged="v => Update(() => Form.Size = v)" Label="Size"
-                         Min="1" Max="10" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:8rem"
-                         HelperText="5 unless a merit or flaw changes it" />
     </MudItem>
 
     @if (Form.IsVampire)
     {
-        <MudItem xs="12">
-            <MudDivider Class="my-2" />
-            <DotRating Label="Blood Potency" Max="10" Value="BloodPotency" ValueChanged="SetBloodPotencyAsync" />
-        </MudItem>
         <MudItem xs="12">
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                 <MudText Typo="Typo.body2" Style="min-width:6.5rem">Vitae</MudText>
                 <TrackerBoxes Label="Vitae" Max="MaxVitae" Current="Form.VitaeCurrent ?? 0" Class="vitae"
                               CurrentChanged="v => AdjustVitaeAsync(v - (Form.VitaeCurrent ?? 0))" />
             </MudStack>
+            <ValidationMessage For="() => Form.VitaeCurrent" class="mud-error-text mud-typography-caption" />
         </MudItem>
-        <MudItem xs="6" sm="3">
-            <MudNumericField T="int?" Value="Form.Generation" ValueChanged="v => Update(() => Form.Generation = v)"
-                             Label="Generation" Min="1" Max="13" Variant="Variant.Outlined" Margin="Margin.Dense" />
-        </MudItem>
-        <MudItem xs="6" sm="3">
-            <MudSwitch T="bool" Value="Form.IsThinblood" ValueChanged="SetThinbloodAsync" Color="Color.Primary" Label="Thinblood" />
-        </MudItem>
-        <ValidationMessage For="() => Form.VitaeCurrent" class="mud-error-text mud-typography-caption" />
     }
     else if (Form.IsGhoul)
     {
         <MudItem xs="12">
-            <MudDivider Class="my-2" />
             <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1">
                 <MudText Typo="Typo.body2" Style="min-width:6.5rem">Vitae</MudText>
                 <TrackerBoxes Label="Vitae" Max="GhoulRules.MaxVitae" Current="Form.VitaeCurrent ?? 0" Class="vitae"
@@ -73,8 +45,7 @@
     [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
     [Parameter] public EventCallback Changed { get; set; }
 
-    private int BloodPotency => Form.BloodPotency ?? BloodRules.MinBloodPotency;
-    private int MaxVitae => BloodRules.MaxVitae(BloodPotency, Form.IsThinblood);
+    private int MaxVitae => BloodRules.MaxVitae(Form.BloodPotency ?? BloodRules.MinBloodPotency, Form.IsThinblood);
 
     private async Task Update(Action change)
     {
@@ -82,31 +53,9 @@
         await Changed.InvokeAsync();
     }
 
-    private Task SetWillpowerDotsAsync(int dots) => Update(() =>
-    {
-        // Keep a full pool full, and never more points than dots.
-        var wasFull = Form.WillpowerCurrent == Form.WillpowerDots;
-        Form.WillpowerDots = dots;
-        if (wasFull || Form.WillpowerCurrent > dots) Form.WillpowerCurrent = dots;
-    });
-
     private Task AdjustWillpowerAsync(int delta) =>
         Update(() => Form.WillpowerCurrent = Math.Clamp(Form.WillpowerCurrent + delta, 0, Form.WillpowerDots));
 
     private Task AdjustVitaeAsync(int delta) =>
         Update(() => Form.VitaeCurrent = Math.Clamp((Form.VitaeCurrent ?? 0) + delta, 0, MaxVitae));
-
-    private Task SetBloodPotencyAsync(int value) => Update(() =>
-    {
-        var wasFull = Form.VitaeCurrent == MaxVitae;
-        Form.BloodPotency = value;
-        if (wasFull || Form.VitaeCurrent > MaxVitae) Form.VitaeCurrent = MaxVitae;
-    });
-
-    private Task SetThinbloodAsync(bool value) => Update(() =>
-    {
-        Form.IsThinblood = value;
-        if (value) Form.Generation = GenerationRules.ThinbloodGeneration;
-        if (Form.VitaeCurrent > MaxVitae) Form.VitaeCurrent = MaxVitae;
-    });
 }

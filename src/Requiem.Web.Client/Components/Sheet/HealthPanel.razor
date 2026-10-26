@@ -2,9 +2,8 @@
    its own description and value, and the character is Taken Out once the wounds total Health. *@
 
 <MudStack Row="true" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap" Spacing="2" Class="mb-2">
-    <MudText Typo="Typo.body1"><b>@Form.Health</b> (Stamina + Size)</MudText>
     <MudText Typo="Typo.body2" Color="Color.Secondary">
-        @(Status.TotalDamage == 0 ? "No wounds" : $"Wounds total {Status.TotalDamage} of {Form.Health}")
+        @(Status.TotalDamage == 0 ? $"No wounds · Health {Form.Health}" : $"Wounds total {Status.TotalDamage} of Health {Form.Health}")
         @if (Status.DicePenalty > 0)
         {
             <b> · −@Status.DicePenalty dice</b>
