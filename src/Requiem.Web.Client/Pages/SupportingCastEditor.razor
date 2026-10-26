@@ -310,7 +310,7 @@ else
     [SupplyParameterFromQuery(Name = "campaign")] public Guid? Campaign { get; set; }
 
     /// <summary>The page of the campaign this NPC belongs to.</summary>
-    private string CampaignUrl => (_form?.CampaignId ?? Campaign) is { } c ? $"campaigns/{c}" : "campaigns";
+    private string CampaignUrl => (_form?.CampaignId ?? Campaign) is { } c ? $"campaigns/{c}?tab=npcs" : "campaigns";
 
     private int BloodPotency => _form?.BloodPotency ?? BloodRules.MinBloodPotency;
     private int MaxVitae => BloodRules.MaxVitae(BloodPotency);

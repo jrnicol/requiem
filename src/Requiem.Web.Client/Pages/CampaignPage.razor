@@ -34,7 +34,8 @@ else
         <MudText Color="Color.Secondary" Class="power-text mb-2">@_campaign.Description</MudText>
     }
 
-    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4" @bind-ActivePanelIndex="_tab">
+    <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-4"
+             ActivePanelIndex="_tab" ActivePanelIndexChanged="OnTabChanged">
         <MudTabPanel Text="Overview" Icon="@Icons.Material.Outlined.Info">
             <MudGrid Spacing="3">
                 <MudItem xs="12" md="6">
@@ -253,7 +254,7 @@ else
                         <MudButton Variant="Variant.Outlined" Class="mt-1" Disabled="_pick is null || _busy" OnClick="BringInAsync">Move in</MudButton>
                     </MudStack>
                 }
-                <CampaignRoster @ref="_roster" CampaignId="Id" />
+                <CampaignRoster @ref="_roster" CampaignId="Id" PlayersView="@(View == PlayersViewKey)" PlayersViewChanged="OnPlayersViewChanged" />
             </MudTabPanel>
 
             <MudTabPanel Text="Scenes" Icon="@Icons.Material.Filled.Casino">
@@ -288,6 +289,20 @@ else
 @code {
     [Parameter] public Guid Id { get; set; }
 
+    // The open tab and the NPCs tab's Players' View are in the address (?tab=npcs&view=players),
+    // so each can be bookmarked or opened in its own browser tab.
+    [SupplyParameterFromQuery(Name = "tab")] public string? Tab { get; set; }
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+
+    private const string NpcsTabKey = "npcs";
+    private const string PlayersViewKey = "players";
+
+    /// <summary>The tabs' names in the address, in the order they appear for this member.</summary>
+    private string[] TabKeys => _campaign?.IsStoryteller == true
+        ? ["overview", "characters", "members", "invites", NpcsTabKey, "scenes"]
+        : ["overview", "characters", "members", "known-npcs"];
+
+    private Guid? _loadedId;
     private CampaignView? _campaign;
     private bool _notFound;
     private bool _busy;
@@ -314,12 +329,40 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        // Switching tabs only changes the query; the campaign's data loads once per campaign.
+        if (_loadedId == Id)
+        {
+            _tab = TabIndex();
+            return;
+        }
+        _loadedId = Id;
         Show(await Api.GetCampaignAsync(Id));
         if (_campaign is null) return;
+        _tab = TabIndex();
         _characters = await Api.ListPlayerCharactersAsync(Id);
         if (_campaign.IsStoryteller) await LoadStorytellerDataAsync();
         else _knownNpcs = await Api.GetKnownNpcsAsync(Id);
     }
+
+    private int TabIndex() => Math.Max(0, Array.IndexOf(TabKeys, Tab?.ToLowerInvariant()));
+
+    private void OnTabChanged(int index)
+    {
+        if (index == _tab) return;
+        _tab = index;
+        var key = TabKeys[Math.Clamp(index, 0, TabKeys.Length - 1)];
+        ShowInAddress(key, key == NpcsTabKey ? View : null);
+    }
+
+    private void OnPlayersViewChanged(bool on) => ShowInAddress(NpcsTabKey, on ? PlayersViewKey : null);
+
+    /// <summary>Puts the tab and view in the address without a new history entry; the overview is the bare address.</summary>
+    private void ShowInAddress(string tab, string? view) =>
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["tab"] = tab == TabKeys[0] ? null : tab,
+            ["view"] = view,
+        }), replace: true);
 
     private void Show(CampaignView? campaign)
     {

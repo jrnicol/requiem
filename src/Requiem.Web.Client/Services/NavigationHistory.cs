@@ -39,6 +39,13 @@ public sealed class NavigationHistory : IDisposable
             return;
         }
 
+        // The same page on another tab or view (campaigns/{id}?tab=npcs) replaces its entry, so the back arrow leaves the page.
+        if (_entries.Count > 0 && PathOf(_entries[^1]) == PathOf(uri))
+        {
+            _entries[^1] = uri;
+            return;
+        }
+
         // A "new" page is replaced by what it becomes once saved (sheets/new → sheets/{id}).
         if (_entries.Count > 0 && IsNewPage(_entries[^1])) _entries.RemoveAt(_entries.Count - 1);
 
@@ -46,7 +53,9 @@ public sealed class NavigationHistory : IDisposable
         if (_entries.Count > MaxEntries) _entries.RemoveAt(0);
     }
 
-    private static bool IsNewPage(string uri) => uri.Split('?')[0].EndsWith("/new", StringComparison.OrdinalIgnoreCase);
+    private static string PathOf(string uri) => uri.Split('?')[0];
+
+    private static bool IsNewPage(string uri) => PathOf(uri).EndsWith("/new", StringComparison.OrdinalIgnoreCase);
 
     private string Relative(string absolute) => _navigation.ToBaseRelativePath(absolute);
 

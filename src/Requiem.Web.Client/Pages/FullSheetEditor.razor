@@ -250,7 +250,9 @@ else
     [SupplyParameterFromQuery(Name = "campaign")] public Guid? Campaign { get; set; }
 
     /// <summary>The page of the campaign this character belongs to.</summary>
-    private string CampaignUrl => (_form?.CampaignId ?? Campaign) is { } c ? $"campaigns/{c}" : "campaigns";
+    private string CampaignUrl => (_form?.CampaignId ?? Campaign) is { } c
+        ? $"campaigns/{c}?tab={(_form?.IsPlayerCharacter == true ? "characters" : "npcs")}"
+        : "campaigns";
 
     private BloodlineOption? SelectedBloodline => _bloodlines.FirstOrDefault(b => b.Id == _form?.BloodlineId);
     private PredatorTypeOption? SelectedPredator => _predatorTypes.FirstOrDefault(p => p.Id == _form?.PredatorTypeId);

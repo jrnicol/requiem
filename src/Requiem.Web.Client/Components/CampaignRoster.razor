@@ -90,6 +90,9 @@ else
     private static readonly string[] KindOptions = ["All", .. Enum.GetNames<CharacterKind>()];
 
     [Parameter, EditorRequired] public Guid CampaignId { get; set; }
+    /// <summary>Set by the page from its address, so the players' view has a link of its own.</summary>
+    [Parameter] public bool PlayersView { get; set; }
+    [Parameter] public EventCallback<bool> PlayersViewChanged { get; set; }
 
     private List<KnownNpc>? _profiles;
     private Dictionary<Guid, CharacterSummary> _byId = [];
@@ -103,7 +106,16 @@ else
 
     private string CountText => _profiles!.Count == 1 ? "1 NPC" : $"{_profiles.Count} NPCs";
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    private bool _loaded;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loaded && PlayersView == _playersView) return;
+        _loaded = true;
+        _playersView = PlayersView;
+        _profiles = null;
+        await LoadAsync();
+    }
 
     /// <summary>Reloads the list, e.g. after an NPC moves in from another campaign.</summary>
     public async Task LoadAsync()
@@ -148,12 +160,8 @@ else
         await LoadAsync();
     }
 
-    private async Task OnPlayersViewChanged(bool value)
-    {
-        _playersView = value;
-        _profiles = null;
-        await LoadAsync();
-    }
+    // The page puts it in the address, and it comes back as the PlayersView parameter.
+    private Task OnPlayersViewChanged(bool value) => PlayersViewChanged.InvokeAsync(value);
 
     private static IEnumerable<string?> KnownText(KnownNpc n) =>
         [n.Name, n.Faction, n.Bloodline, n.Appearance, n.Reputation, n.Backstory];
