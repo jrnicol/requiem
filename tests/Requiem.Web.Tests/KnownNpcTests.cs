@@ -26,17 +26,20 @@ public class KnownNpcTests(RequiemWebFactory factory) : IClassFixture<RequiemWeb
         Assert.Null(card.Backstory);
         Assert.Null(card.Bloodline);
         Assert.Null(card.Generation);
+        Assert.Null(card.Kind);
+        Assert.Null(card.Tier);
 
         // Revealing more as the players find out: the next read shows it.
-        marcel.Reveals |= NpcReveal.Backstory | NpcReveal.Generation;
+        marcel.Reveals |= NpcReveal.Backstory | NpcReveal.Generation | NpcReveal.Kind;
         var saved = await table.Storyteller.PutAsJsonAsync($"/api/characters/{marcel.Id}/supporting-cast", marcel, RequiemJson.Options);
         Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
         card = Assert.Single(await KnownAsync(table.Player, table.CampaignId));
         Assert.Equal("Sired in Paris in 1789.", card.Backstory);
         Assert.Equal(11, card.Generation);
+        Assert.Equal(CharacterKind.Vampire, card.Kind);
 
-        // Storytellers see the same cards, to check what the players see.
-        Assert.Equal(card, Assert.Single(await KnownAsync(table.Storyteller, table.CampaignId)));
+        // Storytellers see the same cards, to check what the players see, plus the tier for the edit link.
+        Assert.Equal(card with { Tier = CharacterTier.SupportingCast }, Assert.Single(await KnownAsync(table.Storyteller, table.CampaignId)));
     }
 
     [Fact]

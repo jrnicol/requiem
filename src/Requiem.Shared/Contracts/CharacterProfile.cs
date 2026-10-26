@@ -1,4 +1,5 @@
 using Requiem.Shared.Campaigns;
+using Requiem.Shared.Characters;
 
 namespace Requiem.Shared.Contracts;
 
@@ -35,7 +36,10 @@ public static class CharacterProfile
     public const int MaxBackstoryLength = 8000;
 }
 
-/// <summary>A Known NPC as the campaign's players see it: only what the Storyteller has revealed is set.</summary>
+/// <summary>
+/// A Known NPC as the campaign's players see it: only what the Storyteller has revealed is set.
+/// <see cref="Tier"/> is set only for the campaign's Storytellers, who need it to link to the right editor.
+/// </summary>
 public sealed record KnownNpc(
     Guid Id,
     string Name,
@@ -45,7 +49,9 @@ public sealed record KnownNpc(
     int? Generation,
     string? Appearance,
     string? Reputation,
-    string? Backstory);
+    string? Backstory,
+    CharacterKind? Kind = null,
+    CharacterTier? Tier = null);
 
 /// <summary>After a portrait upload or removal: its address (null when removed) and the character's new version.</summary>
 public sealed record PortraitResult(string? PortraitUrl, Guid Version);

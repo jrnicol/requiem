@@ -702,3 +702,15 @@ body:has(.mud-layout) .boot-splash {
     font-size: 4rem !important;
     color: var(--mud-palette-text-disabled);
 }
+
+/* Known NPC cards (KnownNpcCards): the top of the card opens the full profile. */
+.known-npc-open {
+    cursor: pointer;
+    border-radius: inherit;
+}
+
+.known-npc-open:hover,
+.known-npc-open:focus-visible {
+    background: var(--mud-palette-action-default-hover);
+    outline: none;
+}

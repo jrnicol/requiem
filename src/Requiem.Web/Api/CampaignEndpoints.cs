@@ -147,16 +147,16 @@ public static class CampaignEndpoints
 
     /// <summary>
     /// The NPCs the Storyteller has shared, as every member sees them: the name and only the revealed details.
-    /// Storytellers get the same cards, so they can check what the players see.
+    /// Storytellers get the same cards, so they can check what the players see, plus each NPC's tier.
     /// </summary>
     private static async Task<Results<Ok<List<KnownNpc>>, NotFound>> KnownNpcsAsync(
         Guid id, ICharacterStore characters, CampaignAccess access, CancellationToken ct)
     {
-        if (await access.RoleInAsync(id, ct) is null) return TypedResults.NotFound();
+        if (await access.RoleInAsync(id, ct) is not { } role) return TypedResults.NotFound();
         return TypedResults.Ok((await characters.ListByCampaignAsync(id, ct))
             .Where(c => !c.IsPlayerCharacter && !c.IsArchived && c.Visibility == NpcVisibility.Known)
             .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(ProfileMapper.ToKnownNpc)
+            .Select(c => ProfileMapper.ToKnownNpc(c, role == CampaignRole.Storyteller))
             .ToList());
     }
 

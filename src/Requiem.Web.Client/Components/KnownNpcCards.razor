@@ -1,4 +1,6 @@
-@* The campaign's shared NPCs as players see them: the name, and only the details the Storyteller has revealed. *@
+@* The campaign's shared NPCs as players see them: a card with the portrait, name and facts, opening the full profile.
+   Only what the Storyteller has revealed is there. The campaign's Storytellers also get links to edit and run each one. *@
+@inject IDialogService Dialogs
 
 @if (Npcs.Count == 0)
 {
@@ -18,26 +20,35 @@ else
         @foreach (var npc in Npcs)
         {
             <MudItem xs="12" sm="6" lg="4">
-                <MudPaper Outlined="true" Class="pa-3 known-npc">
-                    <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Start">
-                        @if (npc.PortraitUrl is { } url)
-                        {
-                            <div class="portrait-box" style="max-width:96px; flex:none">
-                                <img src="@url" alt="Portrait of @npc.Name" class="portrait" />
+                <MudPaper Outlined="true" Class="known-npc">
+                    <div class="known-npc-open pa-3" role="button" tabindex="0" aria-label="@($"Profile of {npc.Name}")"
+                         @onclick="() => OpenAsync(npc)" @onkeydown="e => OnKeyAsync(e, npc)">
+                        <MudStack Row="true" Spacing="3" AlignItems="AlignItems.Center">
+                            <div class="portrait-box" style="max-width:72px; flex:none">
+                                @if (npc.PortraitUrl is { } url)
+                                {
+                                    <img src="@url" alt="Portrait of @npc.Name" class="portrait" />
+                                }
+                                else
+                                {
+                                    <MudIcon Icon="@Icons.Material.Outlined.Person" Class="portrait-empty" Style="font-size:2.5rem !important" />
+                                }
                             </div>
-                        }
-                        <div style="min-width:0">
-                            <MudText Typo="Typo.h6">@npc.Name</MudText>
-                            @if (Facts(npc) is { Length: > 0 } facts)
-                            {
-                                <MudText Typo="Typo.caption" Color="Color.Secondary">@facts</MudText>
-                            }
-                        </div>
-                    </MudStack>
-                    @foreach (var (label, text) in Texts(npc))
+                            <div style="min-width:0">
+                                <MudText Typo="Typo.h6">@npc.Name</MudText>
+                                @if (Facts(npc) is { Length: > 0 } facts)
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">@facts</MudText>
+                                }
+                            </div>
+                        </MudStack>
+                    </div>
+                    @if (IsStoryteller)
                     {
-                        <MudText Typo="Typo.subtitle2" Class="mt-2">@label</MudText>
-                        <MudText Typo="Typo.body2" Style="white-space: pre-line">@text</MudText>
+                        <MudStack Row="true" Spacing="1" Class="px-2 pb-2">
+                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.Edit" Href="@EditUrl(npc)">Edit character</MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Casino" Href="@PlayUrl(npc)">At the table</MudButton>
+                        </MudStack>
                     }
                 </MudPaper>
             </MudItem>
@@ -49,17 +60,29 @@ else
     [Parameter, EditorRequired] public IReadOnlyList<KnownNpc> Npcs { get; set; } = [];
     [Parameter] public bool IsStoryteller { get; set; }
 
-    private static string Facts(KnownNpc npc) => string.Join(" · ", new[]
+    public static string Facts(KnownNpc npc) => string.Join(" · ", new[]
     {
+        npc.Kind?.ToString(),
         npc.Faction,
         npc.Bloodline,
         npc.Generation is { } generation ? $"Generation {generation}" : null,
     }.OfType<string>());
 
-    private static IEnumerable<(string Label, string Text)> Texts(KnownNpc npc)
+    public static string EditUrl(KnownNpc npc) => npc.Tier == CharacterTier.FullSheet ? $"sheets/{npc.Id}" : $"npcs/{npc.Id}";
+
+    public static string PlayUrl(KnownNpc npc) => $"play/{npc.Id}";
+
+    private async Task OpenAsync(KnownNpc npc)
     {
-        if (npc.Appearance is { } appearance) yield return ("Appearance", appearance);
-        if (npc.Reputation is { } reputation) yield return ("Reputation", reputation);
-        if (npc.Backstory is { } backstory) yield return ("Backstory", backstory);
+        var parameters = new DialogParameters<KnownNpcProfileDialog>
+        {
+            { d => d.Npc, npc },
+            { d => d.IsStoryteller, IsStoryteller },
+        };
+        await Dialogs.ShowAsync<KnownNpcProfileDialog>(npc.Name, parameters,
+            new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseButton = true });
     }
+
+    private Task OnKeyAsync(KeyboardEventArgs e, KnownNpc npc) =>
+        e.Key is "Enter" or " " ? OpenAsync(npc) : Task.CompletedTask;
 }

@@ -47,6 +47,8 @@ public enum NpcReveal
     Appearance = 16,
     Reputation = 32,
     Backstory = 64,
+    /// <summary>Vampire, ghoul or mortal.</summary>
+    Kind = 128,
 }
 
 /// <summary>The three ways to earn a Link with other player characters (WoD Core p.75).</summary>

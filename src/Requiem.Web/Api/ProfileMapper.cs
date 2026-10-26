@@ -28,8 +28,11 @@ internal static class ProfileMapper
         c.Reveals = c.IsPlayerCharacter ? NpcReveal.None : form.Reveals & AllReveals;
     }
 
-    /// <summary>A Known NPC's card: its name, and only the details the Storyteller has revealed.</summary>
-    public static KnownNpc ToKnownNpc(Character c)
+    /// <summary>
+    /// A Known NPC's card: its name, and only the details the Storyteller has revealed. Storytellers also get its
+    /// tier, which players don't (it says how fully the Storyteller has written the NPC up).
+    /// </summary>
+    public static KnownNpc ToKnownNpc(Character c, bool forStoryteller)
     {
         bool Shows(NpcReveal reveal) => c.Reveals.HasFlag(reveal);
         return new KnownNpc(
@@ -41,7 +44,9 @@ internal static class ProfileMapper
             Shows(NpcReveal.Generation) ? c.Generation : null,
             Shows(NpcReveal.Appearance) ? c.Appearance : null,
             Shows(NpcReveal.Reputation) ? c.Reputation : null,
-            Shows(NpcReveal.Backstory) ? c.Backstory : null);
+            Shows(NpcReveal.Backstory) ? c.Backstory : null,
+            Shows(NpcReveal.Kind) ? c.Kind : null,
+            forStoryteller ? c.Tier : null);
     }
 
     private static readonly NpcReveal AllReveals = Enum.GetValues<NpcReveal>().Aggregate(NpcReveal.None, (all, r) => all | r);
