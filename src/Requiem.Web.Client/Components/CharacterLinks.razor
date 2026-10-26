@@ -15,6 +15,16 @@
                 <MudIconButton Icon="@link.Icon" Href="@link.Url" Size="Size.Medium" aria-label="@link.Label" />
             }
         </MudTooltip>
+        @* On the profile itself, the Players' View switch sits beside its icon. *@
+        @if (link.Page == Page.Profile && Current == Page.Profile && PlayersViewChanged.HasDelegate)
+        {
+            <MudTooltip Text="@(PlayersView ? "Players' View: on" : "Players' View")">
+                <MudIconButton Icon="@(PlayersView ? Icons.Material.Filled.Visibility : Icons.Material.Outlined.Visibility)"
+                               Color="@(PlayersView ? Color.Primary : Color.Default)" Variant="@(PlayersView ? Variant.Outlined : Variant.Text)"
+                               Size="Size.Medium" aria-label="Players' View" aria-pressed="@(PlayersView ? "true" : "false")"
+                               OnClick="() => PlayersViewChanged.InvokeAsync(!PlayersView)" />
+            </MudTooltip>
+        }
     }
 </MudStack>
 
@@ -27,6 +37,8 @@
     [Parameter] public bool IsPlayerCharacter { get; set; }
     /// <summary>Link the profile in the players' view (from a players'-view page).</summary>
     [Parameter] public bool PlayersView { get; set; }
+    /// <summary>On the profile page: shows the Players' View switch beside the Profile icon.</summary>
+    [Parameter] public EventCallback<bool> PlayersViewChanged { get; set; }
 
     public static string ProfileUrl(Guid id, bool playersView = false) => $"profile/{id}{(playersView ? "?view=players" : "")}";
 

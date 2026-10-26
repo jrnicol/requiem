@@ -42,19 +42,14 @@ else
         @* Only the campaign's Storytellers get the tier, and with it the links. *@
         @if (_npc.Tier is { } tier)
         {
-            <CharacterLinks Id="Id" Current="CharacterLinks.Page.Profile" IsFullSheet="tier == CharacterTier.FullSheet" PlayersView="PlayersView" />
+            <CharacterLinks Id="Id" Current="CharacterLinks.Page.Profile" IsFullSheet="tier == CharacterTier.FullSheet"
+                            PlayersView="PlayersView" PlayersViewChanged="SetPlayersView" />
         }
     </MudStack>
 
-    @if (_npc.Tier is not null)
+    @if (_npc.Tier is not null && PlayersView)
     {
-        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Class="mb-3">
-            <MudSwitch T="bool" Value="PlayersView" ValueChanged="SetPlayersView" Color="Color.Primary" Label="Players' View" />
-            @if (PlayersView)
-            {
-                <MudText Typo="Typo.body2" Color="Color.Secondary">Exactly what your players see.</MudText>
-            }
-        </MudStack>
+        <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Players' View: exactly what your players see.</MudText>
     }
 
     <MudGrid Spacing="4">

@@ -237,11 +237,14 @@ else
             </MudTabPanel>
 
             <MudTabPanel Text="NPCs" Icon="@Icons.Material.Outlined.Groups">
-                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" Class="mb-3">
+                <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-3">
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
                                Href="@($"npcs/new?campaign={Id}")">New Supporting Cast</MudButton>
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Description"
                                Href="@($"sheets/new?campaign={Id}")">New full sheet</MudButton>
+                    <MudSpacer />
+                    <MudSwitch T="bool" Value="@(View == PlayersViewKey)" ValueChanged="OnPlayersViewChanged"
+                               Color="Color.Primary" Label="Players' View" />
                 </MudStack>
                 @* Only Storytellers of more than one campaign have anywhere to bring NPCs from. *@
                 @if (_elsewhere.Count > 0)
@@ -254,7 +257,7 @@ else
                         <MudButton Variant="Variant.Outlined" Class="mt-1" Disabled="_pick is null || _busy" OnClick="BringInAsync">Move in</MudButton>
                     </MudStack>
                 }
-                <CampaignRoster @ref="_roster" CampaignId="Id" PlayersView="@(View == PlayersViewKey)" PlayersViewChanged="OnPlayersViewChanged" />
+                <CampaignRoster @ref="_roster" CampaignId="Id" PlayersView="@(View == PlayersViewKey)" />
             </MudTabPanel>
 
             <MudTabPanel Text="Scenes" Icon="@Icons.Material.Filled.Casino">
