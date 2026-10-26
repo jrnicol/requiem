@@ -15,10 +15,6 @@ Parameters:
   CodeKey:
     Type: String
     Description: Key of the API's Lambda package; a new key per build makes CloudFormation update the code.
-  MemorySize:
-    Type: Number
-    Default: 1024
-    Description: More memory also means more CPU, which shortens .NET cold starts.
 
 Resources:
   # ---------- Data ----------
@@ -138,7 +134,9 @@ Resources:
       Runtime: dotnet10
       Architectures: [arm64]
       Handler: Requiem.Web
-      MemorySize: !Ref MemorySize
+      # Memory also sets CPU. Measured 2026-10-26: a cold start's first request took 0.7 s at 1 GB, 0.4 s at
+      # 2 GB and 0.27 s at 3 GB; at this traffic the extra memory stays within Lambda's free allowance.
+      MemorySize: 3008
       Timeout: 30
       Role: !GetAtt ApiRole.Arn
       Code:

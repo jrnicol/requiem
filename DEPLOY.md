@@ -77,7 +77,7 @@ Open `SiteUrl`, which sends you to `/setup`, and enter the code. The account bec
 - **Logs:**
   - The API: `aws logs tail /requiem-app/api --region us-east-2 --follow`
   - Builds: `/requiem-pipeline/build`
-- **Cold starts:** after a quiet spell, the first API call takes a few seconds while Lambda starts .NET. Raising `MemorySize` in `app.yaml` shortens it.
+- **Cold starts:** after a quiet spell, the first API call takes about 2 seconds while Lambda starts .NET (about 1.2 s of startup, then the first request), against about 0.1 s once it's running. The function runs at 3 GB because memory also sets CPU, which shortens the first request (measured 2026-10-26). Lambda SnapStart would cut the startup part, for a few dollars a month.
 - **Data:**
   - The table is kept even if the stack is deleted, and has deletion protection.
   - Point-in-time recovery can restore it to any second in the last 35 days, into a new table: **DynamoDB > Tables > Backups**.
