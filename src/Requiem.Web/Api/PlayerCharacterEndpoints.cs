@@ -185,7 +185,7 @@ public static class PlayerCharacterEndpoints
 
         var campaign = await CampaignAsync(campaigns, character, ct);
         var report = CreationRules.Evaluate(WithCampaignScripts(FullSheetMapper.ToForm(character), campaign),
-            await CatalogEndpoints.CreationCatalogAsync(catalog, ct), campaign.AllowedTemplates);
+            await CatalogEndpoints.CreationCatalogAsync(catalog, ct), campaign.AllowedTemplates, campaign.Creation);
         if (!report.IsComplete)
             return TypedResults.ValidationProblem(new Dictionary<string, string[]>
             {
@@ -285,7 +285,7 @@ public static class PlayerCharacterEndpoints
         return new PlayerCharacterView(
             sheet, character.Status, owner ?? "Unknown player", isMine, isStoryteller,
             CanEdit: isMine && character.Status is CharacterStatus.Draft or CharacterStatus.Active && campaign.ArchivedAt is null,
-            character.ReviewNote, campaign.Name, campaign.AllowedTemplates);
+            character.ReviewNote, campaign.Name, campaign.AllowedTemplates, campaign.Creation);
     }
 
     /// <summary>The Coterie Script and Chronicle Tenet are the campaign's, shared by every character in it.</summary>

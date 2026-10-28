@@ -1,0 +1,108 @@
+@* A campaign's character creation budgets, in its Storyteller's settings. Lowering the starting Generation turns off
+   buying a lower one, which the Storyteller can turn back on. *@
+
+<div>
+    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="1">
+        <MudText Typo="Typo.subtitle2">Character creation</MudText>
+        <MudButton Size="Size.Small" Variant="Variant.Text" Disabled="IsBook" OnClick="UseBook">Use the book's</MudButton>
+    </MudStack>
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+        Dots on top of the free ones, for each group in order of priority. Players see their budget against these as they build.
+    </MudText>
+
+    <MudText Typo="Typo.body2">Attributes</MudText>
+    <MudGrid Spacing="1" Class="mb-1">
+        @foreach (var (label, get, set) in Attributes)
+        {
+            <MudItem xs="4">
+                <MudNumericField T="int" Value="get()" ValueChanged="set" Label="@label" Min="0" Max="15"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudText Typo="Typo.body2">Skills</MudText>
+    <MudGrid Spacing="1" Class="mb-1">
+        @foreach (var (label, get, set) in Skills)
+        {
+            <MudItem xs="4">
+                <MudNumericField T="int" Value="get()" ValueChanged="set" Label="@label" Min="0" Max="40"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+        }
+    </MudGrid>
+
+    <MudGrid Spacing="1" Class="mb-1">
+        <MudItem xs="6">
+            <MudNumericField T="int" @bind-Value="Settings.MeritPoints" Label="Merit points" Min="0" Max="50"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" />
+        </MudItem>
+        <MudItem xs="6">
+            <MudNumericField T="int" @bind-Value="Settings.FlawPoints" Label="Flaw points" Min="0" Max="20"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="The most at creation" />
+        </MudItem>
+    </MudGrid>
+
+    <MudSelect T="int" Value="Settings.StartingGeneration" ValueChanged="SetStartingGeneration" Label="Vampires start at Generation"
+               Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:16rem"
+               HelperText="Thin-bloods are always 13th">
+        @for (var generation = GenerationRules.StartingGeneration; generation >= CreationSettings.MinStartingGeneration; generation--)
+        {
+            var g = generation;
+            <MudSelectItem T="int" Value="g">@(g)th</MudSelectItem>
+        }
+    </MudSelect>
+    <MudSwitch T="bool" @bind-Value="Settings.CanBuyGeneration" Color="Color.Primary" Class="mt-1"
+               Label="Players can spend Merit points on a lower Generation" />
+
+    @foreach (var problem in Problems)
+    {
+        <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-1">@problem</MudAlert>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public CreationSettings Settings { get; set; } = null!;
+
+    private static readonly CreationSettings Book = new();
+
+    private (string Label, Func<int> Get, Action<int> Set)[] Attributes =>
+    [
+        ("Primary", () => Settings.PrimaryAttributes, v => Settings.PrimaryAttributes = v),
+        ("Secondary", () => Settings.SecondaryAttributes, v => Settings.SecondaryAttributes = v),
+        ("Tertiary", () => Settings.TertiaryAttributes, v => Settings.TertiaryAttributes = v),
+    ];
+
+    private (string Label, Func<int> Get, Action<int> Set)[] Skills =>
+    [
+        ("Primary", () => Settings.PrimarySkills, v => Settings.PrimarySkills = v),
+        ("Secondary", () => Settings.SecondarySkills, v => Settings.SecondarySkills = v),
+        ("Tertiary", () => Settings.TertiarySkills, v => Settings.TertiarySkills = v),
+    ];
+
+    private static int[] Values(CreationSettings s) =>
+    [
+        s.PrimaryAttributes, s.SecondaryAttributes, s.TertiaryAttributes, s.PrimarySkills, s.SecondarySkills, s.TertiarySkills,
+        s.MeritPoints, s.FlawPoints, s.StartingGeneration, s.CanBuyGeneration ? 1 : 0,
+    ];
+
+    private bool IsBook => Values(Settings).SequenceEqual(Values(Book));
+
+    /// <summary>The settings' own checks (such as primary above secondary), shown before saving.</summary>
+    private IEnumerable<string> Problems => Settings.Validate(new System.ComponentModel.DataAnnotations.ValidationContext(Settings))
+        .Select(r => r.ErrorMessage).OfType<string>();
+
+    private void SetStartingGeneration(int generation)
+    {
+        if (generation < Settings.StartingGeneration) Settings.CanBuyGeneration = false;
+        Settings.StartingGeneration = generation;
+    }
+
+    private void UseBook()
+    {
+        (Settings.PrimaryAttributes, Settings.SecondaryAttributes, Settings.TertiaryAttributes) = (Book.PrimaryAttributes, Book.SecondaryAttributes, Book.TertiaryAttributes);
+        (Settings.PrimarySkills, Settings.SecondarySkills, Settings.TertiarySkills) = (Book.PrimarySkills, Book.SecondarySkills, Book.TertiarySkills);
+        (Settings.MeritPoints, Settings.FlawPoints) = (Book.MeritPoints, Book.FlawPoints);
+        (Settings.StartingGeneration, Settings.CanBuyGeneration) = (Book.StartingGeneration, Book.CanBuyGeneration);
+    }
+}

@@ -725,6 +725,11 @@ body:has(.mud-layout) .boot-splash {
     display: none !important;
 }
 
+/* Tab names show as written, in title case, rather than MudBlazor's capitals. */
+.mud-tab {
+    text-transform: none;
+}
+
 /* Chips such as Shared sit in a profile card's upper right corner (NpcProfileCards). */
 .known-npc-badges {
     position: absolute;

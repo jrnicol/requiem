@@ -64,23 +64,21 @@ public sealed record CreationCatalog(
 
 /// <summary>
 /// Starting dots for a player character (WoD Core p.74, VtR p.136). Pure: a draft sheet in, a budget report out.
+/// The budgets are the campaign's <see cref="CreationSettings"/>; the book's, given here, are the defaults.
 /// <list type="bullet">
 /// <item>Attributes: 5/4/3 extra dots across the three groups (every attribute starts at 1); Skills 11/7/5;
 /// 3 Specialties. The groups' priorities are whichever order costs fewest Merit points, so the player never
 /// has to say which group came first.</item>
 /// <item>10 Merit points: Merits at their dots; 1 per extra Skill dot or Specialty; 3 per extra Attribute dot.
-/// Vampires also spend 3 per Blood Potency dot, Discipline dot, Ritual or Generation below 12.</item>
+/// Vampires also spend 3 per Blood Potency dot, Discipline dot, Ritual or Generation below the starting 12th
+/// (the campaign can start them lower, or not let them buy Generation).</item>
 /// <item>Up to 7 points of Flaws. Morality 7 (Humanity 6 for vampires), Willpower Wits + Resolve.</item>
 /// </list>
 /// Over-budget items are warnings the Storyteller can accept; only missing pieces block a submission.
 /// </summary>
 public static class CreationRules
 {
-    public static readonly IReadOnlyList<int> AttributeBudgets = [5, 4, 3];
-    public static readonly IReadOnlyList<int> SkillBudgets = [11, 7, 5];
     public const int FreeSpecialties = 3;
-    public const int MeritPoints = 10;
-    public const int MaxFlawPoints = 7;
     public const int MaxStartingSkill = 3;
     /// <summary>A 4th dot needs the Storyteller's approval (WoD Core p.74), so it's flagged, not refused.</summary>
     public const int MaxFlaggedSkill = 4;
@@ -92,8 +90,10 @@ public static class CreationRules
 
     private static readonly TraitCategory[] Categories = [TraitCategory.Physical, TraitCategory.Social, TraitCategory.Mental];
 
-    public static CreationReport Evaluate(FullSheetForm sheet, CreationCatalog catalog, CharacterTemplates allowed = CharacterTemplates.All)
+    public static CreationReport Evaluate(
+        FullSheetForm sheet, CreationCatalog catalog, CharacterTemplates allowed = CharacterTemplates.All, CreationSettings? settings = null)
     {
+        settings ??= new CreationSettings();
         var budget = new List<BudgetLine>();
         var issues = new List<CreationIssue>();
         var points = new List<MeritPointCost>();
@@ -102,28 +102,29 @@ public static class CreationRules
         CheckStory(sheet, issues);
 
         var attributePriorities = CheckRanked(
-            CreationStep.Attributes, "Attribute", AttributeBudgets, MeritPointsPerAttributeDot,
+            CreationStep.Attributes, "Attribute", settings.AttributeBudgets, MeritPointsPerAttributeDot,
             Enum.GetValues<CharacterAttribute>().ToLookup(Traits.CategoryOf, a => sheet.Attribute(a) - Traits.MinAttribute),
             budget, issues, points);
         var skillPriorities = CheckRanked(
-            CreationStep.Skills, "Skill", SkillBudgets, MeritPointsPerSkillDot,
+            CreationStep.Skills, "Skill", settings.SkillBudgets, MeritPointsPerSkillDot,
             Enum.GetValues<Skill>().ToLookup(Traits.CategoryOf, s => sheet.SkillDots(s) - Traits.MinSkill),
             budget, issues, points);
         CheckSkillCaps(sheet, issues);
         CheckSpecialties(sheet, budget, issues, points);
-        CheckMeritsAndFlaws(sheet, catalog, budget, issues, points);
+        CheckMeritsAndFlaws(sheet, catalog, settings.FlawPoints, budget, issues, points);
         CheckDerived(sheet, issues);
 
-        if (sheet.IsVampire) CheckVampire(sheet, catalog, issues, points);
+        if (sheet.IsVampire) CheckVampire(sheet, catalog, settings, issues, points);
         else if (sheet.IsGhoul) CheckGhoul(sheet, issues);
 
         var spent = points.Sum(p => p.Points);
-        budget.Add(new BudgetLine(CreationStep.Merits, "Merit points", spent, MeritPoints,
+        var meritPoints = settings.MeritPoints;
+        budget.Add(new BudgetLine(CreationStep.Merits, "Merit points", spent, meritPoints,
             points.Count == 0 ? null : string.Join(", ", points.Select(p => $"{p.Item} {p.Points}"))));
-        if (spent > MeritPoints)
-            issues.Add(new(CreationStep.Merits, CreationIssueLevel.Warning, $"{spent} Merit points spent; the limit is {MeritPoints}."));
-        else if (spent < MeritPoints)
-            issues.Add(new(CreationStep.Merits, CreationIssueLevel.Note, $"{MeritPoints - spent} Merit points left to spend."));
+        if (spent > meritPoints)
+            issues.Add(new(CreationStep.Merits, CreationIssueLevel.Warning, $"{spent} Merit points spent; the limit is {meritPoints}."));
+        else if (spent < meritPoints)
+            issues.Add(new(CreationStep.Merits, CreationIssueLevel.Note, $"{meritPoints - spent} Merit points left to spend."));
 
         return new CreationReport(budget, issues, points, attributePriorities, skillPriorities);
     }
@@ -189,7 +190,7 @@ public static class CreationRules
     // ---------- Attributes and Skills ----------
 
     /// <summary>
-    /// Fits the three groups' extra dots to the ranked budgets (5/4/3 or 11/7/5) in the order that leaves the
+    /// Fits the three groups' extra dots to the ranked budgets (5/4/3 or 11/7/5 by the book) in the order that leaves the
     /// fewest dots over budget, charging those to Merit points.
     /// </summary>
     private static IReadOnlyDictionary<TraitCategory, int> CheckRanked(
@@ -258,15 +259,15 @@ public static class CreationRules
     // ---------- Merits and Flaws ----------
 
     private static void CheckMeritsAndFlaws(
-        FullSheetForm sheet, CreationCatalog catalog, List<BudgetLine> budget, List<CreationIssue> issues, List<MeritPointCost> points)
+        FullSheetForm sheet, CreationCatalog catalog, int maxFlawPoints, List<BudgetLine> budget, List<CreationIssue> issues, List<MeritPointCost> points)
     {
         foreach (var merit in sheet.Merits.Where(m => m.Kind == MeritKind.Merit && m.Dots > 0))
             points.Add(new(merit.Qualifier is { Length: > 0 } q ? $"{merit.Name} ({q})" : merit.Name, merit.Dots));
 
         var flawPoints = sheet.Merits.Where(m => m.Kind == MeritKind.Flaw).Sum(m => m.Dots);
-        budget.Add(new BudgetLine(CreationStep.Merits, "Flaw points", flawPoints, MaxFlawPoints, "Flaws earn XP in play, not points"));
-        if (flawPoints > MaxFlawPoints)
-            issues.Add(new(CreationStep.Merits, CreationIssueLevel.Warning, $"{flawPoints} points of Flaws; the most at creation is {MaxFlawPoints}."));
+        budget.Add(new BudgetLine(CreationStep.Merits, "Flaw points", flawPoints, maxFlawPoints, "Flaws earn XP in play, not points"));
+        if (flawPoints > maxFlawPoints)
+            issues.Add(new(CreationStep.Merits, CreationIssueLevel.Warning, $"{flawPoints} points of Flaws; the most at creation is {maxFlawPoints}."));
 
         foreach (var entry in sheet.Merits.Where(m => m.MeritDefinitionId is not null))
         {
@@ -292,7 +293,8 @@ public static class CreationRules
 
     // ---------- Vampire and ghoul templates ----------
 
-    private static void CheckVampire(FullSheetForm sheet, CreationCatalog catalog, List<CreationIssue> issues, List<MeritPointCost> points)
+    private static void CheckVampire(
+        FullSheetForm sheet, CreationCatalog catalog, CreationSettings settings, List<CreationIssue> issues, List<MeritPointCost> points)
     {
         var bloodline = catalog.Bloodlines.FirstOrDefault(b => b.Id == sheet.BloodlineId);
         if (bloodline is null)
@@ -305,16 +307,19 @@ public static class CreationRules
         if (bloodPotency > BloodRules.MinBloodPotency)
             points.Add(new($"Blood Potency {bloodPotency}", (bloodPotency - BloodRules.MinBloodPotency) * MeritPointsPerVampireDot));
 
-        var generation = sheet.Generation ?? GenerationRules.StartingGeneration;
+        var starting = settings.StartingGeneration;
+        var generation = sheet.Generation ?? starting;
         if (sheet.IsThinblood)
         {
             if (generation != GenerationRules.ThinbloodGeneration)
                 issues.Add(new(CreationStep.Blood, CreationIssueLevel.Warning, $"Thin-blooded vampires start at Generation {GenerationRules.ThinbloodGeneration}."));
         }
-        else if (generation < GenerationRules.StartingGeneration)
-            points.Add(new($"Generation {generation}", (GenerationRules.StartingGeneration - generation) * MeritPointsPerVampireDot));
-        else if (generation > GenerationRules.StartingGeneration)
-            issues.Add(new(CreationStep.Blood, CreationIssueLevel.Warning, $"Vampires start at Generation {GenerationRules.StartingGeneration} (13 only with the Thinblood Flaw)."));
+        else if (generation < starting && settings.CanBuyGeneration)
+            points.Add(new($"Generation {generation}", (starting - generation) * MeritPointsPerVampireDot));
+        else if (generation < starting)
+            issues.Add(new(CreationStep.Blood, CreationIssueLevel.Warning, $"This campaign's vampires start at Generation {starting} and can't buy a lower one."));
+        else if (generation > starting)
+            issues.Add(new(CreationStep.Blood, CreationIssueLevel.Warning, $"This campaign's vampires start at Generation {starting} (13 only with the Thinblood Flaw)."));
 
         var humanity = HumanityRules.ClampToGeneration(DerivedStats.StartingHumanity(), bloodPotency, Math.Clamp(generation, 1, GenerationRules.ThinbloodGeneration));
         if (sheet.Humanity != humanity)

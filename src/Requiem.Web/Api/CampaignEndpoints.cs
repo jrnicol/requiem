@@ -334,6 +334,7 @@ public static class CampaignEndpoints
         campaign.ChronicleTenet = Clean(form.ChronicleTenet);
         campaign.CoterieScript = Clean(form.CoterieScript);
         campaign.AllowedTemplates = form.AllowedTemplates & CharacterTemplates.All;
+        campaign.Creation = form.Creation?.Copy() ?? new();
     }
 
     private static async Task<CampaignView> ViewAsync(
@@ -357,7 +358,8 @@ public static class CampaignEndpoints
                 .Select(m => new CampaignMemberView(m.Member.UserId, m.Person?.DisplayName ?? "Someone", storyteller ? m.Person?.Email : null,
                     m.Member.Role, m.Member.JoinedAt, m.Member.UserId == me))
                 .ToList(),
-            invites);
+            invites,
+            campaign.Creation);
     }
 
     private static CampaignInviteView ToView(CampaignInvite i) => new(i.Id, i.Role, i.CreatedAt, i.ExpiresAt, i.UsesLeft, i.RevokedAt);

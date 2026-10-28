@@ -34,7 +34,8 @@ public sealed record PlayerCharacterView(
     bool CanEdit,
     string? ReviewNote,
     string CampaignName,
-    CharacterTemplates AllowedTemplates);
+    CharacterTemplates AllowedTemplates,
+    CreationSettings? Creation = null);
 
 /// <summary>The Storyteller sends a submitted character back to its player with what to change.</summary>
 public sealed record ReturnCharacterRequest(string? Note);

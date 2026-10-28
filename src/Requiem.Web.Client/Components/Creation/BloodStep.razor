@@ -83,7 +83,11 @@ else if (Form.IsVampire)
     <MudDivider Class="my-3" />
     <MudText Typo="Typo.subtitle1">The Blood</MudText>
     <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">
-        Neonates start at Blood Potency 1 and Generation 12. Each extra dot of Blood Potency, or each Generation lower, costs 3 Merit points.
+        Neonates start at Blood Potency 1 and Generation @Start. Each extra dot of Blood Potency@(Creation.CanBuyGeneration ? ", or each Generation lower," : "") costs 3 Merit points.
+        @if (!Creation.CanBuyGeneration)
+        {
+            <span>In this campaign, Generation can't be bought lower.</span>
+        }
     </MudText>
     <MudGrid Spacing="2">
         <MudItem xs="12" sm="6">
@@ -91,12 +95,12 @@ else if (Form.IsVampire)
                        Stacked="true" Size="Size.Medium" ValueChanged="v => Update(() => Form.BloodPotency = v)" />
         </MudItem>
         <MudItem xs="12" sm="6">
-            <MudSelect T="int" Value="Form.Generation ?? GenerationRules.StartingGeneration" ValueChanged="v => Update(() => Form.Generation = v)"
-                       Label="Generation" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="Form.IsThinblood" Style="max-width:12rem">
-                @for (var generation = GenerationRules.StartingGeneration; generation >= 8; generation--)
+            <MudSelect T="int" Value="Form.Generation ?? Start" ValueChanged="v => Update(() => Form.Generation = v)"
+                       Label="Generation" Variant="Variant.Outlined" Margin="Margin.Dense" Disabled="Form.IsThinblood || !Creation.CanBuyGeneration" Style="max-width:12rem">
+                @for (var generation = Start; generation >= Math.Max(1, Start - 4); generation--)
                 {
                     var g = generation;
-                    <MudSelectItem T="int" Value="g">@Ordinal(g)@(g < GenerationRules.StartingGeneration ? $" ({(GenerationRules.StartingGeneration - g) * 3} points)" : "")</MudSelectItem>
+                    <MudSelectItem T="int" Value="g">@Ordinal(g)@(g < Start ? $" ({(Start - g) * 3} points)" : "")</MudSelectItem>
                 }
                 @if (Form.IsThinblood)
                 {
@@ -115,7 +119,11 @@ else if (Form.IsVampire)
     [Parameter] public IReadOnlyList<DisciplineOption> Disciplines { get; set; } = [];
     [Parameter] public IReadOnlyList<PowerOption> Powers { get; set; } = [];
     [Parameter] public IReadOnlyList<MeritOption> Merits { get; set; } = [];
+    /// <summary>The campaign's budgets: where Generation starts, and whether it can be bought lower.</summary>
+    [Parameter] public CreationSettings Creation { get; set; } = new();
     [Parameter] public EventCallback Changed { get; set; }
+
+    private int Start => Creation.StartingGeneration;
 
     private BloodlineOption? Bloodline => Bloodlines.FirstOrDefault(b => b.Id == Form.BloodlineId);
 
@@ -172,7 +180,7 @@ else if (Form.IsVampire)
     private async Task SetThinbloodAsync(bool on)
     {
         Form.IsThinblood = on;
-        Form.Generation = on ? GenerationRules.ThinbloodGeneration : GenerationRules.StartingGeneration;
+        Form.Generation = on ? GenerationRules.ThinbloodGeneration : Start;
         var flaw = Merits.FirstOrDefault(m => m.Kind == MeritKind.Flaw && string.Equals(m.Name, "Thinblood", StringComparison.OrdinalIgnoreCase));
         Form.Merits.RemoveAll(m => m.Kind == MeritKind.Flaw && string.Equals(m.Name, "Thinblood", StringComparison.OrdinalIgnoreCase));
         if (on) Form.Merits.Add(new MeritEntry { MeritDefinitionId = flaw?.Id, Name = flaw?.Name ?? "Thinblood", Kind = MeritKind.Flaw, Dots = 1 });

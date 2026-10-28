@@ -117,7 +117,7 @@ else
                             break;
                         case CreationStep.Attributes:
                             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                                Every Attribute starts with 1 free dot. Put 5 more into one group, 4 into another and 3 into the last;
+                                Every Attribute starts with 1 free dot. Put @Creation.PrimaryAttributes more into one group, @Creation.SecondaryAttributes into another and @Creation.TertiaryAttributes into the last;
                                 the app works out which is which. Attributes left at 1 can't be raised with XP later.
                                 Willpower is Wits + Resolve: @_form.WillpowerDots.
                             </MudText>
@@ -125,15 +125,15 @@ else
                             break;
                         case CreationStep.Skills:
                             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                                Put 11 dots into one group of Skills, 7 into another and 5 into the last. At most 3 in any Skill
+                                Put @Creation.PrimarySkills dots into one group of Skills, @Creation.SecondarySkills into another and @Creation.TertiarySkills into the last. At most 3 in any Skill
                                 (a 4th needs the Storyteller's approval). Then choose 3 Specialties on Skills you have.
                             </MudText>
                             <SkillsPanel Form="_form" Changed="OnChangedAsync" />
                             break;
                         case CreationStep.Merits:
                             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
-                                10 Merit points: Merits cost their dots. Points also buy a Skill dot or Specialty (1) or an Attribute dot (3).
-                                Up to 7 points of Flaws; they earn XP in play rather than points.
+                                @Creation.MeritPoints Merit points: Merits cost their dots. Points also buy a Skill dot or Specialty (1) or an Attribute dot (3).
+                                Up to @Creation.FlawPoints points of Flaws; they earn XP in play rather than points.
                             </MudText>
                             <MudText Typo="Typo.subtitle1">Merits</MudText>
                             <MeritsPanel Form="_form" Options="_merits" Kind="MeritKind.Merit" Changed="OnChangedAsync" />
@@ -142,7 +142,7 @@ else
                             break;
                         case CreationStep.Blood:
                             <BloodStep Form="_form" Bloodlines="_bloodlines" PredatorTypes="_predatorTypes" Disciplines="_disciplines"
-                                       Powers="_powers" Merits="_merits" Changed="OnChangedAsync" />
+                                       Powers="_powers" Merits="_merits" Creation="Creation" Changed="OnChangedAsync" />
                             break;
                         case CreationStep.Review:
                             <SheetOverview Form="_form" Concepts="_concepts" Bloodlines="_bloodlines" PredatorTypes="_predatorTypes"
@@ -340,6 +340,8 @@ else
     private string CampaignUrl => CampaignOf is { } c ? $"campaigns/{c}" : "campaigns";
     private string CampaignName => _view?.CampaignName ?? _campaign?.Name ?? "";
     private CharacterTemplates Allowed => _view?.AllowedTemplates ?? _campaign?.AllowedTemplates ?? CharacterTemplates.All;
+    /// <summary>The campaign's creation budgets; the book's until it's loaded.</summary>
+    private CreationSettings Creation => _view?.Creation ?? _campaign?.Creation ?? new();
     private bool IsDirty => _form is not null && Snapshot(_form) != _saved;
 
     /// <summary>The wizard's steps; mortals have no template to add.</summary>
@@ -401,7 +403,7 @@ else
                     if (script.Kind == ScriptKind.ChronicleTenet) script.Text = _campaign.ChronicleTenet ?? "";
                 }
                 form.NormalizeForKind();
-                Derive(form);
+                Derive(form, Creation);
                 _form = form;
                 _editContext = new EditContext(form);
                 _saved = "";
@@ -423,13 +425,14 @@ else
         Evaluate();
     }
 
-    private void Evaluate() => _report = CreationRules.Evaluate(_form!, _catalog!, Allowed);
+    private void Evaluate() => _report = CreationRules.Evaluate(_form!, _catalog!, Allowed, Creation);
 
     /// <summary>
     /// Values that follow from the rest during creation, so the player never has to work them out:
-    /// Willpower is Wits + Resolve, trackers start full, Humanity 6 within Generation's limit.
+    /// Willpower is Wits + Resolve, trackers start full, Humanity 6 within Generation's limit. Vampires start at the
+    /// campaign's Generation, and stay there when it doesn't let them buy a lower one.
     /// </summary>
-    private static void Derive(FullSheetForm form)
+    private static void Derive(FullSheetForm form, CreationSettings creation)
     {
         form.WillpowerDots = form.WillpowerCurrent =
             DerivedStats.StartingWillpower(form.Attribute(CharacterAttribute.Wits), form.Attribute(CharacterAttribute.Resolve));
@@ -437,7 +440,10 @@ else
         {
             var bloodPotency = form.BloodPotency ??= BloodRules.MinBloodPotency;
             if (form.IsThinblood) form.Generation = GenerationRules.ThinbloodGeneration;
-            var generation = form.Generation ??= GenerationRules.StartingGeneration;
+            else if (form.Generation is not { } chosen || chosen > creation.StartingGeneration
+                     || (chosen < creation.StartingGeneration && !creation.CanBuyGeneration))
+                form.Generation = creation.StartingGeneration;
+            var generation = form.Generation.Value;
             form.Humanity = HumanityRules.ClampToGeneration(DerivedStats.StartingHumanity(), bloodPotency, generation);
             form.VitaeCurrent = BloodRules.MaxVitae(bloodPotency, form.IsThinblood);
         }
@@ -450,7 +456,7 @@ else
 
     private Task OnChangedAsync()
     {
-        if (IsWizard) Derive(_form!);
+        if (IsWizard) Derive(_form!, Creation);
         Evaluate();
         return Task.CompletedTask;
     }

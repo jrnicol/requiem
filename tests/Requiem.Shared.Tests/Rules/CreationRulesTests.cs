@@ -278,6 +278,55 @@ public class CreationRulesTests
         Assert.True(Evaluate(sheet).IsComplete, Missing(Evaluate(sheet)));
     }
 
+    [Fact]
+    public void A_campaigns_budgets_replace_the_books()
+    {
+        // The book's mortal against richer attributes and more Merit points: dots left over, nothing over budget.
+        var generous = new CreationSettings { PrimaryAttributes = 6, SecondaryAttributes = 5, TertiaryAttributes = 4, MeritPoints = 15 };
+        var report = CreationRules.Evaluate(Mortal(), Catalog, CharacterTemplates.All, generous);
+        Assert.True(report.IsWithinBudget);
+        Assert.Equal([6, 5, 4], report.Budget.Where(b => b.Step == CreationStep.Attributes).Select(b => b.Allowed));
+        Assert.Contains(report.Issues, i => i.Message == "3 attribute dots left to place.");
+        Assert.Contains(report.Issues, i => i.Message == "5 Merit points left to spend.");
+
+        // Leaner skills and fewer Flaws: the extra skill dots cost Merit points, and the Flaws are a warning.
+        var lean = new CreationSettings { PrimarySkills = 10, SecondarySkills = 6, TertiarySkills = 4, FlawPoints = 2 };
+        report = CreationRules.Evaluate(Mortal(), Catalog, CharacterTemplates.All, lean);
+        Assert.Equal(3, report.MeritPoints.Where(m => m.Item.Contains("skill dot")).Sum(m => m.Points));
+        Assert.Contains(report.Issues, i => i.Level == CreationIssueLevel.Warning && i.Message.EndsWith("the most at creation is 2."));
+    }
+
+    [Fact]
+    public void A_campaign_can_start_vampires_lower_and_stop_them_buying_generation()
+    {
+        var sheet = Vampire(Ventrue, [new() { PowerGroupId = Auspex }, new() { PowerGroupId = Dominate }]);
+        var tenth = new CreationSettings { StartingGeneration = 10 };
+
+        // Buying down from the campaign's start, not the book's.
+        sheet.Generation = 9;
+        Assert.Equal(3, Assert.Single(CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, tenth).MeritPoints, m => m.Item.StartsWith("Generation")).Points);
+        sheet.Generation = 12;
+        Assert.Contains(CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, tenth).Issues,
+            i => i.Level == CreationIssueLevel.Warning && i.Message.StartsWith("This campaign's vampires start at Generation 10"));
+
+        // Without buying, a lower Generation costs nothing but is a warning.
+        tenth.CanBuyGeneration = false;
+        sheet.Generation = 9;
+        var report = CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, tenth);
+        Assert.DoesNotContain(report.MeritPoints, m => m.Item.StartsWith("Generation"));
+        Assert.Contains(report.Issues, i => i.Message == "This campaign's vampires start at Generation 10 and can't buy a lower one.");
+        sheet.Generation = 10;
+        Assert.DoesNotContain(CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, tenth).Issues, i => i.Message.Contains("Generation 10"));
+    }
+
+    [Fact]
+    public void Creation_settings_keep_priorities_in_order()
+    {
+        var settings = new CreationSettings { PrimaryAttributes = 3, SecondaryAttributes = 4 };
+        Assert.Contains(settings.Validate(new(settings)), r => r.ErrorMessage!.StartsWith("Attributes go from most dots to fewest"));
+        Assert.Empty(new CreationSettings().Validate(new(new CreationSettings())));
+    }
+
     // ---------- Helpers ----------
 
     private static CreationReport Evaluate(FullSheetForm sheet, CharacterTemplates allowed = CharacterTemplates.All) =>

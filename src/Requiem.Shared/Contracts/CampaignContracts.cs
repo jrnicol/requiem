@@ -42,7 +42,8 @@ public sealed record CampaignView(
     DateTimeOffset? ArchivedAt,
     CampaignRole MyRole,
     IReadOnlyList<CampaignMemberView> Members,
-    IReadOnlyList<CampaignInviteView> Invites)
+    IReadOnlyList<CampaignInviteView> Invites,
+    CreationSettings? Creation = null)
 {
     public bool IsStoryteller => MyRole == CampaignRole.Storyteller;
 }
@@ -62,10 +63,18 @@ public sealed class CampaignForm : IValidatableObject
 
     public CharacterTemplates AllowedTemplates { get; set; } = CharacterTemplates.Vampire;
 
+    public CreationSettings Creation { get; set; } = new();
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if ((AllowedTemplates & CharacterTemplates.All) == CharacterTemplates.None)
             yield return new ValidationResult("Allow at least one kind of character.", [nameof(AllowedTemplates)]);
+        // The nested settings aren't validated on their own.
+        if (Creation is null) yield break;
+        var creation = new List<ValidationResult>();
+        Validator.TryValidateObject(Creation, new ValidationContext(Creation), creation, validateAllProperties: true);
+        foreach (var result in creation)
+            yield return new ValidationResult(result.ErrorMessage, result.MemberNames.Select(m => $"{nameof(Creation)}.{m}"));
     }
 }
 

@@ -79,6 +79,7 @@ else
                                                      ValueChanged="on => _settings.AllowedTemplates = on ? _settings.AllowedTemplates | t : _settings.AllowedTemplates & ~t" />
                                     }
                                 </div>
+                                <CreationSettingsEditor Settings="_settings.Creation" />
                                 <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap">
                                     <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="_busy" OnClick="SaveSettingsAsync">Save settings</MudButton>
                                     <MudButton Variant="Variant.Outlined" Disabled="_busy" OnClick="ToggleArchivedAsync">
@@ -120,8 +121,8 @@ else
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Star" Class="mb-3"
                                Disabled="_busy" OnClick="AwardXpAsync">Award XP</MudButton>
                 }
-                @* The same profile cards as the NPCs tab, with each one's status in the corner. Every detail shows; the edit and
-                   table links are for its player and the Storyteller. *@
+                @* The same profile cards as the Storyteller Characters tab, with each one's status in the corner. Every detail
+                   shows; the edit and table links are for its player and the Storyteller. *@
                 <NpcProfileCards Npcs="PcProfiles" ShowLinks="true" Status="PcStatus" />
             }
         </MudTabPanel>
@@ -217,7 +218,7 @@ else
                 </MudPaper>
             </MudTabPanel>
 
-            <MudTabPanel Text="NPCs" Icon="@Icons.Material.Outlined.Groups">
+            <MudTabPanel Text="Storyteller Characters" Icon="@Icons.Material.Outlined.Groups">
                 <MudStack Row="true" Spacing="2" Wrap="Wrap.Wrap" AlignItems="AlignItems.Center" Class="mb-3">
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
                                Href="@($"npcs/new?campaign={Id}")">New Supporting Cast</MudButton>
@@ -310,8 +311,8 @@ else
     /// <summary>A Storyteller sees how many characters wait for approval.</summary>
     private string CharactersTabTitle =>
         _campaign?.IsStoryteller == true && _characters?.Count(c => c.Status == CharacterStatus.Submitted) is > 0 and var waiting
-            ? $"Characters ({waiting} to approve)"
-            : _campaign?.IsStoryteller == true ? "Characters" : "Your character";
+            ? $"Player Characters ({waiting} to Approve)"
+            : _campaign?.IsStoryteller == true ? "Player Characters" : "Your Character";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -360,6 +361,7 @@ else
         {
             Name = campaign.Name, Description = campaign.Description, ChronicleTenet = campaign.ChronicleTenet,
             CoterieScript = campaign.CoterieScript, AllowedTemplates = campaign.AllowedTemplates,
+            Creation = campaign.Creation?.Copy() ?? new(),
         };
     }
 

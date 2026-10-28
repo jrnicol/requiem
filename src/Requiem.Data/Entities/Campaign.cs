@@ -16,6 +16,8 @@ public class Campaign
     /// <summary>The third Script, agreed by the players and stored once (PHASE2.md decision 7).</summary>
     public string? CoterieScript { get; set; }
     public CharacterTemplates AllowedTemplates { get; set; } = CharacterTemplates.Vampire;
+    /// <summary>Character creation budgets. Campaigns saved before they existed read as the book's.</summary>
+    public CreationSettings Creation { get; set; } = new();
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? ArchivedAt { get; set; }
 
