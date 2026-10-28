@@ -38,105 +38,101 @@ else
              ActivePanelIndex="_tab" ActivePanelIndexChanged="OnTabChanged">
         <MudTabPanel Text="Overview" Icon="@Icons.Material.Outlined.Info">
             <MudGrid Spacing="3">
+                @* The left column: the shared Scripts, then who's in the campaign and, for its Storytellers, how to invite more.
+                   The right column holds the Storyteller's settings. *@
                 <MudItem xs="12" md="6">
-                    <MudPaper Class="pa-3" Elevation="1">
-                        <MudText Typo="Typo.subtitle1">Scripts the coterie shares</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
-                            Every character's third and fourth Scripts (VtR p.136).
-                        </MudText>
-                        <MudText Typo="Typo.subtitle2">Coterie</MudText>
-                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">Agreed by the players; anyone in the campaign can change it.</MudText>
-                        <MudTextField T="string" @bind-Value="_coterie" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500"
-                                      Placeholder="What binds you together" Immediate="true" />
-                        <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-1"
-                                   Disabled="_busy || (_coterie ?? string.Empty) == (_campaign.CoterieScript ?? string.Empty)"
-                                   OnClick="SaveCoterieAsync">Save Coterie Script</MudButton>
-
-                        <MudText Typo="Typo.subtitle2" Class="mt-3">Chronicle Tenet</MudText>
-                        <MudText Typo="Typo.body2" Class="power-text">
-                            @(string.IsNullOrWhiteSpace(_campaign.ChronicleTenet) ? "Not set yet." : _campaign.ChronicleTenet)
-                        </MudText>
-                    </MudPaper>
-                </MudItem>
-
-                @* Who is in the campaign, and for its Storytellers the invite links, sit with the rest of the overview. *@
-                <MudItem xs="12" md="6">
-                    <MudPaper Class="pa-3" Elevation="1">
-                        <MudText Typo="Typo.subtitle1" Class="mb-1">Members (@_campaign.Members.Count)</MudText>
-                        @foreach (var member in _campaign.Members)
-                        {
-                            <div class="play-row">
-                                <div style="flex:1; min-width:0">
-                                    <div>@member.DisplayName</div>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                        @(member.Role == CampaignRole.Storyteller ? "Storyteller" : "Player")@(member.Email is null ? "" : $" · {member.Email}")
-                                        · joined @member.JoinedAt.ToLocalTime().ToString("d MMM yyyy")
-                                    </MudText>
-                                </div>
-                                @if (member.IsMe)
-                                {
-                                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveAsync(member, leaving: true)">Leave</MudButton>
-                                }
-                                else if (_campaign.IsStoryteller && member.Role == CampaignRole.Player)
-                                {
-                                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveAsync(member, leaving: false)">Remove</MudButton>
-                                }
-                            </div>
-                        }
-                    </MudPaper>
-                </MudItem>
-
-                @if (_campaign.IsStoryteller)
-                {
-                    <MudItem xs="12" md="6">
-                        <MudPaper Class="pa-3 mb-3" Elevation="1">
-                            <MudText Typo="Typo.subtitle1">Invite players</MudText>
+                    <MudStack Spacing="3">
+                        <MudPaper Class="pa-3" Elevation="1">
+                            <MudText Typo="Typo.subtitle1">Scripts the coterie shares</MudText>
                             <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
-                                Make a link and send it however you like. Players make an account with it, or join with the one they have.
+                                Every character's third and fourth Scripts (VtR p.136).
                             </MudText>
-                            <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap">
-                                <MudNumericField T="int" @bind-Value="_invite.ExpiresInDays" Label="Valid for (days)" Min="1" Max="90"
-                                                 Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:10rem" />
-                                <MudNumericField T="int?" @bind-Value="_invite.MaxUses" Label="Players (blank = any)" Min="1" Max="50"
-                                                 Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:12rem" />
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Link" Class="mt-1"
-                                           Disabled="_busy || _campaign.ArchivedAt is not null" OnClick="CreateInviteAsync">Make link</MudButton>
-                            </MudStack>
-                            @if (_newLink is not null)
-                            {
-                                <MudAlert Severity="Severity.Success" Class="mt-3" NoIcon="true">
-                                    <MudText Typo="Typo.body2" Class="mb-1">Copy it now: it's shown only once.</MudText>
-                                    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
-                                        <code class="invite-link">@_newLink</code>
-                                        <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.ContentCopy" OnClick="CopyAsync">Copy</MudButton>
-                                    </MudStack>
-                                </MudAlert>
-                            }
+                            <MudText Typo="Typo.subtitle2">Coterie</MudText>
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">Agreed by the players; anyone in the campaign can change it.</MudText>
+                            <MudTextField T="string" @bind-Value="_coterie" Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="500"
+                                          Placeholder="What binds you together" Immediate="true" />
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-1"
+                                       Disabled="_busy || (_coterie ?? string.Empty) == (_campaign.CoterieScript ?? string.Empty)"
+                                       OnClick="SaveCoterieAsync">Save Coterie Script</MudButton>
+
+                            <MudText Typo="Typo.subtitle2" Class="mt-3">Chronicle Tenet</MudText>
+                            <MudText Typo="Typo.body2" Class="power-text">
+                                @(string.IsNullOrWhiteSpace(_campaign.ChronicleTenet) ? "Not set yet." : _campaign.ChronicleTenet)
+                            </MudText>
                         </MudPaper>
 
                         <MudPaper Class="pa-3" Elevation="1">
-                            <MudText Typo="Typo.subtitle1" Class="mb-1">Links</MudText>
-                            @if (_campaign.Invites.Count == 0)
+                            <MudText Typo="Typo.subtitle1" Class="mb-1">Members (@_campaign.Members.Count)</MudText>
+                            @foreach (var member in _campaign.Members)
                             {
-                                <MudText Typo="Typo.body2" Color="Color.Secondary">None yet.</MudText>
-                            }
-                            @foreach (var invite in _campaign.Invites)
-                            {
-                                var usable = invite.IsUsable(DateTimeOffset.UtcNow);
                                 <div class="play-row">
-                                    <div style="flex:1">
-                                        <div>Made @invite.CreatedAt.ToLocalTime().ToString("d MMM, HH:mm")</div>
-                                        <MudText Typo="Typo.caption" Color="Color.Secondary">@InviteStatus(invite)</MudText>
+                                    <div style="flex:1; min-width:0">
+                                        <div>@member.DisplayName</div>
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">
+                                            @(member.Role == CampaignRole.Storyteller ? "Storyteller" : "Player")@(member.Email is null ? "" : $" · {member.Email}")
+                                            · joined @member.JoinedAt.ToLocalTime().ToString("d MMM yyyy")
+                                        </MudText>
                                     </div>
-                                    @if (usable)
+                                    @if (member.IsMe)
                                     {
-                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RevokeAsync(invite)">Revoke</MudButton>
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveAsync(member, leaving: true)">Leave</MudButton>
+                                    }
+                                    else if (_campaign.IsStoryteller && member.Role == CampaignRole.Player)
+                                    {
+                                        <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RemoveAsync(member, leaving: false)">Remove</MudButton>
                                     }
                                 </div>
                             }
+
+                            @if (_campaign.IsStoryteller)
+                            {
+                                <MudDivider Class="my-3" />
+                                <MudText Typo="Typo.subtitle2">Invite players</MudText>
+                                <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                                    Make a link and send it however you like. Players make an account with it, or join with the one they have.
+                                </MudText>
+                                <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap">
+                                    <MudNumericField T="int" @bind-Value="_invite.ExpiresInDays" Label="Valid for (days)" Min="1" Max="90"
+                                                     Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:10rem" />
+                                    <MudNumericField T="int?" @bind-Value="_invite.MaxUses" Label="Players (blank = any)" Min="1" Max="50"
+                                                     Variant="Variant.Outlined" Margin="Margin.Dense" Style="width:12rem" />
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Link" Class="mt-1"
+                                               Disabled="_busy || _campaign.ArchivedAt is not null" OnClick="CreateInviteAsync">Make link</MudButton>
+                                </MudStack>
+                                @if (_newLink is not null)
+                                {
+                                    <MudAlert Severity="Severity.Success" Class="mt-3" NoIcon="true">
+                                        <MudText Typo="Typo.body2" Class="mb-1">Copy it now: it's shown only once.</MudText>
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="1" Wrap="Wrap.Wrap">
+                                            <code class="invite-link">@_newLink</code>
+                                            <MudButton Size="Size.Small" Variant="Variant.Outlined" StartIcon="@Icons.Material.Outlined.ContentCopy" OnClick="CopyAsync">Copy</MudButton>
+                                        </MudStack>
+                                    </MudAlert>
+                                }
+
+                                <MudText Typo="Typo.subtitle2" Class="mt-3">Links</MudText>
+                                @if (_campaign.Invites.Count == 0)
+                                {
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary">None yet.</MudText>
+                                }
+                                @foreach (var invite in _campaign.Invites)
+                                {
+                                    var usable = invite.IsUsable(DateTimeOffset.UtcNow);
+                                    <div class="play-row">
+                                        <div style="flex:1">
+                                            <div>Made @invite.CreatedAt.ToLocalTime().ToString("d MMM, HH:mm")</div>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@InviteStatus(invite)</MudText>
+                                        </div>
+                                        @if (usable)
+                                        {
+                                            <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" OnClick="() => RevokeAsync(invite)">Revoke</MudButton>
+                                        }
+                                    </div>
+                                }
+                            }
                         </MudPaper>
-                    </MudItem>
-                }
+                    </MudStack>
+                </MudItem>
 
                 @if (_campaign.IsStoryteller && _settings is not null)
                 {
