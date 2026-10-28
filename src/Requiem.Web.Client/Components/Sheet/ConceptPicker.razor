@@ -1,0 +1,50 @@
+@* Concept on the NPC editors: suggests the book's Concepts (WoD Core p.55–57) and shows how the chosen one regains
+   Willpower, which the table view then offers. A Concept of the Storyteller's own is still accepted, as in creation;
+   at the table it falls back to the general rule. *@
+
+<MudAutocomplete T="string" Value="Value" ValueChanged="SetAsync" SearchFunc="SearchAsync" Label="Concept"
+                 Variant="Variant" Margin="Margin" MaxLength="200" MaxItems="null" Clearable="true"
+                 CoerceValue="true" ResetValueOnEmptyText="true" OpenOnFocus="true"
+                 HelperText="@HelperText" aria-label="Concept">
+    <ItemTemplate Context="name">
+        <div>
+            <div>@name</div>
+            @if (Find(name) is { } concept)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@concept.WillpowerTrigger</MudText>
+            }
+        </div>
+    </ItemTemplate>
+</MudAutocomplete>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<ConceptOption> Concepts { get; set; } = [];
+    [Parameter] public Variant Variant { get; set; } = Variant.Outlined;
+    [Parameter] public Margin Margin { get; set; } = Margin.None;
+
+    private ConceptOption? Find(string? name) =>
+        Concepts.FirstOrDefault(c => string.Equals(c.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    private string HelperText => Find(Value) is { } concept
+        ? $"Willpower: {concept.WillpowerTrigger}"
+        : string.IsNullOrWhiteSpace(Value)
+            ? "Pick one of the book's, or write your own"
+            : "Your own Concept: at the table, the general Willpower rule applies";
+
+    private Task<IEnumerable<string>> SearchAsync(string? text, CancellationToken ct)
+    {
+        var search = text?.Trim();
+        // An exact book Concept shows the whole list, so it's easy to switch.
+        var all = string.IsNullOrEmpty(search) || Find(search) is not null;
+        return Task.FromResult(Concepts
+            .Where(c => all || c.Name.Contains(search!, StringComparison.OrdinalIgnoreCase)
+                            || (c.Description?.Contains(search!, StringComparison.OrdinalIgnoreCase) ?? false))
+            .Select(c => c.Name));
+    }
+
+    // Saves a book Concept by its own name, so the table view can match it.
+    private Task SetAsync(string? value) =>
+        ValueChanged.InvokeAsync(Find(value)?.Name ?? (string.IsNullOrWhiteSpace(value) ? null : value.Trim()));
+}

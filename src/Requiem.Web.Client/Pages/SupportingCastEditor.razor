@@ -84,8 +84,7 @@ else
                                 </MudToggleGroup>
                             </MudItem>
                             <MudItem xs="12" sm="6">
-                                <MudTextField @bind-Value="_form.Concept" For="() => _form.Concept" Label="Concept"
-                                              Placeholder="e.g. Crooked harbor cop" Variant="Variant.Outlined" MaxLength="200" />
+                                <ConceptPicker @bind-Value="_form.Concept" Concepts="_concepts" />
                             </MudItem>
                             <MudItem xs="12" sm="6">
                                 <MudTextField @bind-Value="_form.Faction" For="() => _form.Faction" Label="Faction"
@@ -297,6 +296,7 @@ else
     private EditContext? _editContext;
     private ValidationMessageStore? _serverErrors;
     private IReadOnlyList<BloodlineOption> _bloodlines = [];
+    private IReadOnlyList<ConceptOption> _concepts = [];
     private IReadOnlyList<PredatorTypeOption> _predatorTypes = [];
     private IReadOnlyList<EdgeOption> _edges = [];
     private bool _notFound;
@@ -344,6 +344,7 @@ else
         try
         {
             _bloodlines = await Api.GetBloodlinesAsync();
+            _concepts = await Api.GetConceptsAsync();
             _predatorTypes = await Api.GetPredatorTypesAsync();
             _edges = await Api.GetEdgesAsync();
 

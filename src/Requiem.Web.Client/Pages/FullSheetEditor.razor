@@ -77,8 +77,7 @@ else
                             </MudToggleGroup>
                         </MudItem>
                         <MudItem xs="12" sm="6">
-                            <MudTextField @bind-Value="_form.Concept" For="() => _form.Concept" Label="Concept"
-                                          Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" />
+                            <ConceptPicker @bind-Value="_form.Concept" Concepts="_concepts" Margin="Margin.Dense" />
                         </MudItem>
                         <MudItem xs="12" sm="6">
                             <MudTextField @bind-Value="_form.Faction" For="() => _form.Faction" Label="Faction"
@@ -216,6 +215,7 @@ else
     private EditContext? _editContext;
     private ValidationMessageStore? _serverErrors;
     private IReadOnlyList<BloodlineOption> _bloodlines = [];
+    private IReadOnlyList<ConceptOption> _concepts = [];
     private IReadOnlyList<PredatorTypeOption> _predatorTypes = [];
     private IReadOnlyList<DisciplineOption> _disciplines = [];
     private IReadOnlyList<MeritOption> _merits = [];
@@ -272,6 +272,7 @@ else
         try
         {
             _bloodlines = await Api.GetBloodlinesAsync();
+            _concepts = await Api.GetConceptsAsync();
             _predatorTypes = await Api.GetPredatorTypesAsync();
             _disciplines = await Api.GetDisciplinesAsync();
             _merits = await Api.GetMeritsAsync();
