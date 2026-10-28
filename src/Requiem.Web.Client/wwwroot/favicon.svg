@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- A red rose for the site icon: stem and leaves, an outer cup, two side petals and a spiralled bud. -->
+  <path d="M32 36 C31 45 30 53 31 62" fill="none" stroke="#2f6b37" stroke-width="4" stroke-linecap="round"/>
+  <path d="M31 50 C23 43 15 44 10 50 C18 55 26 54 31 50 Z" fill="#3f8c47"/>
+  <path d="M32 44 C39 37 47 38 53 43 C46 49 38 48 32 44 Z" fill="#3f8c47"/>
+  <path d="M10 18 C10 31 20 39 32 39 C44 39 54 31 54 18 C47 27 40 29 32 29 C24 29 17 27 10 18 Z" fill="#6e0b14"/>
+  <path d="M17 9 C8 14 9 25 20 31 C24 26 26 17 23 9 C21 7 19 7 17 9 Z" fill="#9c1320"/>
+  <path d="M47 9 C56 14 55 25 44 31 C40 26 38 17 41 9 C43 7 45 7 47 9 Z" fill="#9c1320"/>
+  <path d="M32 5 C41 5 47 11 45 20 C43 26 37 29 32 29 C27 29 21 26 19 20 C17 11 23 5 32 5 Z" fill="#c8202e"/>
+  <path d="M26 17 C26 11 37 10 38 16 C39 22 31 24 29 20 C27 17 31 15 33 17" fill="none" stroke="#5c0910" stroke-width="2.4" stroke-linecap="round"/>
+</svg>
