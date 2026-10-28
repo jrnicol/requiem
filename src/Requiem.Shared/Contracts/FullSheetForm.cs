@@ -87,6 +87,7 @@ public sealed class XpLedgerEntry
 public sealed class FullSheetForm : IValidatableObject, ICharacterProfile
 {
     public const int MaxTextLength = 200;
+    public const int MaxStartingXpPurchases = 50;
     public const int MaxCorruption = ExperienceRules.ProgressPointsToUnlockXp;
 
     public Guid? Id { get; set; }
@@ -160,6 +161,8 @@ public sealed class FullSheetForm : IValidatableObject, ICharacterProfile
     public List<string> CorruptionMarks { get; set; } = [];
     public List<string> Equipment { get; set; } = [];
     public List<XpLedgerEntry> Experience { get; set; } = [];
+    /// <summary>What a draft player character buys with the campaign's starting XP, in order. Applied when it's approved.</summary>
+    public List<StartingXpPurchase> StartingXpPurchases { get; set; } = [];
 
     [StringLength(4000)] public string? Notes { get; set; }
     [StringLength(4000)] public string? GmNotes { get; set; }
@@ -255,6 +258,8 @@ public sealed class FullSheetForm : IValidatableObject, ICharacterProfile
 
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
+        if (StartingXpPurchases.Count > MaxStartingXpPurchases)
+            yield return Error($"At most {MaxStartingXpPurchases} starting XP purchases.", nameof(StartingXpPurchases));
         foreach (var attribute in Enum.GetValues<CharacterAttribute>())
             if (Attribute(attribute) is < Traits.MinAttribute or > Traits.MaxAttribute)
                 yield return Error($"{attribute} must be {Traits.MinAttribute}–{Traits.MaxAttribute}.", nameof(Attributes));

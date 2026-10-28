@@ -198,7 +198,8 @@ else
                 }
                 @* The same profile cards as the Storyteller Characters tab, with each one's status in the corner. Every detail
                    shows; the edit and table links are for its player and the Storyteller. *@
-                <NpcProfileCards Npcs="PcProfiles" ShowLinks="true" Status="PcStatus" />
+                <NpcProfileCards Npcs="PcProfiles" ShowLinks="true" Status="PcStatus"
+                                 Flagged="id => _characters.Any(c => c.Id == id && c.XpSplitFlagged)" />
             }
         </MudTabPanel>
 

@@ -6,7 +6,10 @@ namespace Requiem.Shared.Contracts;
 // Player characters (PHASE2.md §5, milestone 2.2): players build them with the creation wizard as a Draft,
 // submit them, and the Storyteller approves them (Active) or returns them with a note.
 
-/// <summary>One row of a campaign's player characters, with the profile its card shows.</summary>
+/// <summary>
+/// One row of a campaign's player characters, with the profile its card shows. <see cref="XpSplitFlagged"/> is for the
+/// Storyteller: a draft or submission whose starting XP looks split to save XP.
+/// </summary>
 public sealed record PlayerCharacterSummary(
     Guid Id,
     Guid CampaignId,
@@ -17,7 +20,8 @@ public sealed record PlayerCharacterSummary(
     string OwnerName,
     bool IsMine,
     DateTimeOffset UpdatedAt,
-    KnownNpc? Profile = null);
+    KnownNpc? Profile = null,
+    bool XpSplitFlagged = false);
 
 /// <summary>
 /// A player character as its player or a Storyteller sees it. The sheet never carries the Storyteller's

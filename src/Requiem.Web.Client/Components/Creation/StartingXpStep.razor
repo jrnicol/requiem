@@ -1,0 +1,70 @@
+@* The wizard's Starting XP step: the campaign's starting XP, spent at XP prices on top of the dots from the earlier steps.
+   The Storyteller sees the purchases when approving, and they go on the sheet then. *@
+
+<MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">
+    This campaign gives @Budget starting XP. Spend it here at the usual XP prices, on top of the dots you've placed; the
+    Storyteller sees what you bought when approving. Whatever's left once you're approved waits for 4 @ProgressName like any XP.
+    If you go back and change the dots under a purchase, it's taken off and you can buy it again.
+</MudText>
+
+<MudStack Row="true" AlignItems="AlignItems.Baseline" Spacing="1" Class="mb-2">
+    <MudText Typo="Typo.h5">@(Budget - Replay.Spent)</MudText>
+    <MudText Typo="Typo.body2" Color="Color.Secondary">of @Budget left</MudText>
+</MudStack>
+
+<SpendXp Sheet="Replay.Sheet" Catalog="Catalog" Disciplines="Disciplines" Powers="Powers" Merits="Merits"
+         Progress="ExperienceRules.ProgressPointsToUnlockXp" Buy="BuyAsync" />
+
+@if (Form.StartingXpPurchases.Count > 0)
+{
+    <MudText Typo="Typo.subtitle2" Class="mt-4">Bought</MudText>
+    @foreach (var (bought, index) in Form.StartingXpPurchases.Select((p, i) => (p, i)))
+    {
+        <div class="play-row">
+            <div style="flex:1">@bought.Label</div>
+            <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mr-2">@bought.Cost XP</MudText>
+            <MudIconButton Icon="@Icons.Material.Outlined.Close" Size="Size.Small" aria-label="@($"Remove {bought.Label}")"
+                           OnClick="() => RemoveAsync(index)" />
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public FullSheetForm Form { get; set; } = null!;
+    [Parameter, EditorRequired] public CreationCatalog Catalog { get; set; } = null!;
+    [Parameter] public IReadOnlyList<DisciplineOption> Disciplines { get; set; } = [];
+    [Parameter] public IReadOnlyList<PowerOption> Powers { get; set; } = [];
+    [Parameter] public IReadOnlyList<MeritOption> Merits { get; set; } = [];
+    /// <summary>The campaign's starting XP.</summary>
+    [Parameter] public int Budget { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+    /// <summary>Says what was taken off when a removal leaves later purchases that no longer fit.</summary>
+    [Parameter] public EventCallback<string> Dropped { get; set; }
+
+    private StartingXpReplay Replay => StartingXpRules.Replay(Form, Form.StartingXpPurchases, Catalog, Budget);
+
+    private string ProgressName => AdvancementRules.ProgressName(Form.Kind);
+
+    private async Task BuyAsync(XpPurchase purchase)
+    {
+        var sheet = Replay.Sheet;
+        var quote = AdvancementRules.Quote(sheet, purchase, Catalog, ExperienceRules.ProgressPointsToUnlockXp);
+        if (!quote.IsAllowed) return;
+        Form.StartingXpPurchases.Add(StartingXpPurchase.From(purchase, quote));
+        await Changed.InvokeAsync();
+    }
+
+    /// <summary>Takes a purchase off, and any bought later that depended on it (e.g. the next dot of the same Skill).</summary>
+    private async Task RemoveAsync(int index)
+    {
+        Form.StartingXpPurchases.RemoveAt(index);
+        var replay = Replay;
+        if (replay.Broken is not null)
+        {
+            var dropped = Form.StartingXpPurchases.Skip(replay.Valid.Count).Select(p => p.Label).ToList();
+            Form.StartingXpPurchases = [.. replay.Valid];
+            await Dropped.InvokeAsync($"Also took off {string.Join(", ", dropped)}, which depended on it.");
+        }
+        await Changed.InvokeAsync();
+    }
+}

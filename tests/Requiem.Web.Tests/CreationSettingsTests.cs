@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Requiem.Shared.Campaigns;
 using Requiem.Shared.Contracts;
+using Requiem.Shared.Rules;
 
 namespace Requiem.Web.Tests;
 
@@ -35,6 +36,86 @@ public class CreationSettingsTests(RequiemWebFactory factory) : IClassFixture<Re
         Assert.Equal(12, draft.Creation!.MeritPoints);
         Assert.Equal(4, draft.Creation.TertiaryAttributes);
     }
+
+    [Fact]
+    public async Task Starting_xp_is_spent_while_building_and_applied_on_approval()
+    {
+        var table = await PlayerTable.CreateAsync(factory);
+        Assert.True((await SaveAsync(table, new CreationSettings { StartingXp = 20 })).IsSuccessStatusCode);
+
+        // Brawl 3 → 4 at XP prices, on top of the creation dots.
+        var form = PlayerTable.CompleteMortal();
+        form.StartingXpPurchases = [Bought(Skill.Brawl, 3, 4)];
+        var id = await PlayerTable.ActiveCharacterAsync(table, form);
+
+        var sheet = (await table.Storyteller.GetFromJsonAsync<PlayerCharacterView>($"/api/player-characters/{id}", RequiemJson.Options))!.Sheet;
+        Assert.Equal(4, sheet.Skills[Skill.Brawl]);
+        Assert.Empty(sheet.StartingXpPurchases);
+        Assert.Equal([(20, "Starting XP"), (-12, "Brawl 3 → 4")], sheet.Experience.Select(x => (x.Amount, x.Reason)));
+
+        // The 8 left over waits for 4 Links like any XP.
+        var advancement = (await table.Player.GetFromJsonAsync<AdvancementView>($"/api/player-characters/{id}/advancement", RequiemJson.Options))!;
+        Assert.Equal((8, false), (advancement.Available, advancement.Unlocked));
+        var spend = await table.Player.PostAsJsonAsync($"/api/player-characters/{id}/spend",
+            new XpPurchase { Kind = PurchaseKind.Skill, Skill = Skill.Athletics }, RequiemJson.Options);
+        Assert.Equal(HttpStatusCode.BadRequest, spend.StatusCode);
+        Assert.Contains(advancement.History, h => h.Summary == "+20 starting XP; spent 12 on Brawl 3 → 4.");
+
+        // Raising it later doesn't add to characters already in play.
+        Assert.True((await SaveAsync(table, new CreationSettings { StartingXp = 30 })).IsSuccessStatusCode);
+        sheet = (await table.Storyteller.GetFromJsonAsync<PlayerCharacterView>($"/api/player-characters/{id}", RequiemJson.Options))!.Sheet;
+        Assert.Equal(8, sheet.ExperienceAvailable);
+    }
+
+    [Theory]
+    [InlineData(20, 2, "Brawl has changed since it was bought.")]
+    [InlineData(10, 3, "Costs 12 XP; 10 available.")]
+    public async Task Purchases_that_no_longer_fit_block_submitting(int startingXp, int from, string problem)
+    {
+        var table = await PlayerTable.CreateAsync(factory);
+        Assert.True((await SaveAsync(table, new CreationSettings { StartingXp = startingXp })).IsSuccessStatusCode);
+        var form = PlayerTable.CompleteMortal();
+        form.StartingXpPurchases = [Bought(Skill.Brawl, from, 4)];
+        var draft = await PlayerTable.CreateCharacterAsync(table.Player, table.CampaignId, form);
+
+        var submit = await table.Player.PostAsync($"/api/player-characters/{draft.Sheet.Id}/submit", null);
+        Assert.Equal(HttpStatusCode.BadRequest, submit.StatusCode);
+        Assert.Contains(problem, await submit.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task Storytellers_see_a_flag_when_cheap_dots_go_on_xp_and_high_ones_on_creation()
+    {
+        var table = await PlayerTable.CreateAsync(factory);
+        Assert.True((await SaveAsync(table, new CreationSettings { StartingXp = 20 })).IsSuccessStatusCode);
+        // Five new Skills at 1 dot for 15 XP, beside creation dots at 3: the same dots on top would cost 36.
+        var form = PlayerTable.CompleteMortal();
+        form.StartingXpPurchases =
+        [
+            Bought(Skill.Expression, 0, 1), Bought(Skill.Persuasion, 0, 1), Bought(Skill.Subterfuge, 0, 1),
+            Bought(Skill.Ballistics, 0, 1), Bought(Skill.Weaponry, 0, 1),
+        ];
+        var draft = await PlayerTable.CreateCharacterAsync(table.Player, table.CampaignId, form);
+        await PlayerTable.PostAsync<PlayerCharacterView>(table.Player, $"/api/player-characters/{draft.Sheet.Id}/submit");
+
+        var cards = (await table.Storyteller.GetFromJsonAsync<List<PlayerCharacterSummary>>(
+            $"/api/campaigns/{table.CampaignId}/player-characters", RequiemJson.Options))!;
+        Assert.True(Assert.Single(cards).XpSplitFlagged);
+        // Only the Storyteller sees it.
+        var mine = (await table.Player.GetFromJsonAsync<List<PlayerCharacterSummary>>(
+            $"/api/campaigns/{table.CampaignId}/player-characters", RequiemJson.Options))!;
+        Assert.False(Assert.Single(mine).XpSplitFlagged);
+
+        var advancement = (await table.Storyteller.GetFromJsonAsync<AdvancementView>(
+            $"/api/player-characters/{draft.Sheet.Id}/advancement", RequiemJson.Options))!;
+        Assert.Contains(advancement.History, h => h.Summary.EndsWith("Flagged: possible gaming of the XP split."));
+    }
+
+    /// <summary>A Skill dot bought with starting XP, at its XP price (new dots × 3).</summary>
+    private static StartingXpPurchase Bought(Skill skill, int from, int to) => new()
+    {
+        Purchase = new XpPurchase { Kind = PurchaseKind.Skill, Skill = skill }, Trait = skill.ToString(), FromDots = from, ToDots = to, Cost = to * 3,
+    };
 
     [Theory]
     [InlineData(4, 5, 3, 12, "Attributes go from most dots to fewest")]

@@ -294,6 +294,55 @@ public class CreationRulesTests
         report = CreationRules.Evaluate(Mortal(), Catalog, CharacterTemplates.All, lean);
         Assert.Equal(3, report.MeritPoints.Where(m => m.Item.Contains("skill dot")).Sum(m => m.Points));
         Assert.Contains(report.Issues, i => i.Level == CreationIssueLevel.Warning && i.Message.EndsWith("the most at creation is 2."));
+
+        // Starting XP is a budget of its own, only when the campaign gives some.
+        Assert.DoesNotContain(report.Budget, b => b.Name == "Starting XP");
+        var xp = Assert.Single(CreationRules.Evaluate(Mortal(), Catalog, CharacterTemplates.All, new CreationSettings { StartingXp = 20 }).Budget,
+            b => b.Name == "Starting XP");
+        Assert.Equal((0, 20), (xp.Spent, xp.Allowed));
+    }
+
+    [Fact]
+    public void Starting_xp_purchases_count_against_their_budget_and_must_still_fit()
+    {
+        var settings = new CreationSettings { StartingXp = 20 };
+        var sheet = Mortal();
+        sheet.StartingXpPurchases = [Bought(Skill.Brawl, 3, 4)];
+        var report = CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, settings);
+        Assert.Equal((12, 20), Assert.Single(report.Budget, b => b.Name == "Starting XP") is var line ? (line.Spent, line.Allowed) : default);
+        Assert.True(report.IsComplete, Missing(report));
+        Assert.Contains(report.Issues, i => i.Level == CreationIssueLevel.Note && i.Message.StartsWith("8 starting XP left."));
+        // The creation budget doesn't see the XP dot: Brawl is still 3 for the Skill groups.
+        Assert.True(report.IsWithinBudget);
+
+        // Brawl changed underneath: the purchase has to be bought again.
+        sheet.Skills[Skill.Brawl] = 2;
+        report = CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, settings);
+        Assert.Contains(report.Issues, i => i.Level == CreationIssueLevel.Missing && i.Step == CreationStep.StartingXp
+            && i.Message == "Brawl 3 → 4 no longer fits: Brawl has changed since it was bought. Remove it, or buy it again.");
+    }
+
+    [Fact]
+    public void One_new_skill_dot_is_fine_but_a_pattern_of_cheap_xp_dots_is_flagged()
+    {
+        var settings = new CreationSettings { StartingXp = 20 };
+        var sheet = Mortal();
+        sheet.StartingXpPurchases = [Bought(Skill.Weaponry, 0, 1)];
+        Assert.DoesNotContain(CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, settings).Issues, i => i.Code == CreationRules.XpSplitCode);
+        sheet.StartingXpPurchases = [Bought(Skill.Brawl, 3, 4)];
+        Assert.DoesNotContain(CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, settings).Issues, i => i.Code == CreationRules.XpSplitCode);
+
+        // Cheap dots beside creation dots at 3: 18 XP for dots that would cost 36 on top.
+        sheet.StartingXpPurchases =
+        [
+            Bought(Skill.Expression, 0, 1), Bought(Skill.Persuasion, 0, 1), Bought(Skill.Subterfuge, 0, 1),
+            Bought(Skill.Weaponry, 0, 1), Bought(Skill.Stealth, 1, 2),
+        ];
+        var flag = Assert.Single(CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, settings).Issues, i => i.Code == CreationRules.XpSplitCode);
+        Assert.Equal(CreationIssueLevel.Warning, flag.Level);
+        Assert.StartsWith("Possible gaming of the XP split: these dots cost 18 XP, 18 less than buying them on top of the creation dots.", flag.Message);
+        Assert.Contains("Social Skills: XP bought Expression 0 → 1, Persuasion 0 → 1, Subterfuge 0 → 1 while creation dots went to Streetwise 3", flag.Message);
+        Assert.Contains("Physical Skills: XP bought Stealth 1 → 2, Weaponry 0 → 1 while creation dots went to Brawl 3", flag.Message);
     }
 
     [Fact]
@@ -331,6 +380,12 @@ public class CreationRulesTests
 
     private static CreationReport Evaluate(FullSheetForm sheet, CharacterTemplates allowed = CharacterTemplates.All) =>
         CreationRules.Evaluate(sheet, Catalog, allowed);
+
+    /// <summary>A Skill dot bought with starting XP, at its XP price (new dots × 3).</summary>
+    private static StartingXpPurchase Bought(Skill skill, int from, int to) => new()
+    {
+        Purchase = new XpPurchase { Kind = PurchaseKind.Skill, Skill = skill }, Trait = skill.ToString(), FromDots = from, ToDots = to, Cost = to * 3,
+    };
 
     private static string Missing(CreationReport report) =>
         string.Join("; ", report.Issues.Where(i => i.Level == CreationIssueLevel.Missing).Select(i => i.Message));

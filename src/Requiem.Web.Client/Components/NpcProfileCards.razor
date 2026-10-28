@@ -18,6 +18,12 @@
                 {
                     <div class="known-npc-badges">
                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@Pages.CharacterPage.StatusColor(status)" Class="ma-0">@Pages.CharacterPage.StatusLabel(status)</MudChip>
+                        @if (Flagged?.Invoke(npc.Id) == true)
+                        {
+                            @* The details are on its sheet. *@
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Warning" Icon="@Icons.Material.Outlined.Flag"
+                                     Class="ma-0 mt-1">Check XP</MudChip>
+                        }
                     </div>
                 }
                 <a class="known-npc-open pa-3" href="@CharacterLinks.ProfileUrl(npc.Id, PlayersView)" aria-label="@($"Profile of {npc.Name}")">
@@ -72,6 +78,8 @@
     [Parameter] public Func<Guid, bool>? IsShared { get; set; }
     /// <summary>For player characters: their status, shown as a chip in the same corner.</summary>
     [Parameter] public Func<Guid, CharacterStatus?>? Status { get; set; }
+    /// <summary>For the Storyteller: player characters to check for gaming the starting XP split, flagged under the status.</summary>
+    [Parameter] public Func<Guid, bool>? Flagged { get; set; }
 
     private bool HasBadge(KnownNpc npc) => IsShared?.Invoke(npc.Id) == true || Status?.Invoke(npc.Id) is not null;
 

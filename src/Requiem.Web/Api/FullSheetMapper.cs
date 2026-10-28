@@ -74,6 +74,7 @@ internal static class FullSheetMapper
         Equipment = c.Items.Where(i => i.Kind == ItemKind.Equipment).OrderBy(i => i.SortOrder).Select(i => i.Name).ToList(),
         Experience = c.XpLedger.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
             .Select(x => new XpLedgerEntry { Amount = x.Amount, Reason = x.Reason, CreatedAt = x.CreatedAt }).ToList(),
+        StartingXpPurchases = [.. c.StartingXpPurchases],
         Notes = c.Notes,
         GmNotes = c.GmNotes,
         IsPlayerCharacter = c.IsPlayerCharacter,
@@ -91,8 +92,10 @@ internal static class FullSheetMapper
             form.Milestones = [];
             form.CorruptionMarks = [];
             form.Experience = [];
+            form.StartingXpPurchases = [];
         }
         ProfileMapper.ApplyProfile(form, c);
+        c.StartingXpPurchases = [.. form.StartingXpPurchases];
 
         c.Tier = CharacterTier.FullSheet;
         c.Name = form.Name.Trim();

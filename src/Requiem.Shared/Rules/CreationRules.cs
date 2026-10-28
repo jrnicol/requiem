@@ -7,7 +7,7 @@ namespace Requiem.Shared.Rules;
 /// <summary>The creation wizard's steps, in the book's order (WoD Core p.55, then VtR p.136).</summary>
 public enum CreationStep
 {
-    Template, Concept, VirtueAndVice, Relationships, Profile, Scripts, Milestones, Attributes, Skills, Merits, Blood, Review,
+    Template, Concept, VirtueAndVice, Relationships, Profile, Scripts, Milestones, Attributes, Skills, Merits, Blood, StartingXp, Review,
 }
 
 public enum CreationIssueLevel
@@ -20,7 +20,8 @@ public enum CreationIssueLevel
     Note,
 }
 
-public sealed record CreationIssue(CreationStep Step, CreationIssueLevel Level, string Message);
+/// <param name="Code">Set for issues the screens pick out, such as <see cref="CreationRules.XpSplitCode"/>.</param>
+public sealed record CreationIssue(CreationStep Step, CreationIssueLevel Level, string Message, string? Code = null);
 
 /// <param name="Allowed">Null for a pool with no fixed allowance, shown for information.</param>
 public sealed record BudgetLine(CreationStep Step, string Name, int Spent, int? Allowed, string? Detail = null)
@@ -78,6 +79,9 @@ public sealed record CreationCatalog(
 /// </summary>
 public static class CreationRules
 {
+    /// <summary>The issue that flags a draft whose creation dots and starting XP look split to save XP.</summary>
+    public const string XpSplitCode = "xp.split";
+
     public const int FreeSpecialties = 3;
     public const int MaxStartingSkill = 3;
     /// <summary>A 4th dot needs the Storyteller's approval (WoD Core p.74), so it's flagged, not refused.</summary>
@@ -125,6 +129,7 @@ public static class CreationRules
             issues.Add(new(CreationStep.Merits, CreationIssueLevel.Warning, $"{spent} Merit points spent; the limit is {meritPoints}."));
         else if (spent < meritPoints)
             issues.Add(new(CreationStep.Merits, CreationIssueLevel.Note, $"{meritPoints - spent} Merit points left to spend."));
+        CheckStartingXp(sheet, catalog, settings.StartingXp, budget, issues);
 
         return new CreationReport(budget, issues, points, attributePriorities, skillPriorities);
     }
@@ -404,6 +409,38 @@ public static class CreationRules
             points.Add(new($"{rituals.Count - free} Ritual{(rituals.Count - free == 1 ? "" : "s")}", (rituals.Count - free) * MeritPointsPerVampireDot));
         else if (isMagi && rituals.Count == 0)
             issues.Add(new(CreationStep.Blood, CreationIssueLevel.Missing, "Choose your house's starting Ritual."));
+    }
+
+    // ---------- Starting XP ----------
+
+    /// <summary>
+    /// The campaign's starting XP, spent at XP prices on top of the creation dots. A purchase the dots under it no longer
+    /// match has to be bought again; what isn't spent waits, once the character is approved, for Corruption or Links.
+    /// </summary>
+    private static void CheckStartingXp(
+        FullSheetForm sheet, CreationCatalog catalog, int startingXp, List<BudgetLine> budget, List<CreationIssue> issues)
+    {
+        if (startingXp <= 0 && sheet.StartingXpPurchases.Count == 0) return;
+        var replay = StartingXpRules.Replay(sheet, sheet.StartingXpPurchases, catalog, startingXp);
+        budget.Add(new BudgetLine(CreationStep.StartingXp, "Starting XP", sheet.StartingXpPurchases.Sum(p => p.Cost), startingXp,
+            sheet.StartingXpPurchases.Count == 0 ? null : string.Join(", ", sheet.StartingXpPurchases.Select(p => $"{p.Label} {p.Cost}"))));
+        if (replay.Broken is { } broken)
+            issues.Add(new(CreationStep.StartingXp, CreationIssueLevel.Missing, $"{broken.Label} no longer fits: {replay.Problem} Remove it, or buy it again."));
+        else if (startingXp - replay.Spent is > 0 and var left)
+            issues.Add(new(CreationStep.StartingXp, CreationIssueLevel.Note,
+                $"{left} starting XP left. Once you're approved, it waits for 4 {AdvancementRules.ProgressName(sheet.Kind)} like any XP."));
+
+        var split = StartingXpRules.AnalyseSplit(sheet, replay.Sheet);
+        if (split.LooksGamed)
+        {
+            var worst = split.Groups.Where(g => g.Saved > 0).OrderByDescending(g => g.Saved).ToList();
+            var detail = string.Join("; ", worst.Select(g => g.HighCreation.Count > 0
+                ? $"{g.Name}: XP bought {string.Join(", ", g.Bought)} while creation dots went to {string.Join(", ", g.HighCreation)}"
+                : $"{g.Name}: XP bought {string.Join(", ", g.Bought)}"));
+            issues.Add(new(CreationStep.StartingXp, CreationIssueLevel.Warning,
+                $"Possible gaming of the XP split: these dots cost {split.Cost} XP, {split.Saved} less than buying them on top of the creation dots. {detail}.",
+                XpSplitCode));
+        }
     }
 
     private static void CheckGhoul(FullSheetForm sheet, List<CreationIssue> issues)

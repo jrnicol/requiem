@@ -113,6 +113,8 @@ public class Character
     public List<CorruptionMark> CorruptionMarks { get; set; } = [];
     public List<CharacterItem> Items { get; set; } = [];
     public List<XpEntry> XpLedger { get; set; } = [];
+    /// <summary>A draft's starting XP purchases, applied to the sheet and the ledger when the Storyteller approves it.</summary>
+    public List<StartingXpPurchase> StartingXpPurchases { get; set; } = [];
     public List<CharacterLink> Links { get; set; } = [];
     /// <summary>The people in the character's life, starting with the three every PC begins with.</summary>
     public List<CharacterRelationship> Relationships { get; set; } = [];

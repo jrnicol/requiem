@@ -41,6 +41,10 @@
             <MudNumericField T="int" @bind-Value="Settings.FlawPoints" Label="Flaw points" Min="0" Max="20"
                              Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="The most at creation" />
         </MudItem>
+        <MudItem xs="6">
+            <MudNumericField T="int" @bind-Value="Settings.StartingXp" Label="Starting XP" Min="0" Max="200"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="Credited on approval" />
+        </MudItem>
     </MudGrid>
 
     <MudSelect T="int" Value="Settings.StartingGeneration" ValueChanged="SetStartingGeneration" Label="Vampires start at Generation"
@@ -83,7 +87,7 @@
     private static int[] Values(CreationSettings s) =>
     [
         s.PrimaryAttributes, s.SecondaryAttributes, s.TertiaryAttributes, s.PrimarySkills, s.SecondarySkills, s.TertiarySkills,
-        s.MeritPoints, s.FlawPoints, s.StartingGeneration, s.CanBuyGeneration ? 1 : 0,
+        s.MeritPoints, s.FlawPoints, s.StartingXp, s.StartingGeneration, s.CanBuyGeneration ? 1 : 0,
     ];
 
     private bool IsBook => Values(Settings).SequenceEqual(Values(Book));
@@ -102,7 +106,7 @@
     {
         (Settings.PrimaryAttributes, Settings.SecondaryAttributes, Settings.TertiaryAttributes) = (Book.PrimaryAttributes, Book.SecondaryAttributes, Book.TertiaryAttributes);
         (Settings.PrimarySkills, Settings.SecondarySkills, Settings.TertiarySkills) = (Book.PrimarySkills, Book.SecondarySkills, Book.TertiarySkills);
-        (Settings.MeritPoints, Settings.FlawPoints) = (Book.MeritPoints, Book.FlawPoints);
+        (Settings.MeritPoints, Settings.FlawPoints, Settings.StartingXp) = (Book.MeritPoints, Book.FlawPoints, Book.StartingXp);
         (Settings.StartingGeneration, Settings.CanBuyGeneration) = (Book.StartingGeneration, Book.CanBuyGeneration);
     }
 }

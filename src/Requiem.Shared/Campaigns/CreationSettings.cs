@@ -23,6 +23,9 @@ public sealed class CreationSettings : IValidatableObject
     [Range(0, 50, ErrorMessage = "Merit points run from 0 to 50.")] public int MeritPoints { get; set; } = 10;
     [Range(0, 20, ErrorMessage = "Flaw points run from 0 to 20.")] public int FlawPoints { get; set; } = 7;
 
+    /// <summary>XP each player character starts with, credited when the Storyteller approves it. The book gives none.</summary>
+    [Range(0, 200, ErrorMessage = "Starting XP runs from 0 to 200.")] public int StartingXp { get; set; }
+
     /// <summary>Where vampires start, before any Generation bought with Merit points. Thin-bloods are always 13th.</summary>
     [Range(MinStartingGeneration, GenerationRules.StartingGeneration, ErrorMessage = "Vampires start between the 4th and 12th Generation.")]
     public int StartingGeneration { get; set; } = GenerationRules.StartingGeneration;

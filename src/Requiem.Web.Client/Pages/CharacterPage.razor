@@ -144,9 +144,14 @@ else
                             <BloodStep Form="_form" Bloodlines="_bloodlines" PredatorTypes="_predatorTypes" Disciplines="_disciplines"
                                        Powers="_powers" Merits="_merits" Creation="Creation" Changed="OnChangedAsync" />
                             break;
+                        case CreationStep.StartingXp:
+                            <StartingXpStep Form="_form" Catalog="_catalog!" Disciplines="_disciplines" Powers="_powers" Merits="_merits"
+                                            Budget="Creation.StartingXp" Changed="OnChangedAsync" Dropped="m => Snackbar.Add(m, Severity.Info)" />
+                            break;
                         case CreationStep.Review:
-                            <SheetOverview Form="_form" Concepts="_concepts" Bloodlines="_bloodlines" PredatorTypes="_predatorTypes"
+                            <SheetOverview Form="Projected" Concepts="_concepts" Bloodlines="_bloodlines" PredatorTypes="_predatorTypes"
                                            Disciplines="_disciplines" Powers="_powers" />
+                            @StartingXpBought
                             <MudDivider Class="my-3" />
                             <CreationBudget Report="_report" />
                             <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mt-3">
@@ -228,6 +233,11 @@ else
                         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Check" Disabled="_busy"
                                    OnClick="@(() => ActAsync("approve"))">Approve</MudButton>
                         <MudButton Variant="Variant.Outlined" StartIcon="@Icons.Material.Filled.Undo" Disabled="_busy" OnClick="ReturnAsync">Return with a note</MudButton>
+                        @if (_report?.Issues.FirstOrDefault(i => i.Code == CreationRules.XpSplitCode) is { } flag)
+                        {
+                            <MudAlert Severity="Severity.Warning" Dense="true" Class="mt-2" Style="flex-basis:100%"
+                                      Icon="@Icons.Material.Outlined.Flag">@flag.Message</MudAlert>
+                        }
                     }
                     else if (Status == CharacterStatus.Draft)
                     {
@@ -256,8 +266,9 @@ else
             <MudItem xs="12" md="8">
                 <MudTabs Elevation="0" Rounded="true" ApplyEffectsToContainer="true" TabPanelsClass="pt-3">
                     <MudTabPanel Text="Sheet">
-                        <SheetOverview Form="_form" Concepts="_concepts" Bloodlines="_bloodlines" PredatorTypes="_predatorTypes"
+                        <SheetOverview Form="Projected" Concepts="_concepts" Bloodlines="_bloodlines" PredatorTypes="_predatorTypes"
                                        Disciplines="_disciplines" Powers="_powers" />
+                        @StartingXpBought
                     </MudTabPanel>
                     <MudTabPanel Text="Story">
                         @{ var editable = _view.CanEdit && Status == CharacterStatus.Active; }
@@ -346,7 +357,9 @@ else
 
     /// <summary>The wizard's steps; mortals have no template to add.</summary>
     private IReadOnlyList<CreationStep> Steps => Enum.GetValues<CreationStep>()
-        .Where(s => s != CreationStep.Blood || _form?.Kind != CharacterKind.Mortal).ToList();
+        .Where(s => s != CreationStep.Blood || _form?.Kind != CharacterKind.Mortal)
+        // Starting XP only when the campaign gives some, or a draft still has purchases from before it stopped.
+        .Where(s => s != CreationStep.StartingXp || Creation.StartingXp > 0 || _form?.StartingXpPurchases.Count > 0).ToList();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -425,7 +438,30 @@ else
         Evaluate();
     }
 
-    private void Evaluate() => _report = CreationRules.Evaluate(_form!, _catalog!, Allowed, Creation);
+    private void Evaluate()
+    {
+        _report = CreationRules.Evaluate(_form!, _catalog!, Allowed, Creation);
+        _projected = _form!.StartingXpPurchases.Count == 0 ? null
+            : StartingXpRules.Replay(_form, _form.StartingXpPurchases, _catalog!, Creation.StartingXp).Sheet;
+    }
+
+    /// <summary>Under the sheet until approval: what the starting XP bought, which the sheet above already includes.</summary>
+    private RenderFragment StartingXpBought => __builder =>
+    {
+        if (_form is not { StartingXpPurchases.Count: > 0 } form) return;
+        <MudPaper Outlined="true" Class="pa-3 mt-3">
+            <MudText Typo="Typo.subtitle2">Bought with starting XP (@form.StartingXpPurchases.Sum(p => p.Cost) of @Creation.StartingXp)</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-1">Shown on the sheet above; added to it on approval.</MudText>
+            @foreach (var bought in form.StartingXpPurchases)
+            {
+                <MudText Typo="Typo.body2">@bought.Label <MudText Inline="true" Typo="Typo.caption" Color="Color.Secondary">· @bought.Cost XP</MudText></MudText>
+            }
+        </MudPaper>
+    };
+
+    /// <summary>The sheet as it will be once approved: with the starting XP purchases on it, so the review shows them.</summary>
+    private FullSheetForm Projected => _projected ?? _form!;
+    private FullSheetForm? _projected;
 
     /// <summary>
     /// Values that follow from the rest during creation, so the player never has to work them out:
@@ -457,8 +493,25 @@ else
     private Task OnChangedAsync()
     {
         if (IsWizard) Derive(_form!, Creation);
+        if (IsWizard && _step != CreationStep.StartingXp) DropStaleStartingXp();
         Evaluate();
         return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// After a change to an earlier step, takes off starting XP purchases the dots under them no longer match (and any
+    /// bought after them), and says so; the player can buy them again on the Starting XP step.
+    /// </summary>
+    private void DropStaleStartingXp()
+    {
+        var purchases = _form!.StartingXpPurchases;
+        if (purchases.Count == 0) return;
+        var replay = StartingXpRules.Replay(_form, purchases, _catalog!, Creation.StartingXp);
+        if (replay.Broken is null) return;
+        var dropped = purchases.Skip(replay.Valid.Count).Select(p => p.Label).ToList();
+        _form.StartingXpPurchases = [.. replay.Valid];
+        Snackbar.Add($"Took off starting XP purchases that no longer match your dots: {string.Join(", ", dropped)}. Buy them again on the Starting XP step.",
+            Severity.Info);
     }
 
     private async Task ChangeAsync(Action change)
@@ -601,6 +654,7 @@ else
         CreationStep.Skills => "Skills",
         CreationStep.Merits => "Merits & Flaws",
         CreationStep.Blood => "The Blood",
+        CreationStep.StartingXp => "Starting XP",
         _ => "Review",
     };
 

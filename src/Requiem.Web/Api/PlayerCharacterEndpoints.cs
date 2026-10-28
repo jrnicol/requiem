@@ -49,7 +49,8 @@ public static class PlayerCharacterEndpoints
     /// who's at the table), each with its profile; never their sheets.
     /// </summary>
     private static async Task<Results<Ok<List<PlayerCharacterSummary>>, NotFound>> ListAsync(
-        Guid campaignId, ICharacterStore characters, IUserDirectory users, CampaignAccess access, CancellationToken ct)
+        Guid campaignId, ICharacterStore characters, ICampaignStore campaigns, ICatalogStore catalog, IUserDirectory users,
+        CampaignAccess access, CancellationToken ct)
     {
         if (await access.RoleInAsync(campaignId, ct) is not { } role) return TypedResults.NotFound();
         var me = access.UserId;
@@ -57,6 +58,7 @@ public static class PlayerCharacterEndpoints
             .Where(c => c.IsPlayerCharacter && (role == CampaignRole.Storyteller || c.OwnerUserId == me || c.Status == CharacterStatus.Active))
             .ToList();
         var owners = await users.GetAsync(rows.Select(r => r.OwnerUserId).OfType<string>(), ct);
+        var flagged = role == CampaignRole.Storyteller ? await XpSplitFlaggedAsync(rows, campaignId, campaigns, catalog, ct) : [];
         return TypedResults.Ok(rows
             .OrderBy(r => Array.IndexOf(InPlay, r.Status) is var i && i < 0 ? InPlay.Length : i)
             .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
@@ -67,9 +69,24 @@ public static class PlayerCharacterEndpoints
                 var storyteller = role == CampaignRole.Storyteller;
                 var profile = ProfileMapper.ToPlayerProfile(r, ownerName, canEdit: storyteller || mine,
                     canPlay: storyteller || (mine && r.Status == CharacterStatus.Active));
-                return new PlayerCharacterSummary(r.Id, campaignId, r.Name, r.Kind, r.Concept, r.Status, ownerName, mine, r.UpdatedAt, profile);
+                return new PlayerCharacterSummary(r.Id, campaignId, r.Name, r.Kind, r.Concept, r.Status, ownerName, mine, r.UpdatedAt, profile,
+                    flagged.Contains(r.Id));
             })
             .ToList());
+    }
+
+    /// <summary>For the Storyteller's cards: drafts and submissions whose starting XP looks split to save XP.</summary>
+    private static async Task<HashSet<Guid>> XpSplitFlaggedAsync(
+        List<Character> rows, Guid campaignId, ICampaignStore campaigns, ICatalogStore catalog, CancellationToken ct)
+    {
+        var building = rows.Where(r => r.Status is CharacterStatus.Draft or CharacterStatus.Submitted && r.StartingXpPurchases.Count > 0).ToList();
+        if (building.Count == 0) return [];
+        var campaign = (await campaigns.GetAsync(campaignId, ct))!;
+        var creationCatalog = await CatalogEndpoints.CreationCatalogAsync(catalog, ct);
+        return building
+            .Where(r => CreationRules.Evaluate(FullSheetMapper.ToForm(r), creationCatalog, campaign.AllowedTemplates, campaign.Creation)
+                .Issues.Any(i => i.Code == CreationRules.XpSplitCode))
+            .Select(r => r.Id).ToHashSet();
     }
 
     private static async Task<Results<Created<PlayerCharacterView>, NotFound, ValidationProblem, Conflict<ProblemDetailsBody>>> CreateAsync(
@@ -194,9 +211,10 @@ public static class PlayerCharacterEndpoints
 
         character.Status = CharacterStatus.Submitted;
         character.ReviewNote = null;
-        audit.Record(campaign.Id, id, "character.submit", report.IsWithinBudget
+        audit.Record(campaign.Id, id, "character.submit", (report.IsWithinBudget
             ? $"Submitted {character.Name} for approval."
-            : $"Submitted {character.Name} for approval, over budget: {string.Join("; ", report.Budget.Where(b => b.IsOver).Select(b => $"{b.Name} {b.Spent}/{b.Allowed}"))}.");
+            : $"Submitted {character.Name} for approval, over budget: {string.Join("; ", report.Budget.Where(b => b.IsOver).Select(b => $"{b.Name} {b.Spent}/{b.Allowed}"))}.")
+            + (report.Issues.Any(i => i.Code == CreationRules.XpSplitCode) ? " Flagged: possible gaming of the XP split." : ""));
         await characters.SaveAsync(character, ct);
         return TypedResults.Ok(await ViewAsync(users, access, character, campaign, ct));
     }
@@ -206,10 +224,46 @@ public static class PlayerCharacterEndpoints
         ChangeStatusAsync(id, characters, campaigns, users, access, audit, ct, byStoryteller: false, CharacterStatus.Submitted, CharacterStatus.Draft,
             "character.withdraw", c => $"Withdrew {c.Name} to make changes.");
 
-    private static Task<Results<Ok<PlayerCharacterView>, NotFound, Conflict<ProblemDetailsBody>>> ApproveAsync(
-        Guid id, ICharacterStore characters, ICampaignStore campaigns, IUserDirectory users, CampaignAccess access, AuditLog audit, CancellationToken ct) =>
-        ChangeStatusAsync(id, characters, campaigns, users, access, audit, ct, byStoryteller: true, CharacterStatus.Submitted, CharacterStatus.Active,
-            "character.approve", c => $"Approved {c.Name}; they're in play.");
+    /// <summary>
+    /// Puts a submitted character in play. The campaign's starting XP goes on its ledger, with what the player bought with it
+    /// during creation applied to the sheet; whatever's left waits for Corruption or Links like any XP.
+    /// </summary>
+    private static async Task<Results<Ok<PlayerCharacterView>, NotFound, Conflict<ProblemDetailsBody>>> ApproveAsync(
+        Guid id, ICharacterStore characters, ICampaignStore campaigns, ICatalogStore catalog, IUserDirectory users, CampaignAccess access,
+        AuditLog audit, TimeProvider time, CancellationToken ct)
+    {
+        var startingXp = await LoadAsync(access, id, ct) is { CampaignId: not null } found
+            ? (await CampaignAsync(campaigns, found, ct)).Creation.StartingXp : 0;
+        var creationCatalog = await CatalogEndpoints.CreationCatalogAsync(catalog, ct);
+        return await ChangeStatusAsync(id, characters, campaigns, users, access, audit, ct, byStoryteller: true, CharacterStatus.Submitted,
+            CharacterStatus.Active, "character.approve", c => $"Approved {c.Name}; they're in play.",
+            c => ApplyStartingXp(c, startingXp, creationCatalog, audit, access, time.GetUtcNow()));
+    }
+
+    private static void ApplyStartingXp(Character c, int startingXp, CreationCatalog catalog, AuditLog audit, CampaignAccess access, DateTimeOffset now)
+    {
+        var purchases = c.StartingXpPurchases.ToList();
+        c.StartingXpPurchases = [];
+        if (startingXp <= 0 || c.XpLedger.Any(x => x.Reason == StartingXpRules.Reason)) return;
+
+        var form = FullSheetMapper.ToForm(c);
+        var replay = StartingXpRules.Replay(form, purchases, catalog, startingXp);
+        // The sheet with the purchases on it, keeping the ledger as it was; the XP lines are added below with their details.
+        replay.Sheet.Experience = form.Experience;
+        FullSheetMapper.Apply(replay.Sheet, c, now);
+
+        c.XpLedger.Add(new XpEntry { Amount = startingXp, Reason = StartingXpRules.Reason, RecordedByUserId = access.UserId, CreatedAt = now });
+        foreach (var bought in replay.Valid)
+            c.XpLedger.Add(new XpEntry
+            {
+                Amount = -bought.Cost, Reason = bought.Label, PurchaseKind = bought.Purchase.Kind, Trait = bought.Trait,
+                FromDots = bought.FromDots, ToDots = bought.ToDots, RecordedByUserId = access.UserId, CreatedAt = now,
+            });
+
+        var spent = replay.Valid.Count == 0 ? "" : $"; spent {replay.Spent} on {string.Join(", ", replay.Valid.Select(p => p.Label))}";
+        var dropped = replay.Broken is null ? "" : $" Left off {replay.Dropped(purchases)} that no longer fit, starting with {replay.Broken.Label}.";
+        audit.Record(c.CampaignId, c.Id, "xp.starting", $"+{startingXp} starting XP{spent}.{dropped}");
+    }
 
     private static Task<Results<Ok<PlayerCharacterView>, NotFound, Conflict<ProblemDetailsBody>>> ReturnAsync(
         Guid id, ReturnCharacterRequest request, ICharacterStore characters, ICampaignStore campaigns, IUserDirectory users,
