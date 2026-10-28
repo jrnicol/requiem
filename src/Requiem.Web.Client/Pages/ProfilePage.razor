@@ -1,6 +1,7 @@
 @page "/profile/{Id:guid}"
-@* An NPC's profile, with a link of its own. The campaign's Storytellers see everything, or with ?view=players exactly
-   what the players see; players see what's been revealed. *@
+@* A character's profile, with a link of its own. For an NPC, the campaign's Storytellers see everything, or with ?view=players
+   exactly what the players see; players see what's been revealed. A player character's profile shows everything to everyone
+   in the campaign. *@
 @inject RequiemApi Api
 @inject NavigationManager Navigation
 
@@ -40,21 +41,26 @@ else
         <BackButton Label="Back" />
         @* As on the cards: the type, when known and not plain Mortal, in red under the name. *@
         <div style="flex:1; min-width:10rem">
-            <MudText Typo="Typo.h4" Class="brand-font">@_npc.Name</MudText>
+            <MudText Typo="Typo.h4" Class="brand-font">@(string.IsNullOrWhiteSpace(_npc.Name) ? "Unnamed" : _npc.Name)</MudText>
             @if (NpcProfileCards.ShownKind(_npc) is { } kind)
             {
                 <MudText Typo="Typo.subtitle1" Color="Color.Primary">@kind</MudText>
             }
         </div>
-        @* Only the campaign's Storytellers get the tier, and with it the links. *@
-        @if (_npc.Tier is { } tier)
+        @* Only those who can open the editor get the tier, and with it the links: the campaign's Storytellers, and a player
+           character's player. A player character's profile is the same for everyone, so it has no Players' View. *@
+        @if (_npc.Tier is not null && _npc.IsPlayerCharacter)
         {
-            <CharacterLinks Id="Id" Current="CharacterLinks.Page.Profile" IsFullSheet="tier == CharacterTier.FullSheet"
+            <CharacterLinks Id="Id" Current="CharacterLinks.Page.Profile" IsFullSheet="true" IsPlayerCharacter="true" CanPlay="_npc.CanPlay" />
+        }
+        else if (_npc.Tier is { } npcTier)
+        {
+            <CharacterLinks Id="Id" Current="CharacterLinks.Page.Profile" IsFullSheet="npcTier == CharacterTier.FullSheet"
                             PlayersView="PlayersView" PlayersViewChanged="SetPlayersView" />
         }
     </MudStack>
 
-    @if (_npc.Tier is not null && PlayersView)
+    @if (_npc.Tier is not null && !_npc.IsPlayerCharacter && PlayersView)
     {
         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-3">Players' View: exactly what your players see.</MudText>
     }
@@ -89,7 +95,7 @@ else
                 @if (!Texts(_npc).Any())
                 {
                     <MudText Typo="Typo.body2" Color="Color.Secondary">
-                        @(_npc.Tier is not null && !PlayersView ? "No appearance, reputation or backstory yet." : "Nothing more is known yet.")
+                        @(_npc.IsPlayerCharacter || (_npc.Tier is not null && !PlayersView) ? "No appearance, reputation or backstory yet." : "Nothing more is known yet.")
                     </MudText>
                 }
             </MudStack>

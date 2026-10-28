@@ -1,6 +1,7 @@
-@* NPC profile cards: the portrait, name and facts, linking to the NPC's profile page. They show whatever details
-   they're given: only the revealed ones on Known NPCs and in the Players' View, everything on the Storyteller's NPCs tab.
-   With ShowLinks, each card also links to the NPC's editor and its play view. *@
+@* Profile cards: the portrait, name and facts, linking to the character's profile page. They show whatever details
+   they're given: only the revealed ones on Known NPCs and in the Players' View, everything on the Storyteller's NPCs tab
+   and for player characters. With ShowLinks, each card also links to the character's editor and its play view, for those
+   who can open them. *@
 
 <MudGrid Spacing="2">
     @foreach (var npc in Npcs)
@@ -11,6 +12,12 @@
                 {
                     <div class="known-npc-badges">
                         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Icon="@Icons.Material.Outlined.Badge" Class="ma-0">Shared</MudChip>
+                    </div>
+                }
+                else if (Status?.Invoke(npc.Id) is { } status)
+                {
+                    <div class="known-npc-badges">
+                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@Pages.CharacterPage.StatusColor(status)" Class="ma-0">@Pages.CharacterPage.StatusLabel(status)</MudChip>
                     </div>
                 }
                 <a class="known-npc-open pa-3" href="@CharacterLinks.ProfileUrl(npc.Id, PlayersView)" aria-label="@($"Profile of {npc.Name}")">
@@ -27,7 +34,7 @@
                         </div>
                         <div style="min-width:0">
                             @* Room on the right for the corner chip. *@
-                            <MudText Typo="Typo.h6" Style="@(IsShared?.Invoke(npc.Id) == true ? "padding-right:5.5rem" : null)">@npc.Name</MudText>
+                            <MudText Typo="Typo.h6" Style="@(HasBadge(npc) ? "padding-right:5.5rem" : null)">@(string.IsNullOrWhiteSpace(npc.Name) ? "Unnamed" : npc.Name)</MudText>
                             @* The type, when known and not plain Mortal, sits in red under the name; every other trait has a labelled line. *@
                             @if (ShownKind(npc) is { } kind)
                             {
@@ -40,11 +47,15 @@
                         </div>
                     </MudStack>
                 </a>
-                @if (ShowLinks)
+                @* A player character's links are for its player and the Storyteller, who get its tier. *@
+                @if (ShowLinks && (!npc.IsPlayerCharacter || npc.Tier is not null))
                 {
                     <MudStack Row="true" Spacing="1" Class="px-2 pb-2">
                         <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.Edit" Href="@EditUrl(npc)">Edit character</MudButton>
-                        <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Casino" Href="@PlayUrl(npc)">At the table</MudButton>
+                        @if (!npc.IsPlayerCharacter || npc.CanPlay)
+                        {
+                            <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Filled.Casino" Href="@PlayUrl(npc)">At the table</MudButton>
+                        }
                     </MudStack>
                 }
             </MudPaper>
@@ -59,10 +70,16 @@
     [Parameter] public bool PlayersView { get; set; }
     /// <summary>On the Storyteller's full view: whether an NPC is shared, shown as a chip in its card's upper right corner.</summary>
     [Parameter] public Func<Guid, bool>? IsShared { get; set; }
+    /// <summary>For player characters: their status, shown as a chip in the same corner.</summary>
+    [Parameter] public Func<Guid, CharacterStatus?>? Status { get; set; }
+
+    private bool HasBadge(KnownNpc npc) => IsShared?.Invoke(npc.Id) == true || Status?.Invoke(npc.Id) is not null;
 
     /// <summary>The trait lines after the type, on cards and profiles: only those it has.</summary>
     public static IEnumerable<(string Label, string Value)> Traits(KnownNpc npc)
     {
+        if (npc.PlayedBy is { } player) yield return ("Played by", player);
+        if (npc.Concept is { } concept) yield return ("Concept", concept);
         if (npc.Faction is { } faction) yield return ("Faction", faction);
         if (npc.Bloodline is { } bloodline) yield return ("Bloodline", bloodline);
         if (npc.Generation is { } generation) yield return ("Generation", generation.ToString());
@@ -72,7 +89,7 @@
     /// <summary>The type worth showing: vampires and ghouls. Mortal is the default, so it isn't shown.</summary>
     public static CharacterKind? ShownKind(KnownNpc npc) => npc.Kind is CharacterKind.Mortal ? null : npc.Kind;
 
-    public static string EditUrl(KnownNpc npc) => npc.Tier == CharacterTier.FullSheet ? $"sheets/{npc.Id}" : $"npcs/{npc.Id}";
+    public static string EditUrl(KnownNpc npc) => npc.IsPlayerCharacter ? $"characters/{npc.Id}" : npc.Tier == CharacterTier.FullSheet ? $"sheets/{npc.Id}" : $"npcs/{npc.Id}";
 
     public static string PlayUrl(KnownNpc npc) => $"play/{npc.Id}";
 }

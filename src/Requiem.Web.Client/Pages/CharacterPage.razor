@@ -38,6 +38,12 @@ else
             </MudText>
         </div>
         <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@StatusColor(Status)">@StatusLabel(Status)</MudChip>
+        @* As the table allows: the Storyteller always, its player once it's approved. *@
+        @if (_view is not null)
+        {
+            <CharacterLinks Id="Id!.Value" Current="CharacterLinks.Page.Edit" IsFullSheet="true" IsPlayerCharacter="true"
+                            CanPlay="_view.IsStoryteller || Status == CharacterStatus.Active" />
+        }
         @if (IsWizard)
         {
             <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Save"

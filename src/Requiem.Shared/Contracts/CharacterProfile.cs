@@ -37,8 +37,10 @@ public static class CharacterProfile
 }
 
 /// <summary>
-/// A Known NPC as the campaign's players see it: only what the Storyteller has revealed is set.
-/// <see cref="Tier"/> is set only for the campaign's Storytellers, who need it to link to the right editor.
+/// A character's profile. For a Known NPC as the campaign's players see it, only what the Storyteller has revealed is set;
+/// a player character's profile has every detail, with <see cref="PlayedBy"/> and <see cref="Concept"/>. <see cref="Tier"/>
+/// is set only for those who can open the character's editor (the campaign's Storytellers, and a player character's player),
+/// who need it for the links; <see cref="CanPlay"/> says whether they can also open it at the table.
 /// </summary>
 public sealed record KnownNpc(
     Guid Id,
@@ -52,7 +54,11 @@ public sealed record KnownNpc(
     string? Backstory,
     CharacterKind? Kind = null,
     CharacterTier? Tier = null,
-    IReadOnlyList<string>? Titles = null);
+    IReadOnlyList<string>? Titles = null,
+    bool IsPlayerCharacter = false,
+    string? PlayedBy = null,
+    bool CanPlay = false,
+    string? Concept = null);
 
 /// <summary>After a portrait upload or removal: its address (null when removed) and the character's new version.</summary>
 public sealed record PortraitResult(string? PortraitUrl, Guid Version);

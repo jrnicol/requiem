@@ -38,8 +38,8 @@ public class KnownNpcTests(RequiemWebFactory factory) : IClassFixture<RequiemWeb
         Assert.Equal(11, card.Generation);
         Assert.Equal(CharacterKind.Vampire, card.Kind);
 
-        // Storytellers see the same cards, to check what the players see, plus the tier for the edit link.
-        Assert.Equal(card with { Tier = CharacterTier.SupportingCast }, Assert.Single(await KnownAsync(table.Storyteller, table.CampaignId)));
+        // Storytellers see the same cards, to check what the players see, plus the tier and play view for the links.
+        Assert.Equal(card with { Tier = CharacterTier.SupportingCast, CanPlay = true }, Assert.Single(await KnownAsync(table.Storyteller, table.CampaignId)));
     }
 
     [Fact]
@@ -73,10 +73,10 @@ public class KnownNpcTests(RequiemWebFactory factory) : IClassFixture<RequiemWeb
         Assert.Equal(CharacterTier.SupportingCast, full.Tier);
         Assert.Equal("Sired in Paris in 1789.", (await ProfileAsync(table.Storyteller, harriet.Id)).Backstory);
 
-        // The Storyteller's Players' View is exactly the players' page, plus the tier for the links.
+        // The Storyteller's Players' View is exactly the players' page, plus the tier and play view for the links.
         var asPlayers = await ProfileAsync(table.Storyteller, marcel.Id, playersView: true);
         var player = await ProfileAsync(table.Player, marcel.Id);
-        Assert.Equal(player with { Tier = CharacterTier.SupportingCast }, asPlayers);
+        Assert.Equal(player with { Tier = CharacterTier.SupportingCast, CanPlay = true }, asPlayers);
         Assert.Equal("Silver cane, older suit", player.Appearance);
         Assert.Null(player.Backstory);
         Assert.Null(player.Kind);
@@ -88,10 +88,6 @@ public class KnownNpcTests(RequiemWebFactory factory) : IClassFixture<RequiemWeb
 
         var outsider = await factory.CreateMemberClientAsync($"outsider-{Guid.NewGuid():N}@example.test");
         Assert.Equal(HttpStatusCode.NotFound, (await outsider.GetAsync($"/api/characters/{marcel.Id}/profile")).StatusCode);
-
-        // Player characters have no profile page.
-        var pc = await PlayerTable.CreateCharacterAsync(table.Player, table.CampaignId, PlayerTable.CompleteMortal());
-        Assert.Equal(HttpStatusCode.NotFound, (await table.Storyteller.GetAsync($"/api/characters/{pc.Sheet.Id}/profile")).StatusCode);
     }
 
     [Fact]

@@ -45,8 +45,8 @@ public static class PlayerCharacterEndpoints
     // ---------- Listing and creating ----------
 
     /// <summary>
-    /// A Storyteller sees every PC in the campaign. A player sees their own, plus the others in play by name
-    /// (for Links, and to know who's at the table); never their sheets.
+    /// A Storyteller sees every PC in the campaign. A player sees their own, plus the others in play (for Links, and to know
+    /// who's at the table), each with its profile; never their sheets.
     /// </summary>
     private static async Task<Results<Ok<List<PlayerCharacterSummary>>, NotFound>> ListAsync(
         Guid campaignId, ICharacterStore characters, IUserDirectory users, CampaignAccess access, CancellationToken ct)
@@ -60,9 +60,15 @@ public static class PlayerCharacterEndpoints
         return TypedResults.Ok(rows
             .OrderBy(r => Array.IndexOf(InPlay, r.Status) is var i && i < 0 ? InPlay.Length : i)
             .ThenBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
-            .Select(r => new PlayerCharacterSummary(r.Id, campaignId, r.Name, r.Kind, r.Concept, r.Status,
-                (r.OwnerUserId is { } owner ? owners.GetValueOrDefault(owner)?.DisplayName : null) ?? "Unknown player",
-                r.OwnerUserId == me, r.UpdatedAt))
+            .Select(r =>
+            {
+                var ownerName = (r.OwnerUserId is { } owner ? owners.GetValueOrDefault(owner)?.DisplayName : null) ?? "Unknown player";
+                var mine = r.OwnerUserId == me;
+                var storyteller = role == CampaignRole.Storyteller;
+                var profile = ProfileMapper.ToPlayerProfile(r, ownerName, canEdit: storyteller || mine,
+                    canPlay: storyteller || (mine && r.Status == CharacterStatus.Active));
+                return new PlayerCharacterSummary(r.Id, campaignId, r.Name, r.Kind, r.Concept, r.Status, ownerName, mine, r.UpdatedAt, profile);
+            })
             .ToList());
     }
 

@@ -29,16 +29,23 @@ public static class CharacterEndpoints
     }
 
     /// <summary>
-    /// An NPC's profile page. The campaign's Storytellers get every detail, or with <paramref name="playersView"/> exactly
-    /// what the players see; players get a shared NPC's revealed details. Anything else, player characters included,
-    /// reads as not found.
+    /// A character's profile page. For an NPC, the campaign's Storytellers get every detail, or with <paramref name="playersView"/>
+    /// exactly what the players see; players get a shared NPC's revealed details. A player character's profile has every
+    /// detail for everyone in the campaign, though the other players, as in the campaign's list, only see those in play.
+    /// Anything else reads as not found.
     /// </summary>
     private static async Task<Results<Ok<KnownNpc>, NotFound>> GetProfileAsync(
-        Guid id, bool? playersView, ICharacterStore characters, CampaignAccess access, CancellationToken ct)
+        Guid id, bool? playersView, ICharacterStore characters, IUserDirectory users, CampaignAccess access, CancellationToken ct)
     {
-        if (await characters.GetAsync(id, ct) is not { IsPlayerCharacter: false, CampaignId: { } campaignId } character)
-            return TypedResults.NotFound();
+        if (await characters.GetAsync(id, ct) is not { CampaignId: { } campaignId } character) return TypedResults.NotFound();
         var role = await access.RoleInAsync(campaignId, ct);
+        if (character.IsPlayerCharacter)
+        {
+            var canEdit = role == CampaignRole.Storyteller || await access.OwnsAsync(character, ct);
+            if (role is null || (!canEdit && character.Status != CharacterStatus.Active)) return TypedResults.NotFound();
+            var owner = character.OwnerUserId is { } ownerId ? (await users.GetAsync([ownerId], ct)).GetValueOrDefault(ownerId)?.DisplayName : null;
+            return TypedResults.Ok(ProfileMapper.ToPlayerProfile(character, owner ?? "Unknown player", canEdit, await access.CanPlayAsync(character, ct)));
+        }
         if (role == CampaignRole.Storyteller && playersView != true) return TypedResults.Ok(ProfileMapper.ToFullProfile(character));
         if (role is null || character.Visibility != NpcVisibility.Known) return TypedResults.NotFound();
         return TypedResults.Ok(ProfileMapper.ToKnownNpc(character, role == CampaignRole.Storyteller));

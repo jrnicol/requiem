@@ -120,28 +120,9 @@ else
                     <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Star" Class="mb-3"
                                Disabled="_busy" OnClick="AwardXpAsync">Award XP</MudButton>
                 }
-                <MudGrid Spacing="2">
-                    @foreach (var pc in _characters)
-                    {
-                        @* Players see the others in play by name only, not their sheets. *@
-                        var opens = _campaign.IsStoryteller || pc.IsMine;
-                        <MudItem xs="12" sm="6" lg="4" @key="pc.Id">
-                            <a href="@(opens ? $"characters/{pc.Id}" : null)" class="npc-card-link">
-                                <MudPaper Outlined="true" Class="pa-3 npc-card">
-                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Spacing="1">
-                                        <MudText Typo="Typo.h6">@(string.IsNullOrWhiteSpace(pc.Name) ? "Unnamed" : pc.Name)</MudText>
-                                        <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="@CharacterPage.StatusColor(pc.Status)">
-                                            @CharacterPage.StatusLabel(pc.Status)
-                                        </MudChip>
-                                    </MudStack>
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                        @pc.Kind@(pc.Concept is { } concept ? $" · {concept}" : "")@(pc.IsMine ? "" : $" · {pc.OwnerName}")
-                                    </MudText>
-                                </MudPaper>
-                            </a>
-                        </MudItem>
-                    }
-                </MudGrid>
+                @* The same profile cards as the NPCs tab, with each one's status in the corner. Every detail shows; the edit and
+                   table links are for its player and the Storyteller. *@
+                <NpcProfileCards Npcs="PcProfiles" ShowLinks="true" Status="PcStatus" />
             }
         </MudTabPanel>
 
@@ -322,6 +303,8 @@ else
     private List<SceneSummary>? _scenes;
     private string? _sceneName;
     private List<PlayerCharacterSummary>? _characters;
+    private List<KnownNpc> PcProfiles => _characters?.Select(c => c.Profile).OfType<KnownNpc>().ToList() ?? [];
+    private CharacterStatus? PcStatus(Guid id) => _characters?.FirstOrDefault(c => c.Id == id)?.Status;
     private IReadOnlyList<KnownNpc>? _knownNpcs;
 
     /// <summary>A Storyteller sees how many characters wait for approval.</summary>

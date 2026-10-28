@@ -1,5 +1,5 @@
 @* Links between a character's pages, as icons at the top of each: its profile, its editor and its play view.
-   The current page's icon is highlighted rather than linked. Player characters have no profile page. *@
+   The current page's icon is highlighted rather than linked. A character not yet approved has no play view. *@
 
 <MudStack Row="true" Spacing="1" AlignItems="AlignItems.Center" Class="character-links" role="navigation" aria-label="Character pages">
     @foreach (var link in Links)
@@ -35,6 +35,7 @@
     [Parameter, EditorRequired] public Page Current { get; set; }
     [Parameter] public bool IsFullSheet { get; set; }
     [Parameter] public bool IsPlayerCharacter { get; set; }
+    [Parameter] public bool CanPlay { get; set; } = true;
     /// <summary>Link the profile in the players' view (from a players'-view page).</summary>
     [Parameter] public bool PlayersView { get; set; }
     /// <summary>On the profile page: shows the Players' View switch beside the Profile icon.</summary>
@@ -46,10 +47,10 @@
     {
         get
         {
-            if (!IsPlayerCharacter) yield return (Page.Profile, "Profile", Icons.Material.Outlined.AccountBox, ProfileUrl(Id, PlayersView));
+            yield return (Page.Profile, "Profile", Icons.Material.Outlined.AccountBox, ProfileUrl(Id, PlayersView));
             yield return (Page.Edit, "Edit", Icons.Material.Outlined.Edit,
                 IsPlayerCharacter ? $"characters/{Id}" : IsFullSheet ? $"sheets/{Id}" : $"npcs/{Id}");
-            yield return (Page.Play, "At the table", Icons.Material.Filled.Casino, $"play/{Id}");
+            if (CanPlay) yield return (Page.Play, "At the table", Icons.Material.Filled.Casino, $"play/{Id}");
         }
     }
 }

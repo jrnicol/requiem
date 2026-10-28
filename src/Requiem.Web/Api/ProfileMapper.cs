@@ -47,13 +47,23 @@ internal static class ProfileMapper
             Shows(NpcReveal.Backstory) ? c.Backstory : null,
             Shows(NpcReveal.Kind) ? c.Kind : null,
             forStoryteller ? c.Tier : null,
-            Shows(NpcReveal.Titles) ? TitlesOrNull(c) : null);
+            Shows(NpcReveal.Titles) ? TitlesOrNull(c) : null,
+            CanPlay: forStoryteller);
     }
 
     /// <summary>An NPC's whole profile, for the campaign's Storytellers: every detail, revealed or not.</summary>
     public static KnownNpc ToFullProfile(Character c) => new(
         c.Id, c.Name, c.PortraitUrl, c.Faction, c.Bloodline?.Name, c.Generation,
-        c.Appearance, c.Reputation, c.Backstory, c.Kind, c.Tier, TitlesOrNull(c));
+        c.Appearance, c.Reputation, c.Backstory, c.Kind, c.Tier, TitlesOrNull(c), CanPlay: true);
+
+    /// <summary>
+    /// A player character's profile, for everyone in its campaign: every detail. <paramref name="canEdit"/> (its player and the
+    /// Storytellers) adds the tier the links need.
+    /// </summary>
+    public static KnownNpc ToPlayerProfile(Character c, string playedBy, bool canEdit, bool canPlay) => new(
+        c.Id, c.Name, c.PortraitUrl, c.Faction, c.Bloodline?.Name, c.Generation,
+        c.Appearance, c.Reputation, c.Backstory, c.Kind, canEdit ? c.Tier : null, TitlesOrNull(c),
+        IsPlayerCharacter: true, PlayedBy: playedBy, CanPlay: canPlay, Concept: c.Concept);
 
     private static IReadOnlyList<string>? TitlesOrNull(Character c) => c.Titles.Count > 0 ? c.Titles : null;
 
