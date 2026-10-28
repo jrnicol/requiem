@@ -26,6 +26,8 @@ public sealed class SupportingCastForm : IValidatableObject, ICharacterProfile
 
     [StringLength(200)] public string? Concept { get; set; }
     [StringLength(200)] public string? Faction { get; set; }
+    /// <summary>Faction titles held, by name (TitleOption). Set by the Storyteller.</summary>
+    [MaxLength(20, ErrorMessage = "At most 20 titles.")] public List<string> Titles { get; set; } = [];
     [StringLength(500)] public string? Ambition { get; set; }
 
     [Range(SupportingCastRules.MinRating, SupportingCastRules.MaxRating)] public int Physical { get; set; } = 2;

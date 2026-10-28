@@ -28,7 +28,8 @@ public sealed record CatalogSnapshot(
     IReadOnlyList<EdgeDefinition> Edges,
     IReadOnlyList<ConceptDefinition> Concepts,
     IReadOnlyList<PowerGroup> PowerGroups,
-    IReadOnlyList<Power> Powers)
+    IReadOnlyList<Power> Powers,
+    IReadOnlyList<TitleDefinition> Titles)
 {
     private Dictionary<int, Power>? _powers;
     private Dictionary<int, PowerGroup>? _groups;

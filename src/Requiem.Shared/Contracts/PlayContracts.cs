@@ -69,7 +69,8 @@ public sealed record PlayCharacter(
     string? Notes,
     string? GmNotes,
     bool IsPlayerCharacter = false,
-    PlayMotives? Motives = null)
+    PlayMotives? Motives = null,
+    IReadOnlyList<TitleOption>? Titles = null)
 {
     [JsonIgnore] public bool IsVampire => Kind == CharacterKind.Vampire;
     [JsonIgnore] public bool IsFullSheet => Tier == CharacterTier.FullSheet;

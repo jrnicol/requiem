@@ -16,6 +16,7 @@ internal static class FullSheetMapper
         Kind = c.Kind,
         Concept = c.Concept,
         Faction = c.Faction,
+        Titles = [.. c.Titles],
         Virtue = c.Virtue,
         VirtueDetail = c.VirtueDetail,
         Vice = c.Vice,
@@ -98,6 +99,7 @@ internal static class FullSheetMapper
         c.Kind = form.Kind;
         c.Concept = Clean(form.Concept);
         c.Faction = Clean(form.Faction);
+        c.Titles = ProfileMapper.CleanTitles(form.Titles);
         c.Virtue = Clean(form.Virtue);
         c.VirtueDetail = Clean(form.VirtueDetail);
         c.Vice = Clean(form.Vice);

@@ -28,6 +28,7 @@ public sealed class RequiemApi(HttpClient http)
     private IReadOnlyList<CompelOption>? _compels;
     private IReadOnlyList<PowerOption>? _powers;
     private IReadOnlyList<ConceptOption>? _concepts;
+    private IReadOnlyList<TitleOption>? _titles;
 
     // ---------- Catalog ----------
 
@@ -54,6 +55,10 @@ public sealed class RequiemApi(HttpClient http)
 
     public async Task<IReadOnlyList<ConceptOption>> GetConceptsAsync() =>
         _concepts ??= await GetAsync<List<ConceptOption>>("api/catalog/concepts");
+
+    /// <summary>Every faction's titles, in the book's order.</summary>
+    public async Task<IReadOnlyList<TitleOption>> GetTitlesAsync() =>
+        _titles ??= await GetAsync<List<TitleOption>>("api/catalog/titles");
 
     /// <summary>The catalog entries <see cref="CreationRules"/> needs, from the cached lists.</summary>
     public async Task<CreationCatalog> GetCreationCatalogAsync()

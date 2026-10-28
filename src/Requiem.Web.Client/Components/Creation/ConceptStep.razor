@@ -6,9 +6,7 @@
                       Variant="Variant.Outlined" MaxLength="200" Immediate="true" DebounceInterval="300" />
     </MudItem>
     <MudItem xs="12" sm="6">
-        <MudTextField T="string" Value="Form.Faction" ValueChanged="v => Update(() => Form.Faction = v)" Label="Faction"
-                      Placeholder="@(Form.IsVampire ? "e.g. Camarilla, Carthians" : "e.g. a gang, a church, the police")"
-                      HelperText="Optional" Variant="Variant.Outlined" MaxLength="200" />
+        <FactionPicker Value="@Form.Faction" ValueChanged="v => Update(() => Form.Faction = v)" />
     </MudItem>
 </MudGrid>
 

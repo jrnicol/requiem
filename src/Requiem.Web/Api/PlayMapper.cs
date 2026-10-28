@@ -7,16 +7,22 @@ namespace Requiem.Web.Api;
 
 /// <summary>The catalog data the table view needs.</summary>
 /// <param name="ConceptTriggers">Concept name (case-insensitive) to how it regains Willpower.</param>
-internal sealed record PlayCatalog(IReadOnlyList<Power> Powers, IReadOnlyDictionary<string, string> ConceptTriggers);
+/// <param name="Titles">Title name (case-insensitive) to its definition and benefits.</param>
+internal sealed record PlayCatalog(IReadOnlyList<Power> Powers, IReadOnlyDictionary<string, string> ConceptTriggers,
+    IReadOnlyDictionary<string, TitleDefinition> Titles);
 
 /// <summary>Builds the table view of a character, full sheet or Supporting Cast.</summary>
 internal static class PlayMapper
 {
-    /// <param name="catalog">Every catalog power (light-weight: no bonus options needed), and the Concepts' Willpower triggers.</param>
+    /// <param name="catalog">Every catalog power (light-weight: no bonus options needed), the Concepts' Willpower triggers and the titles.</param>
     public static PlayCharacter ToPlay(Character c, PlayCatalog catalog) => ToPlay(c, catalog.Powers) with
     {
         Motives = new PlayMotives(c.Concept, c.Concept is { } concept ? catalog.ConceptTriggers.GetValueOrDefault(concept) : null,
             c.Virtue, c.VirtueDetail, c.Vice, c.ViceDetail),
+        // The titles they hold, with what each grants; one no longer in the catalog still shows by name.
+        Titles = c.Titles.Count == 0 ? null : c.Titles
+            .Select(t => catalog.Titles.TryGetValue(t, out var d) ? CatalogEndpoints.ToOption(d) : new TitleOption(0, t, "", "", null, [], null))
+            .ToList(),
     };
 
     private static PlayCharacter ToPlay(Character c, IReadOnlyList<Power> catalog)

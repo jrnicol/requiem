@@ -150,9 +150,9 @@ else
     }
 
     private static IEnumerable<string?> KnownText(KnownNpc n) =>
-        [n.Name, n.Faction, n.Bloodline, n.Appearance, n.Reputation, n.Backstory];
+        [n.Name, n.Faction, n.Bloodline, n.Appearance, n.Reputation, n.Backstory, .. n.Titles ?? []];
 
     /// <summary>The same cards as the players', with every detail filled in rather than only the revealed ones.</summary>
     private static KnownNpc Profile(CharacterSummary c) => new(
-        c.Id, c.Name, c.PortraitUrl, c.Faction, c.BloodlineName, c.Generation, c.Appearance, c.Reputation, c.Backstory, c.Kind, c.Tier);
+        c.Id, c.Name, c.PortraitUrl, c.Faction, c.BloodlineName, c.Generation, c.Appearance, c.Reputation, c.Backstory, c.Kind, c.Tier, c.Titles);
 }

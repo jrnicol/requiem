@@ -80,8 +80,11 @@ else
                             <ConceptPicker @bind-Value="_form.Concept" Concepts="_concepts" Margin="Margin.Dense" />
                         </MudItem>
                         <MudItem xs="12" sm="6">
-                            <MudTextField @bind-Value="_form.Faction" For="() => _form.Faction" Label="Faction"
-                                          Variant="Variant.Outlined" Margin="Margin.Dense" MaxLength="200" />
+                            <FactionPicker @bind-Value="_form.Faction" Margin="Margin.Dense" />
+                        </MudItem>
+                        @* Players' own drafts can't hold titles: the Storyteller grants them here. *@
+                        <MudItem xs="12">
+                            <TitlesPicker Titles="_form.Titles" Faction="@_form.Faction" Catalog="_titles" Changed="StateHasChanged" />
                         </MudItem>
                         @if (_form.IsVampire)
                         {
@@ -216,6 +219,7 @@ else
     private ValidationMessageStore? _serverErrors;
     private IReadOnlyList<BloodlineOption> _bloodlines = [];
     private IReadOnlyList<ConceptOption> _concepts = [];
+    private IReadOnlyList<TitleOption> _titles = [];
     private IReadOnlyList<PredatorTypeOption> _predatorTypes = [];
     private IReadOnlyList<DisciplineOption> _disciplines = [];
     private IReadOnlyList<MeritOption> _merits = [];
@@ -273,6 +277,7 @@ else
         {
             _bloodlines = await Api.GetBloodlinesAsync();
             _concepts = await Api.GetConceptsAsync();
+            _titles = await Api.GetTitlesAsync();
             _predatorTypes = await Api.GetPredatorTypesAsync();
             _disciplines = await Api.GetDisciplinesAsync();
             _merits = await Api.GetMeritsAsync();

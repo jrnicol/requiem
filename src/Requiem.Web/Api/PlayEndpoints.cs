@@ -306,6 +306,7 @@ public static class PlayEndpoints
     private static async Task<PlayCatalog> CatalogAsync(ICatalogStore store, CancellationToken ct)
     {
         var catalog = await store.GetAsync(ct);
-        return new(catalog.Powers, catalog.Concepts.ToDictionary(c => c.Name, c => c.WillpowerTrigger, StringComparer.OrdinalIgnoreCase));
+        return new(catalog.Powers, catalog.Concepts.ToDictionary(c => c.Name, c => c.WillpowerTrigger, StringComparer.OrdinalIgnoreCase),
+            catalog.Titles.ToDictionary(t => t.Name, StringComparer.OrdinalIgnoreCase));
     }
 }

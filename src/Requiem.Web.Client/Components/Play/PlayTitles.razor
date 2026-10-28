@@ -1,0 +1,26 @@
+@* At the table: each title the character holds and what it grants (VtR Factions chapter). *@
+
+@foreach (var title in Titles)
+{
+    <div class="mb-2">
+        <MudText Typo="Typo.subtitle2" Color="@(title.Group == "Negative" ? Color.Error : Color.Default)">
+            @title.Name
+            @if (title.Group.Length > 0)
+            {
+                <MudText Inline="true" Typo="Typo.caption" Color="Color.Secondary" Class="ml-1">· @title.Faction, @title.Group.ToLowerInvariant()@(title.SourcePage is { } page ? $" · VtR p.{page}" : "")</MudText>
+            }
+        </MudText>
+        @if (title.Benefits.Count == 0)
+        {
+            <MudText Typo="Typo.body2" Color="Color.Secondary">@(title.Description ?? "No rules of its own.")</MudText>
+        }
+        @foreach (var benefit in title.Benefits)
+        {
+            <MudText Typo="Typo.body2"><b>@benefit.Name:</b> @benefit.Text</MudText>
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TitleOption> Titles { get; set; } = [];
+}

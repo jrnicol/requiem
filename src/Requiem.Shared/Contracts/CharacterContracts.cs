@@ -31,7 +31,8 @@ public sealed record CharacterSummary(
     string? Appearance = null,
     string? Reputation = null,
     string? Backstory = null,
-    bool IsShared = false);
+    bool IsShared = false,
+    IReadOnlyList<string>? Titles = null);
 
 /// <param name="CampaignId">Only that campaign's characters; otherwise those of every campaign the user tells.</param>
 /// <param name="PlayerCharacters">Players' characters instead of NPCs.</param>

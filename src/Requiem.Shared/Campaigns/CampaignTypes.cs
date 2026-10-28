@@ -49,6 +49,8 @@ public enum NpcReveal
     Backstory = 64,
     /// <summary>Vampire, ghoul or mortal.</summary>
     Kind = 128,
+    /// <summary>Faction titles held.</summary>
+    Titles = 256,
 }
 
 /// <summary>The three ways to earn a Link with other player characters (WoD Core p.75).</summary>

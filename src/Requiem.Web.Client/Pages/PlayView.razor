@@ -189,6 +189,14 @@ else
                 </MudPaper>
             }
 
+            @if (_npc.Titles is { Count: > 0 } titles)
+            {
+                <MudPaper Class="pa-3 mb-3" Elevation="1">
+                    <MudText Typo="Typo.subtitle1" Class="mb-2">@(titles.Count == 1 ? "Title" : "Titles")</MudText>
+                    <PlayTitles Titles="titles" />
+                </MudPaper>
+            }
+
             @if (!string.IsNullOrWhiteSpace(_npc.Notes) || !string.IsNullOrWhiteSpace(_npc.GmNotes))
             {
                 <MudPaper Class="pa-3 mb-3" Elevation="1">

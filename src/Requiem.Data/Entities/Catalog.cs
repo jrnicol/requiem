@@ -75,6 +75,30 @@ public class ConceptDefinition
     public int? SourcePage { get; set; }
 }
 
+/// <summary>
+/// A faction title (VtR Factions chapter): a position, or a fleeting or negative title, and what it grants.
+/// Characters hold titles by name.
+/// </summary>
+public class TitleDefinition
+{
+    public int Id { get; set; }
+    public required string Name { get; set; }
+    /// <summary>One of <see cref="Shared.Characters.Factions"/>.</summary>
+    public required string Faction { get; set; }
+    /// <summary>The part of the faction it belongs to, e.g. Court, Negative, Inquisition.</summary>
+    public required string Group { get; set; }
+    public string? Description { get; set; }
+    public List<TitleBenefit> Benefits { get; set; } = [];
+    public int? SourcePage { get; set; }
+}
+
+/// <summary>One thing a title grants, named as in the book (e.g. the Prince's Sovereign).</summary>
+public class TitleBenefit
+{
+    public required string Name { get; set; }
+    public required string Text { get; set; }
+}
+
 /// <summary>Supporting Cast Edges (WoD Core p.117).</summary>
 public class EdgeDefinition
 {

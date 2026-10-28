@@ -1,0 +1,88 @@
+@* Titles held (VtR Factions chapter), granted by the Storyteller. It offers the character's faction's own titles, plus
+   the Camarilla's fleeting and negative titles, which its officers can give anyone in their Domain. *@
+
+<MudText Typo="Typo.subtitle2">Titles</MudText>
+@if (Titles.Count > 0)
+{
+    <MudStack Row="true" Wrap="Wrap.Wrap" Spacing="1" Class="my-1">
+        @foreach (var name in Titles)
+        {
+            var title = Find(name);
+            <MudTooltip Text="@Summary(title)" Disabled="title is null">
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Class="ma-0"
+                         Color="@(title?.Group == "Negative" ? Color.Error : Color.Default)" OnClose="() => RemoveAsync(name)">
+                    @name@(title is null ? " (not in the book's list)" : "")
+                </MudChip>
+            </MudTooltip>
+        }
+    </MudStack>
+}
+<MudAutocomplete @ref="_picker" T="TitleOption" Value="_pick" ValueChanged="AddAsync" SearchFunc="SearchAsync"
+                 ToStringFunc="t => t?.Name" Placeholder="Add a title" MaxItems="null" OpenOnFocus="true"
+                 Variant="Variant.Outlined" Margin="Margin.Dense" ResetValueOnEmptyText="true"
+                 HelperText="@HelperText" aria-label="Add a title">
+    <ItemTemplate Context="title">
+        <div>
+            <div>@title.Name <MudText Inline="true" Typo="Typo.caption" Color="Color.Secondary" Class="ml-1">· @Where(title)</MudText></div>
+            @if (title.Description is { } description)
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">@description</MudText>
+            }
+        </div>
+    </ItemTemplate>
+</MudAutocomplete>
+
+@code {
+    [Parameter, EditorRequired] public List<string> Titles { get; set; } = [];
+    [Parameter] public string? Faction { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<TitleOption> Catalog { get; set; } = [];
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private MudAutocomplete<TitleOption>? _picker;
+    private TitleOption? _pick;
+
+    private TitleOption? Find(string name) => Catalog.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>The faction's own titles first, then the Camarilla's fleeting and negative ones.</summary>
+    private IEnumerable<TitleOption> Available => Catalog
+        .Where(t => t.Faction == Faction || (t.Faction == Factions.Camarilla && t.Group is "Fleeting" or "Negative"))
+        .OrderBy(t => t.Faction == Faction && t.Group is not ("Fleeting" or "Negative") ? 0 : 1);
+
+    private string HelperText => Faction switch
+    {
+        Factions.Anarch => "The Anarchs have no titles; the Camarilla's fleeting and negative titles are here",
+        null or Factions.NoKnownAffiliation => "Pick a faction for its titles; the Camarilla's fleeting and negative titles are here",
+        _ when !Factions.All.Contains(Faction) => "Pick a faction from the list for its titles; the Camarilla's fleeting and negative titles are here",
+        _ => $"{Faction} titles, then the Camarilla's fleeting and negative titles",
+    };
+
+    private static string Where(TitleOption t) => t.Faction == Factions.Camarilla && t.Group is "Fleeting" or "Negative"
+        ? $"Camarilla, {t.Group.ToLowerInvariant()}" : t.Group;
+
+    private static string? Summary(TitleOption? t) => t is null ? null
+        : string.Join(" ", new[] { t.Description }.Concat(t.Benefits.Select(b => $"{b.Name}: {b.Text}")).OfType<string>());
+
+    private Task<IEnumerable<TitleOption>> SearchAsync(string? text, CancellationToken ct)
+    {
+        var search = text?.Trim();
+        return Task.FromResult(Available
+            .Where(t => !Titles.Contains(t.Name, StringComparer.OrdinalIgnoreCase))
+            .Where(t => string.IsNullOrEmpty(search) || t.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                        || t.Group.Contains(search, StringComparison.OrdinalIgnoreCase)));
+    }
+
+    private async Task AddAsync(TitleOption? title)
+    {
+        if (title is null) return;
+        if (!Titles.Contains(title.Name, StringComparer.OrdinalIgnoreCase)) Titles.Add(title.Name);
+        _pick = null;
+        if (_picker is not null) await _picker.ClearAsync();
+        await Changed.InvokeAsync();
+    }
+
+    private async Task RemoveAsync(string name)
+    {
+        Titles.RemoveAll(t => string.Equals(t, name, StringComparison.OrdinalIgnoreCase));
+        await Changed.InvokeAsync();
+    }
+}

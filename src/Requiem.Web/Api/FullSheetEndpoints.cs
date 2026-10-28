@@ -127,6 +127,9 @@ public static class FullSheetEndpoints
         Validator.TryValidateObject(form, new ValidationContext(form), results, validateAllProperties: true);
         var catalog = await store.GetAsync(ct);
 
+        if (ProfileMapper.TitlesProblem(form.Titles, catalog) is { } titles) results.Add(titles);
+        else form.Titles = ProfileMapper.CanonicalTitles(form.Titles, catalog);
+
         if (form.IsVampire)
         {
             if (form.BloodlineId is { } bloodlineId && catalog.Bloodline(bloodlineId) is null)

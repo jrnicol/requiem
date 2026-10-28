@@ -51,7 +51,8 @@ public sealed record KnownNpc(
     string? Reputation,
     string? Backstory,
     CharacterKind? Kind = null,
-    CharacterTier? Tier = null);
+    CharacterTier? Tier = null,
+    IReadOnlyList<string>? Titles = null);
 
 /// <summary>After a portrait upload or removal: its address (null when removed) and the character's new version.</summary>
 public sealed record PortraitResult(string? PortraitUrl, Guid Version);

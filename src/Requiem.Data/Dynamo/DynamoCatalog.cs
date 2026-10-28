@@ -77,7 +77,7 @@ internal static class DynamoCatalog
     public static class Kinds
     {
         public const string Bloodline = "BLOODLINE", PredatorType = "PREDATOR", Merit = "MERIT", Compel = "COMPEL",
-            Edge = "EDGE", Concept = "CONCEPT", PowerGroup = "GROUP", Power = "POWER";
+            Edge = "EDGE", Concept = "CONCEPT", PowerGroup = "GROUP", Power = "POWER", Title = "TITLE";
     }
 
     public static Dictionary<string, AttributeValue> Item<T>(string kind, int id, T value)
@@ -116,7 +116,8 @@ internal static class DynamoCatalog
         foreach (var power in powers) power.PowerGroup = groupById[power.PowerGroupId];
 
         return new CatalogSnapshot(bloodlines, Of<PredatorType>(Kinds.PredatorType), Of<MeritDefinition>(Kinds.Merit),
-            Of<CompelDefinition>(Kinds.Compel), Of<EdgeDefinition>(Kinds.Edge), Of<ConceptDefinition>(Kinds.Concept), groups, powers);
+            Of<CompelDefinition>(Kinds.Compel), Of<EdgeDefinition>(Kinds.Edge), Of<ConceptDefinition>(Kinds.Concept), groups, powers,
+            Of<TitleDefinition>(Kinds.Title));
     }
 
     /// <summary>
@@ -156,6 +157,7 @@ internal static class DynamoCatalog
         var compels = AddMissing(Kinds.Compel, current.Compels, data.Compels, c => c.Name, c => c.Id, (c, id) => c.Id = id);
         var edges = AddMissing(Kinds.Edge, current.Edges, data.Edges, e => e.Name, e => e.Id, (e, id) => e.Id = id);
         var concepts = AddMissing(Kinds.Concept, current.Concepts, data.Concepts, c => c.Name, c => c.Id, (c, id) => c.Id = id);
+        var titles = AddMissing(Kinds.Title, current.Titles, data.Titles, t => t.Name, t => t.Id, (t, id) => t.Id = id);
 
         // Power groups link to Bloodlines, and powers to groups, by id.
         var bloodlineIds = current.Bloodlines.Concat(data.Bloodlines.Where(b => b.Id != 0)).GroupBy(b => b.Name).ToDictionary(g => g.Key, g => g.First().Id);
@@ -187,7 +189,7 @@ internal static class DynamoCatalog
             ExpressionAttributeNames = new() { ["#v"] = "Version", ["#h"] = "SeedHash" },
             ExpressionAttributeValues = new() { [":one"] = N(1), [":hash"] = S(seedHash) },
         }, ct);
-        return new CatalogSeedResult(bloodlines, predators, merits, compels, edges, groups, powers, concepts);
+        return new CatalogSeedResult(bloodlines, predators, merits, compels, edges, groups, powers, concepts, titles);
     }
 
     /// <summary>A fingerprint of the embedded seed files.</summary>

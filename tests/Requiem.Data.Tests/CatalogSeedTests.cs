@@ -137,6 +137,25 @@ public class PowerSeedDataTests
     }
 
     [Fact]
+    public void Faction_titles_follow_the_book()
+    {
+        // The Anarchs have no organization and so no titles.
+        Assert.DoesNotContain(Data.Titles, t => t.Faction == Factions.Anarch);
+        Assert.Equal(13, Data.Titles.Count(t => t.Faction == Factions.Camarilla && t.Group is "Council of Thorns" or "Court"));
+        Assert.Equal(20, Data.Titles.Count(t => t.Faction == Factions.Sabbat));
+        Assert.Equal(7, Data.Titles.Count(t => t.Faction == Factions.CarthianMovement));
+
+        // Every Camarilla position grants something; the Sabbat's offices are described only.
+        Assert.All(Data.Titles.Where(t => t.Faction == Factions.Camarilla), t => Assert.NotEmpty(t.Benefits));
+        Assert.All(Data.Titles.Where(t => t.Faction == Factions.Sabbat), t => Assert.Empty(t.Benefits));
+        Assert.All(Data.Titles, t => Assert.False(string.IsNullOrWhiteSpace(t.Description)));
+
+        var prince = Data.Titles.Single(t => t.Name == "Prince");
+        Assert.Equal(["Sovereign", "Liege", "Majesty", "Bestowment"], prince.Benefits.Select(b => b.Name));
+        Assert.Equal(74, prince.SourcePage);
+    }
+
+    [Fact]
     public void Every_power_group_has_powers()
     {
         foreach (var group in Data.PowerGroups)
@@ -185,7 +204,7 @@ public class CatalogSeederTests : IDisposable
     [Fact]
     public async Task First_run_adds_everything_and_later_runs_add_nothing()
     {
-        Assert.Equal(new CatalogSeedResult(13, 10, 115, 18, 5, 25, Data.Powers.Count, Concepts: 31), await SeedAsync());
+        Assert.Equal(new CatalogSeedResult(13, 10, 115, 18, 5, 25, Data.Powers.Count, Concepts: 31, Titles: 48), await SeedAsync());
         // Unchanged seed files: skipped outright. Forced: compared entry by entry, and still nothing to add.
         Assert.Equal(0, (await SeedAsync()).Total);
         Assert.Equal(0, (await SeedAsync(force: true)).Total);

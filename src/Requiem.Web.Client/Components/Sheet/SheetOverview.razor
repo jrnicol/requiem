@@ -11,6 +11,11 @@
         {
             <MudItem xs="12" sm="6"><b>Faction:</b> @Form.Faction</MudItem>
         }
+        @* Granted by the Storyteller; their benefits are listed at the table. *@
+        @if (Form.Titles.Count > 0)
+        {
+            <MudItem xs="12" sm="6"><b>@(Form.Titles.Count == 1 ? "Title" : "Titles"):</b> @string.Join(", ", Form.Titles)</MudItem>
+        }
         @if (Form.IsGhoul)
         {
             <MudItem xs="12" sm="6"><b>Domitor:</b> @(Form.DomitorName ?? (Form.DomitorId is null ? "—" : "linked by the Storyteller"))</MudItem>

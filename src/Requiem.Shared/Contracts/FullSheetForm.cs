@@ -101,6 +101,8 @@ public sealed class FullSheetForm : IValidatableObject, ICharacterProfile
 
     [StringLength(200)] public string? Concept { get; set; }
     [StringLength(200)] public string? Faction { get; set; }
+    /// <summary>Faction titles held, by name (TitleOption). Set by the Storyteller.</summary>
+    [MaxLength(20, ErrorMessage = "At most 20 titles.")] public List<string> Titles { get; set; } = [];
     [StringLength(200)] public string? Virtue { get; set; }
     [StringLength(200)] public string? VirtueDetail { get; set; }
     [StringLength(200)] public string? Vice { get; set; }

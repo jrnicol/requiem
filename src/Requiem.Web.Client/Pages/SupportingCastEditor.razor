@@ -87,8 +87,10 @@ else
                                 <ConceptPicker @bind-Value="_form.Concept" Concepts="_concepts" />
                             </MudItem>
                             <MudItem xs="12" sm="6">
-                                <MudTextField @bind-Value="_form.Faction" For="() => _form.Faction" Label="Faction"
-                                              Placeholder="e.g. Carthians" Variant="Variant.Outlined" MaxLength="200" />
+                                <FactionPicker @bind-Value="_form.Faction" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <TitlesPicker Titles="_form.Titles" Faction="@_form.Faction" Catalog="_titles" Changed="StateHasChanged" />
                             </MudItem>
                             <MudItem xs="12">
                                 <MudTextField @bind-Value="_form.Ambition" For="() => _form.Ambition" Label="Ambition"
@@ -297,6 +299,7 @@ else
     private ValidationMessageStore? _serverErrors;
     private IReadOnlyList<BloodlineOption> _bloodlines = [];
     private IReadOnlyList<ConceptOption> _concepts = [];
+    private IReadOnlyList<TitleOption> _titles = [];
     private IReadOnlyList<PredatorTypeOption> _predatorTypes = [];
     private IReadOnlyList<EdgeOption> _edges = [];
     private bool _notFound;
@@ -345,6 +348,7 @@ else
         {
             _bloodlines = await Api.GetBloodlinesAsync();
             _concepts = await Api.GetConceptsAsync();
+            _titles = await Api.GetTitlesAsync();
             _predatorTypes = await Api.GetPredatorTypesAsync();
             _edges = await Api.GetEdgesAsync();
 

@@ -37,6 +37,13 @@ public static class CatalogEndpoints
                 .Select(c => new ConceptOption(c.Id, c.Name, c.Description, c.WillpowerTrigger, c.SourcePage))
                 .ToList());
 
+        // In the book's order, which runs from the highest office to the lowest within each faction.
+        catalog.MapGet("/titles", async (ICatalogStore store, CancellationToken ct) =>
+            (await store.GetAsync(ct)).Titles
+                .OrderBy(t => t.Id)
+                .Select(ToOption)
+                .ToList());
+
         // The whole powers catalog (a few hundred KB): the client caches it and searches locally.
         catalog.MapGet("/powers", async (ICatalogStore store, CancellationToken ct) =>
             (await store.GetAsync(ct)).Powers
@@ -153,6 +160,10 @@ public static class CatalogEndpoints
         p.Duration, p.CastingDuration, p.HowToLearn, p.DramaticFailureText, p.FailureText, p.SuccessText,
         p.ExceptionalSuccessText, p.Notes, p.SourcePage, p.IsReviewed,
         p.BonusOptions.OrderBy(b => b.SortOrder).Select(b => new PowerBonusOptionDto(b.SuccessCost, b.Effect)).ToList());
+
+    internal static TitleOption ToOption(TitleDefinition t) => new(
+        t.Id, t.Name, t.Faction, t.Group, t.Description,
+        t.Benefits.Select(b => new TitleBenefitOption(b.Name, b.Text)).ToList(), t.SourcePage);
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 

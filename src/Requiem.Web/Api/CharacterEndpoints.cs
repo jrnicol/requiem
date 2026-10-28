@@ -99,7 +99,8 @@ public static class CharacterEndpoints
                 c.Tier == CharacterTier.FullSheet ? c.Humanity ?? c.Morality : null,
                 c.CampaignId,
                 c.PortraitUrl, c.Generation, c.Appearance, c.Reputation, c.Backstory,
-                !c.IsPlayerCharacter && c.Visibility == NpcVisibility.Known))
+                !c.IsPlayerCharacter && c.Visibility == NpcVisibility.Known,
+                c.Titles.Count > 0 ? c.Titles : null))
             .OrderBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
     }
@@ -161,10 +162,13 @@ public static class CharacterEndpoints
     {
         var results = new List<ValidationResult>();
         Validator.TryValidateObject(form, new ValidationContext(form), results, validateAllProperties: true);
+        var catalog = await store.GetAsync(ct);
+
+        if (ProfileMapper.TitlesProblem(form.Titles, catalog) is { } titles) results.Add(titles);
+        else form.Titles = ProfileMapper.CanonicalTitles(form.Titles, catalog);
 
         if (form.IsVampire)
         {
-            var catalog = await store.GetAsync(ct);
             if (form.BloodlineId is { } bloodlineId && catalog.Bloodline(bloodlineId) is null)
                 results.Add(new ValidationResult("Unknown Bloodline.", [nameof(form.BloodlineId)]));
             if (form.PredatorTypeId is { } predatorId && catalog.PredatorTypes.All(p => p.Id != predatorId))

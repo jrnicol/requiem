@@ -20,6 +20,8 @@ public class Character
     /// <summary>Supporting Cast: drives how the NPC approaches situations.</summary>
     public string? Ambition { get; set; }
     public string? Faction { get; set; }
+    /// <summary>Faction titles held, by catalog name (TitleDefinition). Only the Storyteller sets them.</summary>
+    public List<string> Titles { get; set; } = [];
     /// <summary>The uploaded portrait's address (under /media/), or null.</summary>
     public string? PortraitUrl { get; set; }
     /// <summary>What others notice: looks, manner, dress.</summary>

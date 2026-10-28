@@ -294,7 +294,7 @@ public static class PlayerCharacterEndpoints
     }
 
     /// <summary>
-    /// What a player can't set on their own Draft: links to other characters (the Storyteller makes them),
+    /// What a player can't set on their own Draft: links to other characters and titles (the Storyteller grants them),
     /// the XP ledger, the Storyteller's notes and play state. Those keep their current values.
     /// </summary>
     private static void KeepPlayerOutOf(FullSheetForm form, FullSheetForm? current, Campaign campaign)
@@ -302,6 +302,7 @@ public static class PlayerCharacterEndpoints
         form.SireId = current?.SireId;
         form.DomitorId = current?.DomitorId;
         form.GmNotes = current?.GmNotes;
+        form.Titles = current?.Titles ?? [];
         form.Experience = current?.Experience ?? [];
         form.Wounds = current?.Wounds ?? [];
         form.Stains = current?.Stains ?? [];

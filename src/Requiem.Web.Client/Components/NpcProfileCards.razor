@@ -66,6 +66,7 @@
         if (npc.Faction is { } faction) yield return ("Faction", faction);
         if (npc.Bloodline is { } bloodline) yield return ("Bloodline", bloodline);
         if (npc.Generation is { } generation) yield return ("Generation", generation.ToString());
+        if (npc.Titles is { Count: > 0 } titles) yield return (titles.Count == 1 ? "Title" : "Titles", string.Join(", ", titles));
     }
 
     /// <summary>The type worth showing: vampires and ghouls. Mortal is the default, so it isn't shown.</summary>

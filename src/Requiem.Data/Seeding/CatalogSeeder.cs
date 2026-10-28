@@ -13,7 +13,8 @@ public sealed record CatalogSeedData(
     IReadOnlyList<EdgeDefinition> Edges,
     IReadOnlyList<PowerGroupSeed> PowerGroups,
     IReadOnlyList<PowerSeed> Powers,
-    IReadOnlyList<ConceptDefinition> Concepts);
+    IReadOnlyList<ConceptDefinition> Concepts,
+    IReadOnlyList<TitleDefinition> Titles);
 
 /// <summary>A power group as written in disciplines.json; <see cref="Bloodline"/> is a catalog name.</summary>
 public sealed record PowerGroupSeed(
@@ -53,9 +54,9 @@ public sealed record PowerSeed
 
 public sealed record PowerBonusSeed(int SuccessCost, string Effect);
 
-public sealed record CatalogSeedResult(int Bloodlines, int PredatorTypes, int Merits, int Compels, int Edges, int PowerGroups, int Powers = 0, int Concepts = 0)
+public sealed record CatalogSeedResult(int Bloodlines, int PredatorTypes, int Merits, int Compels, int Edges, int PowerGroups, int Powers = 0, int Concepts = 0, int Titles = 0)
 {
-    public int Total => Bloodlines + PredatorTypes + Merits + Compels + Edges + PowerGroups + Powers + Concepts;
+    public int Total => Bloodlines + PredatorTypes + Merits + Compels + Edges + PowerGroups + Powers + Concepts + Titles;
 }
 
 /// <summary>
@@ -85,7 +86,8 @@ public static class CatalogSeeder
             Read<EdgeDefinition>("edges.json"),
             Read<PowerGroupSeed>("disciplines.json"),
             Read<PowerSeed>("powers.json"),
-            Read<ConceptDefinition>("concepts.json"));
+            Read<ConceptDefinition>("concepts.json"),
+            Read<TitleDefinition>("titles.json"));
 
         EnsureUnique(data.Bloodlines, b => b.Name, "bloodlines.json");
         EnsureUnique(data.PredatorTypes, p => p.Name, "predator-types.json");
@@ -94,6 +96,7 @@ public static class CatalogSeeder
         EnsureUnique(data.Compels.Where(c => c.Roll is not null), c => c.Roll, "compels.json (roll)");
         EnsureUnique(data.Edges, e => e.Name, "edges.json");
         EnsureUnique(data.Concepts, c => c.Name, "concepts.json");
+        EnsureUnique(data.Titles, t => t.Name, "titles.json");
         EnsureUnique(data.PowerGroups, g => g.Name, "disciplines.json");
 
         var unknown = data.PowerGroups.Where(g => g.Bloodline is not null && data.Bloodlines.All(b => b.Name != g.Bloodline))
@@ -111,6 +114,10 @@ public static class CatalogSeeder
             .Select(p => $"{p.Group}/{p.Name}").ToList();
         if (badPowers.Count > 0)
             throw new InvalidOperationException($"powers.json has invalid entries: {string.Join(", ", badPowers)}");
+
+        var badTitles = data.Titles.Where(t => !Shared.Characters.Factions.All.Contains(t.Faction)).Select(t => $"{t.Name} → {t.Faction}").ToList();
+        if (badTitles.Count > 0)
+            throw new InvalidOperationException($"titles.json names unknown factions: {string.Join(", ", badTitles)}");
         return data;
     }
 

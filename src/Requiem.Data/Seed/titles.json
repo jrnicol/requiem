@@ -1,0 +1,200 @@
+// Faction titles (VtR Factions chapter). sourcePage is the PDF page. Descriptions are short summaries; each
+// benefit keeps the book's rules. Camarilla positions carry benefits; the Sabbat church and Inquisition are offices
+// without rules of their own; the Carthian offices and committees come from the Boston Night Assembly example.
+// The Anarchs have no titles: the book says there is no Anarch organization. Fleeting and negative titles are
+// granted or imposed by Camarilla officers.
+[
+  // ---------- Camarilla: Council of Thorns ----------
+  { "name": "Council Lord", "faction": "Camarilla", "group": "Council of Thorns", "sourcePage": 72,
+    "description": "One of the Inner Seven, the hidden masters of the Camarilla, whose identities are concealed behind tradition.",
+    "benefits": [
+      { "name": "Master of Puppets", "text": "Any Kindred you have drunk from can be given a Compel 4 once per cycle of the moon; you need not be present." },
+      { "name": "Draconian Lover", "text": "Any act of heartless destruction or harm you command grants a special Boon for you to give. Its receiver gets one grand narrative effect, such as a permanent dot of Blood Potency, a dot in a new Discipline, restoration of a body part, exemption from one action, or success in one intrigue. Once per person." } ] },
+  { "name": "Archon", "faction": "Camarilla", "group": "Council of Thorns", "sourcePage": 73,
+    "description": "One for each Bloodline of the Camarilla: commands its assets and members, represents the Bloodline to the Council and enforces the Traditions.",
+    "benefits": [
+      { "name": "For Whom the Bell Tolls", "text": "+4 dice to all Manipulation or Combat rolls directly affecting a single person you have declared your target." },
+      { "name": "Eternities' Right Hand", "text": "Any Intrigue or Persuasion roll relating to anyone in the Camarilla gains 3 successes." } ] },
+  { "name": "Justicar", "faction": "Camarilla", "group": "Council of Thorns", "sourcePage": 73,
+    "description": "One of the four elite agents each Archon hand-selects to enforce Camarilla law, seek out secrets and spy on the Tower's foes.",
+    "benefits": [
+      { "name": "And Justice for All", "text": "You may issue any negative title in any region without approval, even to Princes." },
+      { "name": "Miller", "text": "+4 to related dice pools when acting under your Archon's orders to spy, infiltrate, pursue, or obtain or plant evidence." } ] },
+
+  // ---------- Camarilla: the court ----------
+  { "name": "Prince", "faction": "Camarilla", "group": "Court", "sourcePage": 74,
+    "description": "Holds Praxis over a Domain: allots hunting grounds, declares Elysium, grants the right to sire, punishes breaches of the Traditions and the Masquerade, and holds Audience, the only time a Blood Hunt may be called.",
+    "benefits": [
+      { "name": "Sovereign", "text": "Anyone who would disobey or ignore your orders must spend 1 Willpower or make a Resolve roll at a penalty equal to your dots in Status (Camarilla)." },
+      { "name": "Liege", "text": "Grant the fleeting title Loyal to a number of permanent residents of your Domain equal to your dots in Status (Camarilla)." },
+      { "name": "Majesty", "text": "Everyone in your Domain knows who you are, without doubt, when you reveal yourself to them." },
+      { "name": "Bestowment", "text": "Grant or revoke any Camarilla position at will, without contest, except Primogen." } ] },
+  { "name": "Primogen", "faction": "Camarilla", "group": "Court", "sourcePage": 75,
+    "description": "Represents a Bloodline to the Prince and leads it within the Domain; the Bloodline is judged by what its Primogen says and does.",
+    "benefits": [
+      { "name": "Ascendant", "text": "Immune to Disgraced and Censured. You may contradict the orders of anyone without the Sovereign, Established or Elysium titles, and may issue a doctrinal edict altering the sect's practices." },
+      { "name": "Lord", "text": "Inflict Censured on a Kindred of your Bloodline in your Domain; if they are already Censured, inflict Forsaken, which applies in every Camarilla Domain." },
+      { "name": "Patronage", "text": "At Elysium, grant one of your Bloodline +1 to Status or Resources, or an extra Demesne selection, until you grant it to another." } ] },
+  { "name": "Seneschal", "faction": "Camarilla", "group": "Court", "sourcePage": 75,
+    "description": "The Prince's second self: hears grievances, manages Elysium politics and Primogen squabbles, and acts as regent when the Prince is away.",
+    "benefits": [
+      { "name": "Privileged", "text": "You cannot be openly or effectively accused of lying unless the accuser holds Sovereign, Courteous, Triumphant or Authority." },
+      { "name": "Seal Bearer", "text": "When the Prince is not at Court, you hold all the Prince's powers; the Prince may reverse or revoke them at any time." },
+      { "name": "Chain of Succor", "text": "While the Prince is absent, every Camarilla vampire who owes a Boon to the Prince, a Primogen or you gains +2 on all Social rolls within the Domain." } ] },
+  { "name": "Sheriff", "faction": "Camarilla", "group": "Court", "sourcePage": 76,
+    "description": "The blade of Camarilla law: investigates Masquerade breaches, hunts violators and enforces the Prince's edicts; refusing their summons brands a vampire Hunted.",
+    "benefits": [
+      { "name": "Authority", "text": "Issue Censured to anyone you legitimately believe has broken the law of your sect or Domain." },
+      { "name": "Posse Comitatus", "text": "Carry weapons to any gathering, including restricted places and Elysium; vampiric authorities must allow it." },
+      { "name": "Hounds", "text": "Deputize up to two members of your Domain in good standing, granting them the fleeting title Defender for a night." },
+      { "name": "Nightwatch", "text": "Grant armed protection for three nights to a Kindred threatened from outside the Domain: no NPC may enter their Haven without the owner's permission. A Boon to the Sheriff can extend it." } ] },
+  { "name": "Whip", "faction": "Camarilla", "group": "Court", "sourcePage": 76,
+    "description": "The Primogen's enforcer and diplomat, who shapes the Bloodline's consensus; given a Mark of Authority, acts as Primogen while the Primogen is away.",
+    "benefits": [
+      { "name": "Rally", "text": "At Elysium, command a public show of Bloodline unity, granting +1 Resolve for 3 nights." },
+      { "name": "The Unseen Hand", "text": "In any vote of the court, all who knowingly vote as you wish regain all spent Willpower." },
+      { "name": "Supper", "text": "At Elysium, assemble your Bloodline in the Domain to share intelligence, resources or aid; all who attend gain +1 on any cooperative action for 3 nights." } ] },
+  { "name": "Harpy", "faction": "Camarilla", "group": "Court", "sourcePage": 77,
+    "description": "Enforces the Domain's etiquette and keeps the ledger of slights, favors and debts; their approval or scorn can make or unmake Kindred overnight.",
+    "benefits": [
+      { "name": "Prominent", "text": "Award anyone the fleeting status Honorable or Courteous." },
+      { "name": "Abiding", "text": "Not usable in combat. The target must physically leave the scene or gain Disgraced." },
+      { "name": "Grace", "text": "At Elysium, recognize a character whose deeds are sufficient: +1 to their Intrigue until the next Elysium." } ] },
+  { "name": "Herald", "faction": "Camarilla", "group": "Court", "sourcePage": 77,
+    "description": "The Prince's voice abroad: bears edicts between Domains, negotiates truces and treaties, and weighs rival cities.",
+    "benefits": [
+      { "name": "Established", "text": "Anyone who openly insults, threatens or attacks you automatically gains Disgraced." },
+      { "name": "Emissary", "text": "Spend 1 Willpower to overcome a political or etiquette error you made in the scene: those offended must accept your apology and may not hold it against you." },
+      { "name": "Echoes of the Throne", "text": "When you announce a decree of the Prince, all Kindred present regain 1 spent Willpower." } ] },
+  { "name": "Keeper of Elysium", "faction": "Camarilla", "group": "Court", "sourcePage": 78,
+    "description": "Guardian of Elysium, the neutral ground where Kindred meet without violence; without a Keeper, Elysium cannot be called.",
+    "benefits": [
+      { "name": "Gallant", "text": "Immediately apply Censured to anyone you catch abusing, but not breaking, the rules of Elysium; if you didn't witness it, sufficient evidence must be brought." },
+      { "name": "Courteous", "text": "Spend 1 Willpower: for the scene at Elysium you know when someone lies to you, though not why or what the truth is." },
+      { "name": "Breaker of Accords", "text": "Declare anyone who breaks the rules of Elysium a Breaker of Accords." } ] },
+  { "name": "Liaison Officer", "faction": "Camarilla", "group": "Court", "sourcePage": 78,
+    "description": "The Domain's face and bridge: keeps records, greets newcomers, handles communications with other Domains and controls access to the court.",
+    "benefits": [
+      { "name": "Confirmed", "text": "Approach any Kindred of your Domain without introduction or invitation, and without social penalty; you must be met with grace and courtesy." },
+      { "name": "Attendant", "text": "You always choose when you fulfil a Boon; no one can demand it sooner." },
+      { "name": "Emissary", "text": "When you represent the Domain abroad, every vampire of your home city gains +1 Fame in that Domain while you are there." } ] },
+  { "name": "Scourge", "faction": "Camarilla", "group": "Court", "sourcePage": 79,
+    "description": "Hunts and destroys unacknowledged Embraces, unpresented neonates and rogue Kindred at the margins of the Domain.",
+    "benefits": [
+      { "name": "Persona Non Grata", "text": "Inflict Disgraced on anyone found harboring or abetting vampires created without the Prince's permission or never formally presented." },
+      { "name": "Dreaded", "text": "You cannot be given Censured." },
+      { "name": "Stalker", "text": "Harass, detain or destroy, without penalty, any Kindred created without the Prince's permission." },
+      { "name": "Cup Bearer", "text": "After eliminating a Blood Hunted target, an illegal Embrace, a Sabbat infiltrator or another threat, call a Chalice Night: all who feed with you and in your presence automatically succeed on their next Dominion roll." } ] },
+
+  // ---------- Camarilla: fleeting titles ----------
+  { "name": "Loyal", "faction": "Camarilla", "group": "Fleeting", "sourcePage": 74,
+    "description": "Granted by the Prince (Liege) to permanent residents of the Domain.",
+    "benefits": [
+      { "name": "Loyal", "text": "+1 to all rolls made publicly in the Prince's name, for 1 month or until you gain a negative title." } ] },
+  { "name": "Defender", "faction": "Camarilla", "group": "Fleeting", "sourcePage": 76,
+    "description": "Granted by the Sheriff (Hounds) to a deputy, for a single night.",
+    "benefits": [
+      { "name": "Defender", "text": "You gain no Stains while acting publicly under the Sheriff's authority." } ] },
+
+  // ---------- Camarilla: negative titles ----------
+  { "name": "Disgraced", "faction": "Camarilla", "group": "Negative", "sourcePage": 80,
+    "description": "Applies within the Domain that issued it.",
+    "benefits": [
+      { "name": "Disgraced", "text": "You may not carry weapons or actively use powers in the presence of a sect officer, nor feed in the sect's territories. You cannot use or gain titles, and others need not repay Boons they owe you. A Toreador who publicly insults you gains a favor from the Harpy. Breaking these terms will likely bring a Blood Hunt." } ] },
+  { "name": "Censured", "faction": "Camarilla", "group": "Negative", "sourcePage": 80,
+    "description": "Applies within the Domain that issued it, for no more than 2 months, during which the bearer is expected to offer a Boon or perform the task demanded.",
+    "benefits": [
+      { "name": "Censured", "text": "You may not speak in public to any Kindred holding a Position title unless they speak to you first, nor contradict them; apologizing and offering a Boon avoids breaking this. Whoever imposes it may set an alternate restriction instead, which cannot significantly handicap you or force you into danger." } ] },
+  { "name": "Forsaken", "faction": "Camarilla", "group": "Negative", "sourcePage": 80,
+    "description": "Applies across your whole Bloodline within the Camarilla.",
+    "benefits": [
+      { "name": "Forsaken", "text": "Your Bloodline no longer accepts you: you may hold no status, title or position, and may be destroyed without repercussion from your Bloodline (Diablerie is still forbidden)." } ] },
+  { "name": "Antitribu", "faction": "Camarilla", "group": "Negative", "sourcePage": 80,
+    "description": "Given to a Kindred who walked away while holding a Camarilla Position title.",
+    "benefits": [
+      { "name": "Antitribu", "text": "As Forsaken, but across the whole Camarilla. You lose the Camarilla's benefits and are not protected at Elysium." } ] },
+  { "name": "Breaker of Accords", "faction": "Camarilla", "group": "Negative", "sourcePage": 78,
+    "description": "Declared by the Keeper of Elysium on one who broke its rules; made publicly known.",
+    "benefits": [
+      { "name": "Breaker of Accords", "text": "A mark on your soul, visible in your Aura and impossible to hide by any power. Any vampire may destroy you, and counts it a point of pride, except on the grounds of an Elysium." } ] },
+  { "name": "Blood Hunted", "faction": "Camarilla", "group": "Negative", "sourcePage": 80,
+    "description": "Declared by the Prince at Court.",
+    "benefits": [
+      { "name": "Blood Hunted", "text": "Every titled vampire of the Camarilla, and all Blood Bound to one, knows you are marked for death when they meet you, though not where you are. There are few rules on killing you, though Diablerie is still forbidden; when you meet Final Death, all who felt the Hunt know." } ] },
+
+  // ---------- Sabbat: the Episcopate ----------
+  { "name": "Pontifex", "faction": "Sabbat", "group": "Episcopate", "sourcePage": 98,
+    "description": "The singular leader of the Sabbat, chosen by the Ornatissimi from among their own; claims no divine connection, only vision of the faith." },
+  { "name": "Ornatissimus", "faction": "Sabbat", "group": "Episcopate", "sourcePage": 98,
+    "description": "One of the 13 venerated elders who lead the whole faith: they establish orders, advise and draft the Pontifex's edicts, and see to matters across nations." },
+  { "name": "Doyen", "faction": "Sabbat", "group": "Episcopate", "sourcePage": 98,
+    "description": "Leads one of the Sabbat's orders, judged by its success in its stated duty." },
+
+  // ---------- Sabbat: the Presbyterate ----------
+  { "name": "Praecipuus", "faction": "Sabbat", "group": "Presbyterate", "sourcePage": 98,
+    "description": "Prior: the priest who oversees a religious order in a location." },
+  { "name": "Rector", "faction": "Sabbat", "group": "Presbyterate", "sourcePage": 98,
+    "description": "The priest over the practical operation of a region of churches." },
+  { "name": "Prisci", "faction": "Sabbat", "group": "Presbyterate", "sourcePage": 98,
+    "description": "The priest of civil interactions and of the church's letters to all those not involved with law, leadership and governance." },
+  { "name": "Prelate", "faction": "Sabbat", "group": "Presbyterate", "sourcePage": 98,
+    "description": "The priest of political interactions and of the church's letters to all those involved with law, leadership and governance." },
+  { "name": "Apostolic", "faction": "Sabbat", "group": "Presbyterate", "sourcePage": 99,
+    "description": "The priest of propaganda, who corrects, amends and publishes the faith's philosophy and controls its documents and relics." },
+  { "name": "Mand'rite", "faction": "Sabbat", "group": "Presbyterate", "sourcePage": 99,
+    "description": "The priest who oversees an abbey or monastery; with an Ensik, performs the Rite of Vaulderie that forms a coven." },
+  { "name": "Ensik", "faction": "Sabbat", "group": "Presbyterate", "sourcePage": 99,
+    "description": "The priest of a single church, who has received Nictus Verata and celebrates the Rise of the Drusius, hears confession and gives absolution." },
+
+  // ---------- Sabbat: the Inquisition ----------
+  { "name": "Inquisitor General", "faction": "Sabbat", "group": "Inquisition", "sourcePage": 99,
+    "description": "Presides over the whole Inquisition: decides when one is formed, who serves in it and when it is dissolved." },
+  { "name": "Councillor of the Suprema", "faction": "Sabbat", "group": "Inquisition", "sourcePage": 99,
+    "description": "One of six permanent chairs who advise the Inquisitor General and set each Inquisition's justification and terms." },
+  { "name": "Inquisitor", "faction": "Sabbat", "group": "Inquisition", "sourcePage": 99,
+    "description": "Leads an Inquisition personally, with the final say in all its tasks, and nominates its other officers." },
+  { "name": "Fiscal", "faction": "Sabbat", "group": "Inquisition", "sourcePage": 99,
+    "description": "Presents the accusation, investigates the denunciations and interrogates the witnesses." },
+  { "name": "Calificador", "faction": "Sabbat", "group": "Inquisition", "sourcePage": 99,
+    "description": "A theologian who determines whether the defendant's conduct was a crime against the faith." },
+  { "name": "Alguacil", "faction": "Sabbat", "group": "Inquisition", "sourcePage": 99,
+    "description": "The officer of the court, who detains and jails the defendant and acts as the Inquisitor's right hand." },
+  { "name": "Inquisition Secretary", "faction": "Sabbat", "group": "Inquisition", "sourcePage": 99,
+    "description": "One of three notaries: of Property, who registers the accused's goods; of the Secret, who records testimony; and the General Notary, who records the court's actions." },
+  { "name": "Familiar", "faction": "Sabbat", "group": "Inquisition", "sourcePage": 99,
+    "description": "A lay collaborator permanently at the Inquisition's service: an honor recognizing purity of Blood, with privileges during an Inquisition." },
+  { "name": "Commissario", "faction": "Sabbat", "group": "Inquisition", "sourcePage": 99,
+    "description": "A member of a Sabbat order working with the Inquisition on very large or global matters." },
+
+  // ---------- Sabbat: the coven ----------
+  { "name": "Ductus", "faction": "Sabbat", "group": "Coven", "sourcePage": 100,
+    "description": "Leader of a coven, more an honor than a duty: deals with the church and organizes Ritae, and may be replaced at any time by the coven's majority." },
+
+  // ---------- Carthian Movement: the Night Assembly ----------
+  { "name": "Speaker of the Night", "faction": "Carthian Movement", "group": "Elected office", "sourcePage": 118,
+    "description": "Moderates Assembly sessions, sets agendas and recognizes motions; missing two meetings in a row triggers a no-confidence vote.",
+    "benefits": [
+      { "name": "Speaker", "text": "A bonus to Persuasion and Politics rolls involving Carthian Kindred during official proceedings." } ] },
+  { "name": "Registrar of Feeding Rights", "faction": "Carthian Movement", "group": "Elected office", "sourcePage": 118,
+    "description": "Administers feeding zones, schedules and quotas, with access to feeding maps, mortal demographic data and hospital acquisition channels.",
+    "benefits": [
+      { "name": "Registrar", "text": "A standing Contacts network among mortal administrators and medical staff." } ] },
+  { "name": "Chair of Enforcement Review", "faction": "Carthian Movement", "group": "Elected office", "sourcePage": 118,
+    "description": "Oversees Carthian enforcers, authorizes sanctioned violence and reviews unsanctioned incidents.",
+    "benefits": [
+      { "name": "Chair", "text": "Once per story, mitigate legal or social Conditions incurred by Carthian-aligned violence." } ] },
+  { "name": "Director of Mortal Interface", "faction": "Carthian Movement", "group": "Elected office", "sourcePage": 118,
+    "description": "Manages influence over city councils, zoning boards, police unions and academic institutions.",
+    "benefits": [
+      { "name": "Director", "text": "Bonus dice to Socialize and Subterfuge rolls involving mortal bureaucrats and politicians." } ] },
+  { "name": "Eligibility Committee", "faction": "Carthian Movement", "group": "Committee", "sourcePage": 118,
+    "description": "Certifies candidates for office; membership rotates quarterly.",
+    "benefits": [
+      { "name": "Member", "text": "The Cloaked Condition against political retaliation while serving." } ] },
+  { "name": "Emergency Powers Committee", "faction": "Carthian Movement", "group": "Committee", "sourcePage": 118,
+    "description": "Activated during Masquerade breaches, Sabbat incursions or elder tantrums; every use generates permanent records.",
+    "benefits": [
+      { "name": "Member", "text": "While activated, temporary authority to suspend votes and authorize Final Death warrants." } ] },
+  { "name": "Audit and Records Committee", "faction": "Carthian Movement", "group": "Committee", "sourcePage": 118,
+    "description": "The most feared body in the city: keeps the archives of votes, sanctions, feeding violations and alliances. Access requires unanimous consent." }
+]
