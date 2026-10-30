@@ -91,6 +91,26 @@ public class KnownNpcTests(RequiemWebFactory factory) : IClassFixture<RequiemWeb
     }
 
     [Fact]
+    public async Task A_magi_house_is_labelled_a_house_only_once_revealed()
+    {
+        var table = await PlayerTable.CreateAsync(factory);
+        var tremere = (await table.Storyteller.GetFromJsonAsync<List<BloodlineOption>>("/api/catalog/bloodlines", RequiemJson.Options))!
+            .Single(b => b.Name == "Tremere").Id;
+        var magus = await CreateNpcAsync(table, "Magus Orrin", shared: true, NpcReveal.Faction, tremere);
+
+        // Not revealed: neither the House nor that it is one.
+        var card = Assert.Single(await KnownAsync(table.Player, table.CampaignId));
+        Assert.Equal((null, null), (card.Bloodline, card.BloodlineKind));
+        Assert.Equal(("Tremere", "House"), ((await ProfileAsync(table.Storyteller, magus.Id)) is var full ? (full.Bloodline, full.BloodlineLabel) : default));
+
+        magus.Reveals |= NpcReveal.Bloodline;
+        var saved = await table.Storyteller.PutAsJsonAsync($"/api/characters/{magus.Id}/supporting-cast", magus, RequiemJson.Options);
+        Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+        card = Assert.Single(await KnownAsync(table.Player, table.CampaignId));
+        Assert.Equal(("Tremere", "MagiHouse", "House"), (card.Bloodline, card.BloodlineKind, card.BloodlineLabel));
+    }
+
+    [Fact]
     public async Task Outsiders_see_no_cards_and_player_characters_are_never_shared()
     {
         var table = await PlayerTable.CreateAsync(factory);
@@ -107,11 +127,11 @@ public class KnownNpcTests(RequiemWebFactory factory) : IClassFixture<RequiemWeb
         Assert.Empty(await KnownAsync(table.Player, table.CampaignId));
     }
 
-    private static async Task<SupportingCastForm> CreateNpcAsync(Table table, string name, bool shared, NpcReveal reveals)
+    private static async Task<SupportingCastForm> CreateNpcAsync(Table table, string name, bool shared, NpcReveal reveals, int? bloodlineId = null)
     {
         var form = new SupportingCastForm
         {
-            Name = name, CampaignId = table.CampaignId, Kind = CharacterKind.Vampire, Faction = "Invictus", Generation = 11,
+            Name = name, CampaignId = table.CampaignId, Kind = CharacterKind.Vampire, Faction = "Invictus", Generation = 11, BloodlineId = bloodlineId,
             Appearance = "Silver cane, older suit", Reputation = "Never forgets a favor", Backstory = "Sired in Paris in 1789.",
             IsShared = shared, Reveals = reveals,
         };

@@ -80,4 +80,20 @@ public static class BloodlineRules
             _ => [],
         };
     }
+
+    /// <summary>The catalog kind of a Magi House, as opposed to "Bloodline" or "Caitiff".</summary>
+    public const string MagiHouseKind = "MagiHouse";
+
+    public static bool IsMagiHouse(string? kind) => kind == MagiHouseKind;
+
+    /// <summary>
+    /// What to call the field: Magi have a House, not a Bloodline, since they aren't descended from one (VtR p.45).
+    /// </summary>
+    public static string KindLabel(string? kind) => IsMagiHouse(kind) ? "House" : "Bloodline";
+
+    /// <summary>A Magi House's weakness is a Lich Weakness (VtR p.45 onwards).</summary>
+    public static string WeaknessLabel(string? kind) => IsMagiHouse(kind) ? "Lich Weakness" : "Weakness";
+
+    /// <summary>"House Tremere", or the Bloodline's name as it is.</summary>
+    public static string Named(string name, string? kind) => IsMagiHouse(kind) ? $"House {name}" : name;
 }

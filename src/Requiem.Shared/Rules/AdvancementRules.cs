@@ -30,6 +30,13 @@ public sealed class XpPurchase
 public sealed record XpPurchaseQuote(string Trait, int FromDots, int ToDots, int Cost, IReadOnlyList<RuleViolation> Violations)
 {
     public bool IsAllowed => Violations.Count == 0;
+
+    /// <summary>"Strength 2 → 3", or just the name of a Ritual or Specialty: those are had or not.</summary>
+    public static string Label(PurchaseKind kind, string trait, int fromDots, int toDots) =>
+        HasNoDots(kind) ? trait : $"{trait} {fromDots} → {toDots}";
+
+    /// <summary>Rituals and Specialties are bought 0 → 1 at a flat price, with no rating.</summary>
+    public static bool HasNoDots(PurchaseKind kind) => kind is PurchaseKind.Ritual or PurchaseKind.Specialty;
 }
 
 /// <summary>
@@ -117,8 +124,8 @@ public static class AdvancementRules
                 // One Specialty per Skill (WoD Core p.80).
                 if (sheet.Specialties.Any(s => s.Skill == skill))
                     violations.Add(new("specialty.one-per-skill", $"{skill} already has a Specialty; each Skill takes one."));
-                var count = sheet.Specialties.Count;
-                return ($"{skill} ({name})", count, count + 1, ExperienceRules.Quote(PurchaseKind.Specialty, count, count + 1));
+                // Had or not, like a Ritual: 0 → 1 at a flat 5, so a Specialty added later doesn't reprice this one.
+                return ($"{skill} ({name})", 0, 1, ExperienceRules.Quote(PurchaseKind.Specialty, 0, 1));
             }
 
             case PurchaseKind.Merit:
@@ -214,19 +221,20 @@ public static class AdvancementRules
     {
         var groupId = purchase.PowerId is { } powerId && catalog.PowerGroupOfPower.TryGetValue(powerId, out var g) ? g : (int?)null;
         var group = catalog.PowerGroups.FirstOrDefault(x => x.Id == groupId);
-        var count = sheet.LearnedPowerIds.Count(id => catalog.PowerGroupOfPower.TryGetValue(id, out var gid)
-            && catalog.PowerGroups.FirstOrDefault(x => x.Id == gid)?.Kind == PowerGroupKind.BloodSorcery);
 
         if (group is null || group.Kind is not (PowerGroupKind.BloodSorcery or PowerGroupKind.SabbatRitae))
             violations.Add(new("ritual.unknown", "Choose a Ritual."));
         else if (group.Kind == PowerGroupKind.SabbatRitae)
             violations.Add(new("ritual.ritae", "Sabbat Ritae are taught by Sabbat elders; the Storyteller adds them."));
-        else if (group.BloodlineId != sheet.BloodlineId)
-            violations.Add(new("ritual.other-house", $"{group.Name} belongs to another house; its Rituals have to be taught or stolen in play."));
+        else if (!PowerRules.CanLearnRitual(group.BloodlineId, sheet.BloodlineId))
+            violations.Add(new("ritual.other-house", PowerRules.RitualProblem("That Ritual", group.Name, group.BloodlineName)));
         if (purchase.PowerId is { } id && sheet.LearnedPowerIds.Contains(id))
             violations.Add(new("ritual.owned", "You already know that Ritual."));
 
-        return (group is null ? "Ritual" : $"{group.Name} Ritual", count, count + 1, ExperienceRules.Quote(PurchaseKind.Ritual, count, count + 1));
+        // Each Ritual is known or not, so it's bought 0 → 1 at a flat 10 whatever else is known (VtR p.137). Pricing
+        // it as a count would let a Ritual picked at creation afterwards break one already bought with starting XP.
+        var name = purchase.PowerId is { } ritual && catalog.PowerNames?.GetValueOrDefault(ritual) is { } known ? known : "Ritual";
+        return (group is null ? name : $"{name} ({group.Name})", 0, 1, ExperienceRules.Quote(PurchaseKind.Ritual, 0, 1));
     }
 
     /// <summary>

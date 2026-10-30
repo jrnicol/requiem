@@ -48,13 +48,13 @@ internal static class ProfileMapper
             Shows(NpcReveal.Kind) ? c.Kind : null,
             forStoryteller ? c.Tier : null,
             Shows(NpcReveal.Titles) ? TitlesOrNull(c) : null,
-            CanPlay: forStoryteller);
+            CanPlay: forStoryteller, BloodlineKind: Shows(NpcReveal.Bloodline) ? KindOf(c) : null);
     }
 
     /// <summary>An NPC's whole profile, for the campaign's Storytellers: every detail, revealed or not.</summary>
     public static KnownNpc ToFullProfile(Character c) => new(
         c.Id, c.Name, c.PortraitUrl, c.Faction, c.Bloodline?.Name, c.Generation,
-        c.Appearance, c.Reputation, c.Backstory, c.Kind, c.Tier, TitlesOrNull(c), CanPlay: true);
+        c.Appearance, c.Reputation, c.Backstory, c.Kind, c.Tier, TitlesOrNull(c), CanPlay: true, BloodlineKind: KindOf(c));
 
     /// <summary>
     /// A player character's profile, for everyone in its campaign: every detail. <paramref name="canEdit"/> (its player and the
@@ -63,7 +63,9 @@ internal static class ProfileMapper
     public static KnownNpc ToPlayerProfile(Character c, string playedBy, bool canEdit, bool canPlay) => new(
         c.Id, c.Name, c.PortraitUrl, c.Faction, c.Bloodline?.Name, c.Generation,
         c.Appearance, c.Reputation, c.Backstory, c.Kind, canEdit ? c.Tier : null, TitlesOrNull(c),
-        IsPlayerCharacter: true, PlayedBy: playedBy, CanPlay: canPlay, Concept: c.Concept);
+        IsPlayerCharacter: true, PlayedBy: playedBy, CanPlay: canPlay, Concept: c.Concept, BloodlineKind: KindOf(c));
+
+    private static string? KindOf(Character c) => c.Bloodline?.Kind.ToString();
 
     private static IReadOnlyList<string>? TitlesOrNull(Character c) => c.Titles.Count > 0 ? c.Titles : null;
 

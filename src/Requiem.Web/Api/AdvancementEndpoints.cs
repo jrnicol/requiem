@@ -150,16 +150,17 @@ public static class AdvancementEndpoints
         AdvancementRules.Apply(form, purchase, quote, catalog);
         var now = time.GetUtcNow();
         FullSheetMapper.Apply(form, character, now);
+        var label = XpPurchaseQuote.Label(purchase.Kind, quote.Trait, quote.FromDots, quote.ToDots);
         var entry = new XpEntry
         {
-            Amount = -quote.Cost, Reason = $"{quote.Trait} {quote.FromDots} → {quote.ToDots}", PurchaseKind = purchase.Kind,
+            Amount = -quote.Cost, Reason = label, PurchaseKind = purchase.Kind,
             Trait = quote.Trait, FromDots = quote.FromDots, ToDots = quote.ToDots, RecordedByUserId = access.UserId, CreatedAt = now,
         };
         character.XpLedger.Add(entry);
 
         var lostHumanity = humanityBefore is { } before && form.Humanity < before ? $" Humanity drops to {form.Humanity}." : "";
         Record(audit, character, "xp.spend",
-            $"Spent {quote.Cost} XP: {quote.Trait} {quote.FromDots} → {quote.ToDots}.{lostHumanity}",
+            $"Spent {quote.Cost} XP: {label}.{lostHumanity}",
             () => new Undo("spend", entry.Id, purchase, quote, humanityBefore));
         await characters.SaveAsync(character, ct);
         return TypedResults.Ok(await ViewAsync(characters, audits, users, access, character, ct));

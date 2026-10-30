@@ -69,7 +69,8 @@ public sealed class RequiemApi(HttpClient http)
             await GetDisciplinesAsync(),
             powers.ToDictionary(p => p.Id, p => p.PowerGroupId),
             await GetMeritsAsync(),
-            powers.ToDictionary(p => p.Id, p => p.Level));
+            powers.ToDictionary(p => p.Id, p => p.Level),
+            powers.ToDictionary(p => p.Id, p => p.Name));
     }
 
     /// <summary>Saves the site admin's review of an imported power and refreshes the cached catalog entry.</summary>

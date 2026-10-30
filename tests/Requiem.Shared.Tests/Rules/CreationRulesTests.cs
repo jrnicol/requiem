@@ -258,6 +258,39 @@ public class CreationRulesTests
     }
 
     [Fact]
+    public void Only_a_magi_of_the_house_has_its_sorcery()
+    {
+        // Sorcery has no rating: a Magi has their House's and nobody else has any (house ruling 2026-10-29).
+        foreach (var (bloodline, discipline) in new[] { (Ventrue, Auspex), (Caitiff, Furor) })
+        {
+            var sheet = Vampire(bloodline, [new() { PowerGroupId = discipline }]);
+            sheet.LearnedPowerIds = [Ritual1];
+            var report = Evaluate(sheet);
+
+            Assert.False(report.IsComplete);
+            Assert.Contains(report.Issues, i => i.Level == CreationIssueLevel.Missing && i.Message.StartsWith("Only Magi know Blood Sorcery"));
+            Assert.DoesNotContain(report.MeritPoints, m => m.Item.Contains("Ritual"));
+        }
+    }
+
+    [Fact]
+    public void Another_houses_rituals_block_submitting()
+    {
+        var catalog = Catalog with
+        {
+            Bloodlines = [.. Catalog.Bloodlines, new(98, "Tzimisce", "MagiHouse", null, null, null, null, null)],
+            PowerGroups = [.. Catalog.PowerGroups, new(97, "Vishap", PowerGroupKind.BloodSorcery, 98, "Tzimisce", null, null)],
+            PowerGroupOfPower = new Dictionary<int, int>(Catalog.PowerGroupOfPower) { [103] = 97 },
+        };
+        var sheet = Vampire(Tremere, [new() { PowerGroupId = Auspex }]);
+        sheet.LearnedPowerIds = [Ritual1, 103];
+        var report = CreationRules.Evaluate(sheet, catalog);
+
+        Assert.Contains(report.Issues, i => i.Level == CreationIssueLevel.Missing && i.Message.StartsWith("Vishap is House Tzimisce's sorcery"));
+        Assert.DoesNotContain(report.MeritPoints, m => m.Item.Contains("Ritual"));
+    }
+
+    [Fact]
     public void Humanity_starts_at_six_and_respects_generation_strength()
     {
         var sheet = Vampire(Ventrue, [new() { PowerGroupId = Auspex }, new() { PowerGroupId = Dominate }], bloodPotency: 5);
@@ -382,6 +415,48 @@ public class CreationRulesTests
         CreationRules.Evaluate(sheet, Catalog, allowed);
 
     /// <summary>A Skill dot bought with starting XP, at its XP price (new dots × 3).</summary>
+    [Fact]
+    public void Starting_xp_buys_rituals_at_ten_each_beside_the_free_one()
+    {
+        var settings = new CreationSettings { StartingXp = 20 };
+        var sheet = Vampire(Tremere, [new() { PowerGroupId = Auspex }]);
+        var ritual = new XpPurchase { Kind = PurchaseKind.Ritual, PowerId = Ritual2 };
+        var quote = StartingXpRules.Replay(sheet, [], Catalog, 20) is var empty
+            ? AdvancementRules.Quote(empty.Sheet, ritual, Catalog, ExperienceRules.ProgressPointsToUnlockXp)
+            : null!;
+        Assert.True(quote.IsAllowed, string.Join("; ", quote.Violations.Select(v => v.Message)));
+        sheet.StartingXpPurchases = [StartingXpPurchase.From(ritual, quote)];
+
+        // The free Ritual is still to pick; the one bought with XP doesn't count as it.
+        Assert.Contains(CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, settings).Issues,
+            i => i.Level == CreationIssueLevel.Missing && i.Message == "Choose your house's starting Ritual.");
+
+        // Picking it afterwards leaves the purchase standing, and costs no Merit points.
+        sheet.LearnedPowerIds = [Ritual1];
+        var report = CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, settings);
+        Assert.True(report.IsComplete, Missing(report));
+        Assert.Equal(10, Assert.Single(report.Budget, b => b.Name == "Starting XP").Spent);
+        Assert.DoesNotContain(report.MeritPoints, m => m.Item.Contains("Ritual"));
+        Assert.Equal([Ritual1, Ritual2], StartingXpRules.Replay(sheet, sheet.StartingXpPurchases, Catalog, 20).Sheet.LearnedPowerIds);
+    }
+
+    [Fact]
+    public void A_specialty_bought_with_starting_xp_survives_one_added_at_creation()
+    {
+        var settings = new CreationSettings { StartingXp = 20 };
+        var sheet = Mortal();
+        var specialty = new XpPurchase { Kind = PurchaseKind.Specialty, Skill = Skill.Empathy, SpecialtyName = "Lies" };
+        var quote = AdvancementRules.Quote(StartingXpRules.Replay(sheet, [], Catalog, 20).Sheet, specialty, Catalog, ExperienceRules.ProgressPointsToUnlockXp);
+        sheet.StartingXpPurchases = [StartingXpPurchase.From(specialty, quote)];
+
+        sheet.Specialties.Add(new SpecialtyEntry { Skill = Skill.Investigation, Name = "Crime scenes" });
+        var report = CreationRules.Evaluate(sheet, Catalog, CharacterTemplates.All, settings);
+
+        Assert.DoesNotContain(report.Issues, i => i.Step == CreationStep.StartingXp && i.Level == CreationIssueLevel.Missing);
+        Assert.Equal(5, Assert.Single(report.Budget, b => b.Name == "Starting XP").Spent);
+        Assert.Equal("Empathy (Lies)", sheet.StartingXpPurchases[0].Label);
+    }
+
     private static StartingXpPurchase Bought(Skill skill, int from, int to) => new()
     {
         Purchase = new XpPurchase { Kind = PurchaseKind.Skill, Skill = skill }, Trait = skill.ToString(), FromDots = from, ToDots = to, Cost = to * 3,

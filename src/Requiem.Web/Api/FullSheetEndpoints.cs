@@ -78,8 +78,8 @@ public static class FullSheetEndpoints
         await access.ManagedCharacterAsync(id, ct) is { } character && character.Tier == tier ? character : null;
 
     /// <summary>
-    /// Learned powers are rituals, ritae, or picks in a pick-per-dot Discipline (Investiture) the
-    /// character has, no more picks than its dots.
+    /// Learned powers are rituals of the character's own House, ritae, or picks in a pick-per-dot Discipline
+    /// (Investiture) the character has, no more picks than its dots.
     /// </summary>
     private static List<ValidationResult> ValidateLearnedPowers(FullSheetForm form, CatalogSnapshot catalog)
     {
@@ -94,6 +94,12 @@ public static class FullSheetEndpoints
         var unknown = powerIds.Count != powers.Count;
         foreach (var group in powers.GroupBy(p => (p.PowerGroupId, GroupName: p.PowerGroup.Name, p.PowerGroup.Kind)))
         {
+            if (group.Key.Kind == PowerGroupKind.BloodSorcery
+                && catalog.PowerGroup(group.Key.PowerGroupId) is { } sorcery
+                && !PowerRules.CanLearnRitual(sorcery.BloodlineId, form.BloodlineId))
+                errors.Add(new ValidationResult(
+                    PowerRules.RitualProblem(group.First().Name, sorcery.Name, sorcery.BloodlineId is { } house ? catalog.Bloodline(house)?.Name : null),
+                    [nameof(form.LearnedPowerIds)]));
             if (PowerRules.AcquisitionFor(group.Key.Kind) == PowerAcquisition.LearnedIndividually) continue;
             if (!PowerRules.IsPickPerDot(group.Key.Kind, levels[group.Key.PowerGroupId]))
             {

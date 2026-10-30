@@ -79,7 +79,7 @@ public class PowerCatalogApiTests(RequiemWebFactory factory) : IClassFixture<Req
         var ritual = powers.First(p => p.PowerGroupId == hekate);
         var ritae = powers.First(p => p.PowerGroupId == auctoritas);
 
-        var created = await CreateAsync(new FullSheetForm { Name = "Magus Orrin", LearnedPowerIds = [ritae.Id, ritual.Id] });
+        var created = await CreateAsync(new FullSheetForm { Name = "Magus Orrin", BloodlineId = await BloodlineIdAsync("Tremere"), LearnedPowerIds = [ritae.Id, ritual.Id] });
         Assert.Equal(new[] { ritual.Id, ritae.Id }.Order(), created.LearnedPowerIds);
 
         created.LearnedPowerIds = [ritual.Id];
@@ -87,6 +87,25 @@ public class PowerCatalogApiTests(RequiemWebFactory factory) : IClassFixture<Req
         Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
         var reloaded = (await _http.GetFromJsonAsync<FullSheetForm>($"/api/characters/{created.Id}/full-sheet", RequiemJson.Options))!;
         Assert.Equal([ritual.Id], reloaded.LearnedPowerIds);
+    }
+
+    [Theory]
+    [InlineData("Lasombra")] // another House
+    [InlineData("Ventrue")]  // not a Magi
+    [InlineData(null)]       // no Bloodline yet
+    public async Task Only_a_magi_of_the_house_learns_its_rituals(string? bloodline)
+    {
+        var ritual = (await PowersAsync()).First(p => p.Name == "Banishing Sign");
+        var form = new FullSheetForm
+        {
+            Name = "Wrong", CampaignId = _campaign, LearnedPowerIds = [ritual.Id],
+            BloodlineId = bloodline is null ? null : await BloodlineIdAsync(bloodline),
+        };
+        var response = await _http.PostAsJsonAsync("/api/characters/full-sheet", form, RequiemJson.Options);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        var problem = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>(RequiemJson.Options);
+        Assert.Contains(problem!.Errors[nameof(FullSheetForm.LearnedPowerIds)], e => e.StartsWith("Banishing Sign is House Tremere's Hekate"));
     }
 
     [Fact]
@@ -134,6 +153,9 @@ public class PowerCatalogApiTests(RequiemWebFactory factory) : IClassFixture<Req
 
     private async Task<List<PowerOption>> PowersAsync() =>
         (await _http.GetFromJsonAsync<List<PowerOption>>("/api/catalog/powers", RequiemJson.Options))!;
+
+    private async Task<int> BloodlineIdAsync(string name) =>
+        (await _http.GetFromJsonAsync<List<BloodlineOption>>("/api/catalog/bloodlines", RequiemJson.Options))!.Single(b => b.Name == name).Id;
 
     private async Task<int> GroupIdAsync(string name) =>
         (await _http.GetFromJsonAsync<List<DisciplineOption>>("/api/catalog/disciplines", RequiemJson.Options))!.Single(d => d.Name == name).Id;

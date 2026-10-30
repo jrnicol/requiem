@@ -20,7 +20,7 @@ public sealed class StartingXpPurchase
         Purchase = purchase, Trait = quote.Trait, FromDots = quote.FromDots, ToDots = quote.ToDots, Cost = quote.Cost,
     };
 
-    public string Label => $"{Trait} {FromDots} → {ToDots}";
+    public string Label => XpPurchaseQuote.Label(Purchase.Kind, Trait, FromDots, ToDots);
 }
 
 /// <param name="Sheet">The draft with every purchase that still fits applied, in order.</param>

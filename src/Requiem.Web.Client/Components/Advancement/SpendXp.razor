@@ -90,7 +90,7 @@
         <MudText Style="flex:1; min-width:12rem">
             @if (!string.IsNullOrEmpty(quote.Trait))
             {
-                <span><b>@quote.Trait</b> @quote.FromDots → @quote.ToDots for <b>@quote.Cost XP</b></span>
+                <span><b>@quote.Trait</b>@(XpPurchaseQuote.HasNoDots(_purchase.Kind) ? "" : $" {quote.FromDots} → {quote.ToDots}") for <b>@quote.Cost XP</b></span>
             }
         </MudText>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.ShoppingCart"

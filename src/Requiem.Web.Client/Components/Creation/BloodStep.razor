@@ -14,7 +14,7 @@ else if (Form.IsVampire)
 {
     <MudGrid Spacing="2">
         <MudItem xs="12" md="6">
-            <MudSelect T="int?" Value="Form.BloodlineId" ValueChanged="SetBloodlineAsync" Label="Bloodline"
+            <MudSelect T="int?" Value="Form.BloodlineId" ValueChanged="SetBloodlineAsync" Label="Bloodline or House"
                        Variant="Variant.Outlined" ToStringFunc="@(id => Bloodlines.FirstOrDefault(b => b.Id == id)?.Name)">
                 @foreach (var group in Bloodlines.GroupBy(b => b.Kind))
                 {
@@ -31,7 +31,7 @@ else if (Form.IsVampire)
                 <MudText Typo="Typo.caption" Color="Color.Secondary" Style="display:block" Class="mt-1">@FreeDots(chosen)</MudText>
                 @if (chosen.WeaknessName is { } weakness)
                 {
-                    <MudText Typo="Typo.caption" Style="display:block" Class="mt-1"><b>Weakness: @weakness.</b> @chosen.WeaknessText</MudText>
+                    <MudText Typo="Typo.caption" Style="display:block" Class="mt-1"><b>@BloodlineRules.WeaknessLabel(chosen.Kind): @weakness.</b> @chosen.WeaknessText</MudText>
                 }
             }
         </MudItem>
@@ -77,7 +77,7 @@ else if (Form.IsVampire)
         <MudDivider Class="my-3" />
         <MudText Typo="Typo.subtitle1">Rituals</MudText>
         <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">Your house teaches you one Ritual to start; more cost 3 Merit points each.</MudText>
-        <RitualsPanel Form="Form" Options="Disciplines" Powers="Powers" Changed="Changed" />
+        <RitualsPanel Form="Form" Options="Disciplines" Powers="Powers" Changed="Changed" AllowRitae="false" />
     }
 
     <MudDivider Class="my-3" />
@@ -146,13 +146,19 @@ else if (Form.IsVampire)
 
     private static string Ordinal(int n) => n switch { 1 => "1st", 2 => "2nd", 3 => "3rd", _ => $"{n}th" };
 
-    /// <summary>Picking a Bloodline brings its Discipline along and drops another Bloodline's.</summary>
+    /// <summary>
+    /// Picking a Bloodline brings its Discipline along and drops another Bloodline's; leaving a House drops its Rituals.
+    /// </summary>
     private async Task SetBloodlineAsync(int? id)
     {
         Form.BloodlineId = id;
         var own = Disciplines.FirstOrDefault(d => d.Kind == PowerGroupKind.BloodlineDiscipline && d.BloodlineId == id && id is not null);
         var others = Disciplines.Where(d => d.Kind == PowerGroupKind.BloodlineDiscipline && d.Id != own?.Id).Select(d => d.Id).ToHashSet();
         Form.Disciplines.RemoveAll(d => others.Contains(d.PowerGroupId));
+        var otherSorcery = Disciplines.Where(d => d.Kind == PowerGroupKind.BloodSorcery && !PowerRules.CanLearnRitual(d.BloodlineId, id))
+            .Select(d => d.Id).ToHashSet();
+        var otherRituals = Powers.Where(p => otherSorcery.Contains(p.PowerGroupId)).Select(p => p.Id).ToHashSet();
+        Form.LearnedPowerIds.RemoveAll(otherRituals.Contains);
         if (own is not null && Form.Disciplines.All(d => d.PowerGroupId != own.Id))
             Form.Disciplines.Add(new DisciplineEntry { PowerGroupId = own.Id, Dots = 1 });
         // With no Bloodline the Caitiff Discipline gets both free dots.

@@ -58,7 +58,12 @@ public sealed record KnownNpc(
     bool IsPlayerCharacter = false,
     string? PlayedBy = null,
     bool CanPlay = false,
-    string? Concept = null);
+    string? Concept = null,
+    string? BloodlineKind = null)
+{
+    /// <summary>"House" for a Magi, "Bloodline" otherwise.</summary>
+    public string BloodlineLabel => Rules.BloodlineRules.KindLabel(BloodlineKind);
+}
 
 /// <summary>After a portrait upload or removal: its address (null when removed) and the character's new version.</summary>
 public sealed record PortraitResult(string? PortraitUrl, Guid Version);

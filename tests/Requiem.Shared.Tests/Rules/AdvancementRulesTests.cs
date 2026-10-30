@@ -89,6 +89,11 @@ public class AdvancementRulesTests
         var sheet = Vampire();
         var quote = Quote(sheet, new XpPurchase { Kind = PurchaseKind.Specialty, Skill = Skill.Streetwise, SpecialtyName = "Gangs" });
         Assert.Equal((5, true), (quote.Cost, quote.IsAllowed));
+        // Had or not: 0 → 1 however many Specialties there are.
+        sheet.Specialties.Add(new SpecialtyEntry { Skill = Skill.Brawl, Name = "Boxing" });
+        quote = Quote(sheet, new XpPurchase { Kind = PurchaseKind.Specialty, Skill = Skill.Streetwise, SpecialtyName = "Gangs" });
+        Assert.Equal((0, 1, 5), (quote.FromDots, quote.ToDots, quote.Cost));
+        Assert.Equal("Streetwise (Gangs)", XpPurchaseQuote.Label(PurchaseKind.Specialty, quote.Trait, quote.FromDots, quote.ToDots));
 
         sheet.Specialties.Add(new SpecialtyEntry { Skill = Skill.Streetwise, Name = "Rumors" });
         Assert.Contains(Quote(sheet, new XpPurchase { Kind = PurchaseKind.Specialty, Skill = Skill.Streetwise, SpecialtyName = "Gangs" }).Violations,
@@ -183,10 +188,44 @@ public class AdvancementRulesTests
 
         var quote = Quote(sheet, new XpPurchase { Kind = PurchaseKind.Ritual, PowerId = Ritual2 });
         Assert.Equal((10, true), (quote.Cost, quote.IsAllowed));
+        // Known or not: 0 → 1 however many are known, so a Ritual added later doesn't reprice it.
+        Assert.Equal((0, 1), (quote.FromDots, quote.ToDots));
+        Assert.Equal("Ritual (Hekate)", XpPurchaseQuote.Label(PurchaseKind.Ritual, quote.Trait, quote.FromDots, quote.ToDots));
+        Assert.Contains(Quote(sheet, new XpPurchase { Kind = PurchaseKind.Ritual, PowerId = Ritual1 }).Violations, v => v.Code == "ritual.owned");
         Assert.Contains(Quote(sheet, new XpPurchase { Kind = PurchaseKind.Ritual, PowerId = Rite }).Violations, v => v.Code == "ritual.ritae");
 
         sheet.BloodlineId = Ventrue;
         Assert.Contains(Quote(sheet, new XpPurchase { Kind = PurchaseKind.Ritual, PowerId = Ritual2 }).Violations, v => v.Code == "ritual.other-house");
+    }
+
+    [Fact]
+    public void Blood_potency_does_not_limit_rituals()
+    {
+        // Sorcery has no rating, so nothing for Blood Potency to cap (house ruling 2026-10-29).
+        var sheet = Vampire(xp: 30);
+        sheet.BloodlineId = Tremere;
+        sheet.BloodPotency = 1;
+        sheet.Disciplines = [new() { PowerGroupId = Auspex, Dots = 1 }];
+        foreach (var ritual in new[] { Ritual1, Ritual2 })
+        {
+            var purchase = new XpPurchase { Kind = PurchaseKind.Ritual, PowerId = ritual };
+            var quote = Quote(sheet, purchase);
+            Assert.True(quote.IsAllowed, string.Join("; ", quote.Violations.Select(v => v.Message)));
+            AdvancementRules.Apply(sheet, purchase, quote, Catalog);
+            sheet.Experience.Add(new() { Amount = -quote.Cost });
+        }
+        Assert.Equal([Ritual1, Ritual2], sheet.LearnedPowerIds);
+        Assert.Equal(10, sheet.ExperienceAvailable);
+    }
+
+    [Fact]
+    public void Only_a_magi_buys_rituals()
+    {
+        var sheet = Vampire();
+        sheet.BloodlineId = null;
+        Assert.Contains(Quote(sheet, new XpPurchase { Kind = PurchaseKind.Ritual, PowerId = Ritual1 }).Violations, v => v.Code == "ritual.other-house");
+        sheet.Kind = CharacterKind.Ghoul;
+        Assert.Contains(Quote(sheet, new XpPurchase { Kind = PurchaseKind.Ritual, PowerId = Ritual1 }).Violations, v => v.Code == "xp.not-for-sale");
     }
 
     [Fact]

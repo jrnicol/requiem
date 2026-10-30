@@ -1,3 +1,5 @@
+using Requiem.Shared.Contracts;
+
 namespace Requiem.Shared.Rules;
 
 public enum PowerGroupKind
@@ -67,4 +69,20 @@ public static class PowerRules
 
         return violations;
     }
+
+    /// <summary>
+    /// Blood Sorcery has no rating: a Magi has their House's sorcery and nobody else has any. Its Rituals come only from
+    /// that House's list (house ruling 2026-10-29; VtR p.17, p.199).
+    /// </summary>
+    /// <param name="sorceryHouseId">The House whose sorcery the Ritual belongs to.</param>
+    /// <param name="bloodlineId">The character's Bloodline or House.</param>
+    public static bool CanLearnRitual(int? sorceryHouseId, int? bloodlineId) =>
+        sorceryHouseId is not null && sorceryHouseId == bloodlineId;
+
+    public static string RitualProblem(string ritual, string sorcery, string? house) =>
+        $"{ritual} is {(house is null ? "" : $"House {house}'s ")}{sorcery}; only Magi of that House learn its Rituals.";
+
+    /// <summary>The House's sorcery a character has, or null for anyone who isn't a Magi.</summary>
+    public static DisciplineOption? HouseSorcery(IEnumerable<DisciplineOption> groups, int? bloodlineId) =>
+        groups.FirstOrDefault(g => g.Kind == PowerGroupKind.BloodSorcery && CanLearnRitual(g.BloodlineId, bloodlineId));
 }

@@ -89,7 +89,7 @@ else
                         @if (_form.IsVampire)
                         {
                             <MudItem xs="12" sm="6">
-                                <MudSelect T="int?" @bind-Value="_form.BloodlineId" For="() => _form.BloodlineId" Label="Bloodline"
+                                <MudSelect T="int?" @bind-Value="_form.BloodlineId" For="() => _form.BloodlineId" Label="Bloodline or House"
                                            Clearable="true" Variant="Variant.Outlined" Margin="Margin.Dense"
                                            ToStringFunc="BloodlineName">
                                     @foreach (var b in _bloodlines)
@@ -115,7 +115,7 @@ else
                             {
                                 <MudItem xs="12">
                                     <MudExpansionPanels Outlined="true" Dense="true">
-                                        <MudExpansionPanel Text="@($"Weakness: {bloodline.WeaknessName ?? "none"} · Compel: {bloodline.CompelName}")">
+                                        <MudExpansionPanel Text="@($"{BloodlineRules.WeaknessLabel(bloodline.Kind)}: {bloodline.WeaknessName ?? "none"} · Compel: {bloodline.CompelName}")">
                                             <MudText Typo="Typo.body2" Class="mb-2">@bloodline.WeaknessText</MudText>
                                             <MudText Typo="Typo.body2">@bloodline.CompelText</MudText>
                                             @if (bloodline.SourcePage is { } sourcePage)

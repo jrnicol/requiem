@@ -145,7 +145,7 @@ else
                             <MudGrid Spacing="2">
                                 <MudItem xs="12" sm="6">
                                     <MudSelect T="int?" @bind-Value="_form.BloodlineId" For="() => _form.BloodlineId"
-                                               Label="Bloodline" Clearable="true" Variant="Variant.Outlined"
+                                               Label="Bloodline or House" Clearable="true" Variant="Variant.Outlined"
                                                ToStringFunc="BloodlineName">
                                         @foreach (var b in _bloodlines)
                                         {
@@ -175,7 +175,7 @@ else
                                         <MudAlert Severity="Severity.Normal" Variant="Variant.Outlined" Dense="true" NoIcon="true">
                                             @if (bloodline.WeaknessName is not null)
                                             {
-                                                <MudText Typo="Typo.subtitle2">Weakness: @bloodline.WeaknessName</MudText>
+                                                <MudText Typo="Typo.subtitle2">@BloodlineRules.WeaknessLabel(bloodline.Kind): @bloodline.WeaknessName</MudText>
                                             }
                                             <MudText Typo="Typo.body2" Class="mb-2">@bloodline.WeaknessText</MudText>
                                             <MudText Typo="Typo.subtitle2">Compel: @bloodline.CompelName</MudText>

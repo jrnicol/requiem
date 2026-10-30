@@ -95,7 +95,8 @@ public static class CatalogEndpoints
             Disciplines(catalog),
             catalog.Powers.ToDictionary(p => p.Id, p => p.PowerGroupId),
             Merits(catalog),
-            catalog.Powers.ToDictionary(p => p.Id, p => p.Level));
+            catalog.Powers.ToDictionary(p => p.Id, p => p.Level),
+            catalog.Powers.ToDictionary(p => p.Id, p => p.Name));
     }
 
     private static async Task<Results<Ok<PowerOption>, NotFound, ValidationProblem>> UpdatePowerAsync(

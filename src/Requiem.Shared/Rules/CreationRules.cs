@@ -56,12 +56,14 @@ public sealed record CreationReport(
 /// <summary>The catalog entries the creation and advancement rules need to know about.</summary>
 /// <param name="PowerGroupOfPower">Catalog power id to its power group id (for rituals).</param>
 /// <param name="PowerLevels">Catalog power id to its dot level (null for rituals), for pick-per-dot Disciplines.</param>
+/// <param name="PowerNames">Catalog power id to its name, so a Ritual bought with XP is named.</param>
 public sealed record CreationCatalog(
     IReadOnlyList<BloodlineOption> Bloodlines,
     IReadOnlyList<DisciplineOption> PowerGroups,
     IReadOnlyDictionary<int, int> PowerGroupOfPower,
     IReadOnlyList<MeritOption> Merits,
-    IReadOnlyDictionary<int, int?>? PowerLevels = null);
+    IReadOnlyDictionary<int, int?>? PowerLevels = null,
+    IReadOnlyDictionary<int, string>? PowerNames = null);
 
 /// <summary>
 /// Starting dots for a player character (WoD Core p.74, VtR p.136). Pure: a draft sheet in, a budget report out.
@@ -395,12 +397,15 @@ public static class CreationRules
         var groups = sheet.LearnedPowerIds
             .Select(id => catalog.PowerGroupOfPower.TryGetValue(id, out var groupId) ? catalog.PowerGroups.FirstOrDefault(g => g.Id == groupId) : null)
             .OfType<DisciplineOption>().ToList();
-        var rituals = groups.Where(g => g.Kind == PowerGroupKind.BloodSorcery).ToList();
-        var ownHouse = rituals.Count(g => g.BloodlineId is not null && g.BloodlineId == bloodline?.Id);
+        var sorcery = groups.Where(g => g.Kind == PowerGroupKind.BloodSorcery).ToList();
+        var rituals = sorcery.Where(g => PowerRules.CanLearnRitual(g.BloodlineId, bloodline?.Id)).ToList();
         var isMagi = bloodline?.Kind == "MagiHouse";
 
-        if (rituals.Count > ownHouse)
-            issues.Add(new(CreationStep.Blood, CreationIssueLevel.Warning, "Rituals from another house's sorcery have to be taught or stolen in play."));
+        // Only a Magi has sorcery, and only their own House's.
+        foreach (var other in sorcery.Except(rituals).DistinctBy(g => g.Id))
+            issues.Add(new(CreationStep.Blood, CreationIssueLevel.Missing, isMagi
+                ? $"{other.Name} is House {other.BloodlineName}'s sorcery; remove its Rituals. Only your House's Rituals can be learned."
+                : $"Only Magi know Blood Sorcery; remove the {other.Name} Rituals."));
         if (groups.Any(g => g.Kind == PowerGroupKind.SabbatRitae))
             issues.Add(new(CreationStep.Blood, CreationIssueLevel.Warning, "Sabbat Ritae are taught by Sabbat elders, not chosen at creation."));
 

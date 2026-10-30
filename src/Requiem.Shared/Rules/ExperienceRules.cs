@@ -35,7 +35,7 @@ public static class ExperienceRules
     /// <summary>
     /// Price to raise a rated trait from <paramref name="currentDots"/> to <paramref name="targetDots"/>.
     /// "New dots × N": each step costs the new rating times the multiplier.
-    /// For <see cref="PurchaseKind.Specialty"/> and <see cref="PurchaseKind.Ritual"/> the dots are a count of items bought.
+    /// <see cref="PurchaseKind.Specialty"/> and <see cref="PurchaseKind.Ritual"/> have no rating: each is bought 0 → 1 at a flat price.
     /// </summary>
     /// <param name="bloodPotency">Required for Discipline purchases (dots may not exceed Blood Potency).</param>
     public static XpQuote Quote(PurchaseKind kind, int currentDots, int targetDots, int? bloodPotency = null)

@@ -82,4 +82,12 @@ public class BloodlineRulesTests
         Assert.Equal(new DicePoolSplit(4, 2), DicePools.Split(6, hunger));
         Assert.Equal(new DicePoolSplit(6, 0), DicePools.Split(6, hunger, isHumanityRoll: true));
     }
+
+    [Theory]
+    [InlineData("MagiHouse", "House", "Lich Weakness", "House Tremere")]
+    [InlineData("Bloodline", "Bloodline", "Weakness", "Tremere")]
+    [InlineData("Caitiff", "Bloodline", "Weakness", "Tremere")]
+    [InlineData(null, "Bloodline", "Weakness", "Tremere")]
+    public void Magi_have_a_house_and_a_lich_weakness(string? kind, string label, string weakness, string named) =>
+        Assert.Equal((label, weakness, named), (BloodlineRules.KindLabel(kind), BloodlineRules.WeaknessLabel(kind), BloodlineRules.Named("Tremere", kind)));
 }

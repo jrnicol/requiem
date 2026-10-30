@@ -4,7 +4,7 @@
 <MudPaper Outlined="true" Class="pa-3 mb-3">
     <MudGrid Spacing="1">
         <MudItem xs="12" sm="6"><b>Concept:</b> @(Form.Concept ?? "—")@(ConceptTrigger is { } trigger ? $" ({trigger})" : "")</MudItem>
-        <MudItem xs="12" sm="6"><b>Template:</b> @Form.Kind@(Bloodline is { } b ? $", {b.Name}" : "")@(PredatorType is { } p ? $", {p}" : "")</MudItem>
+        <MudItem xs="12" sm="6"><b>Template:</b> @Form.Kind@(Bloodline is { } b ? $", {BloodlineRules.Named(b.Name, b.Kind)}" : "")@(PredatorType is { } p ? $", {p}" : "")</MudItem>
         <MudItem xs="12" sm="6"><b>Virtue:</b> @(Form.Virtue ?? "—")@(Form.VirtueDetail is { Length: > 0 } vd ? $": {vd}" : "")</MudItem>
         <MudItem xs="12" sm="6"><b>Vice:</b> @(Form.Vice ?? "—")@(Form.ViceDetail is { Length: > 0 } xd ? $": {xd}" : "")</MudItem>
         @if (!string.IsNullOrWhiteSpace(Form.Faction))
@@ -69,6 +69,11 @@
     @foreach (var entry in Form.Disciplines)
     {
         <MudText Typo="Typo.body2">@(Disciplines.FirstOrDefault(d => d.Id == entry.PowerGroupId)?.Name ?? "Discipline") <span class="dots-inline">@(new string('●', entry.Dots))</span></MudText>
+    }
+    @* Sorcery has no dots: a Magi has their House's or nothing. *@
+    @if (PowerRules.HouseSorcery(Disciplines, Form.BloodlineId) is { } sorcery)
+    {
+        <MudText Typo="Typo.body2" Class="mt-1"><b>Blood Sorcery:</b> @sorcery.Name</MudText>
     }
     @if (Learned.Count > 0)
     {
