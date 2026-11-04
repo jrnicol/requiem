@@ -394,7 +394,13 @@ public static class CreationRules
     private static void CheckRituals(
         FullSheetForm sheet, CreationCatalog catalog, BloodlineOption? bloodline, List<CreationIssue> issues, List<MeritPointCost> points)
     {
-        var groups = sheet.LearnedPowerIds
+        // Koldun Thaumaturgy is bought only with XP (starting XP included): never the free Ritual, nor with Merit points.
+        var picks = sheet.LearnedPowerIds.Where(id => !catalog.IsKoldun(id)).ToList();
+        if (picks.Count < sheet.LearnedPowerIds.Count)
+            issues.Add(new(CreationStep.Blood, CreationIssueLevel.Missing,
+                $"{KoldunRules.RitualName} is bought only with XP; remove it here and buy it with starting XP."));
+
+        var groups = picks
             .Select(id => catalog.PowerGroupOfPower.TryGetValue(id, out var groupId) ? catalog.PowerGroups.FirstOrDefault(g => g.Id == groupId) : null)
             .OfType<DisciplineOption>().ToList();
         var sorcery = groups.Where(g => g.Kind == PowerGroupKind.BloodSorcery).ToList();

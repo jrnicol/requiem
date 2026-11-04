@@ -1,0 +1,161 @@
+@* Koldun Thaumaturgy at the table (KoldunRules): Invoke a Spell for 1 Vitae, with extra Vitae and Eruditions for dice,
+   then the successes become Antipathia. At 10, or on a botch, it clears and the Dark Retribution table shows. *@
+
+<MudText Typo="Typo.subtitle1">
+    @KoldunRules.RitualName <span class="dots-inline">@(new string('●', Koldun.Dots))</span>
+</MudText>
+<MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+    @(Koldun.Domain is { } domain ? $"{domain} ({KoldunRules.Describe(domain)})" : "No Domain chosen")
+    @if (Koldun.Arts.Count > 0)
+    {
+        <span> · @string.Join(", ", Koldun.Arts.Select(KoldunRules.Label))</span>
+    }
+</MudText>
+@if (!string.IsNullOrWhiteSpace(Koldun.Method))
+{
+    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">Method: @Koldun.Method</MudText>
+}
+
+<div class="play-row mt-2">
+    <span class="play-label">Antipathia</span>
+    <MudProgressLinear Value="Koldun.Antipathia" Max="KoldunRules.MaxAntipathia" Color="Color.Warning" Rounded="true" Size="Size.Medium"
+                       Style="flex:1; min-width:5rem" aria-label="@($"Antipathia {Koldun.Antipathia} of {KoldunRules.MaxAntipathia}")" />
+    <span class="play-value">@Koldun.Antipathia/@KoldunRules.MaxAntipathia</span>
+    <MudButton Size="Size.Small" Variant="Variant.Outlined" Class="play-tap" Disabled="Busy || Koldun.Antipathia == 0"
+               OnClick="() => Act(new PlayAction { Kind = PlayActionKind.Oblation })">Oblation −@KoldunRules.OblationRelief</MudButton>
+</div>
+
+<div class="roll-builder">
+    <div class="roll-builder-head">
+        <MudText Typo="Typo.subtitle2" Style="flex:1">Invoke a Spell</MudText>
+        <MudText Typo="Typo.caption" Color="Color.Secondary">No Willpower</MudText>
+    </div>
+    <div class="roll-builder-fields">
+        <div class="roll-modifier" role="group" aria-label="Extra Vitae">
+            <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small" aria-label="One Vitae fewer"
+                           Disabled="_extraVitae <= 0" OnClick="() => _extraVitae--" />
+            <span class="roll-modifier-value">@_extraVitae</span>
+            <MudIconButton Icon="@Icons.Material.Filled.Add" Size="Size.Small" aria-label="One Vitae more"
+                           Disabled="_extraVitae >= MaxExtraVitae" OnClick="() => _extraVitae++" />
+            <MudText Typo="Typo.caption" Color="Color.Secondary">extra Vitae (up to @KoldunRules.MaxExtraVitae(Npc.BloodPotency ?? 0))</MudText>
+        </div>
+        <MudNumericField T="int" @bind-Value="_targetBloodPotency" Min="0" Max="10" Label="Target's Blood Potency"
+                         Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:12rem" />
+    </div>
+    <div class="roll-builder-sorcery">
+        <div class="roll-builder-extras" role="group" aria-label="Eruditions">
+            @foreach (var erudition in Eruditions)
+            {
+                var e = erudition;
+                var on = _eruditions.Contains(e);
+                <MudChip T="string" Size="Size.Small" Variant="@(on ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
+                         OnClick="() => Toggle(e)" aria-pressed="@(on ? "true" : "false")">
+                    @e.Name +@SorceryRules.DicePerErudition
+                </MudChip>
+            }
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.AutoFixHigh" Style="align-self:flex-start"
+                   Disabled="Busy || (Npc.VitaeCurrent ?? 0) < VitaeCost" OnClick="InvokeAsync">Invoke: spend @VitaeCost Vitae</MudButton>
+    </div>
+    <div class="roll-builder-result">
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="roll-builder-breakdown">@Breakdown</MudText>
+        <PoolDice Npc="Npc" Dice="Math.Max(0, Dice)" />
+    </div>
+</div>
+
+@if (_cast)
+{
+    @* After the roll: its successes are the spell's strength, and its Antipathia. *@
+    <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2" Wrap="Wrap.Wrap" Class="mt-2">
+        <MudNumericField T="int" @bind-Value="_successes" Min="0" Max="30" Label="Successes rolled" Variant="Variant.Outlined" Margin="Margin.Dense"
+                         Style="max-width:10rem" />
+        <MudButton Variant="Variant.Outlined" Color="Color.Warning" Disabled="Busy" OnClick="GainAsync">
+            @(NoAntipathia ? "Done: no Antipathia (mortal magi's blood)" : $"Gain {_successes} Antipathia")
+        </MudButton>
+        <MudButton Variant="Variant.Text" Color="Color.Error" Disabled="Busy" OnClick="BotchAsync">Botched</MudButton>
+    </MudStack>
+}
+
+@if (_retribution)
+{
+    <MudAlert Severity="Severity.Error" Class="mt-2" ShowCloseIcon="true" CloseIconClicked="() => _retribution = false">
+        <b>Dark Retribution.</b> Antipathia clears. Roll 1d10; the Storyteller works the result into the fiction.
+        @foreach (var result in KoldunRules.Retributions)
+        {
+            <div class="mt-1"><b>@result.Rolls @result.Name:</b> @result.Effect</div>
+        }
+    </MudAlert>
+}
+
+@code {
+    [Parameter, EditorRequired] public PlayCharacter Npc { get; set; } = null!;
+    [Parameter, EditorRequired] public PlayKoldun Koldun { get; set; } = null!;
+    /// <summary>Vishap's Eruditions, then Koldun's own.</summary>
+    [Parameter] public IReadOnlyList<Erudition> Eruditions { get; set; } = [];
+    [Parameter] public bool Busy { get; set; }
+    /// <summary>Sends a change; true when it saved.</summary>
+    [Parameter, EditorRequired] public Func<PlayAction, Task<bool>> Act { get; set; } = null!;
+
+    private int _extraVitae;
+    private int _targetBloodPotency;
+    private readonly HashSet<Erudition> _eruditions = [];
+    private bool _cast;
+    private int _successes;
+    private bool _retribution;
+
+    // Extra Vitae is a pool as large as Blood Potency, and the casting point must be left to pay.
+    private int MaxExtraVitae => Math.Min(KoldunRules.MaxExtraVitae(Npc.BloodPotency ?? 0), Math.Max(0, (Npc.VitaeCurrent ?? 0) - KoldunRules.InvokeVitae));
+    private int VitaeCost => KoldunRules.InvokeVitae + _extraVitae;
+    private int Dice => KoldunRules.InvokeDice(Koldun.Dots, _extraVitae, _eruditions.Count, _targetBloodPotency);
+    private bool NoAntipathia => _eruditions.Contains(KoldunRules.Eruditions[1]);
+
+    private string Breakdown
+    {
+        get
+        {
+            var parts = new List<string> { $"Thaumaturgy {Koldun.Dots}" };
+            if (_extraVitae > 0) parts.Add($"+ Vitae {_extraVitae}");
+            if (_eruditions.Count > 0)
+                parts.Add($"+ {(_eruditions.Count == 1 ? "Erudition" : $"{_eruditions.Count} Eruditions")} {_eruditions.Count * SorceryRules.DicePerErudition}");
+            if (_targetBloodPotency > 0) parts.Add($"− target's Blood Potency {_targetBloodPotency}");
+            if (Npc.Status.DicePenalty > 0) parts.Add($"− wounds {Npc.Status.DicePenalty}");
+            return string.Join(" ", parts);
+        }
+    }
+
+    private void Toggle(Erudition erudition)
+    {
+        if (!_eruditions.Remove(erudition)) _eruditions.Add(erudition);
+    }
+
+    private async Task InvokeAsync()
+    {
+        if (!await Act(new PlayAction { Kind = PlayActionKind.AdjustVitae, Amount = -VitaeCost })) return;
+        _cast = true;
+        _successes = 0;
+        _retribution = false;
+    }
+
+    private async Task GainAsync()
+    {
+        if (NoAntipathia || _successes == 0) { Reset(); return; }
+        var retribution = KoldunRules.Gain(Koldun.Antipathia, _successes).Retribution;
+        if (!await Act(new PlayAction { Kind = PlayActionKind.GainAntipathia, Amount = _successes })) return;
+        Reset();
+        _retribution = retribution;
+    }
+
+    private async Task BotchAsync()
+    {
+        if (!await Act(new PlayAction { Kind = PlayActionKind.BotchSpell })) return;
+        Reset();
+        _retribution = true;
+    }
+
+    private void Reset()
+    {
+        _cast = false;
+        _extraVitae = 0;
+        _eruditions.Clear();
+    }
+}

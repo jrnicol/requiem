@@ -201,6 +201,14 @@ else
                 </MudPaper>
             }
 
+            @if (_npc.Koldun is { } koldun)
+            {
+                <MudPaper Class="pa-3 mb-3" Elevation="1">
+                    <KoldunPanel Npc="_npc" Koldun="koldun" Busy="_busy" Act="ActAndRenderAsync"
+                                 Eruditions="[.. SorceryRules.Eruditions(KoldunRules.Sorcery), .. KoldunRules.Eruditions]" />
+                </MudPaper>
+            }
+
             @if (Powers.Count > 0)
             {
                 <MudPaper Class="pa-3 mb-3" Elevation="1">
@@ -319,7 +327,8 @@ else
 
     private DisciplineOption? GroupOf(PowerOption power) => _groups.FirstOrDefault(g => g.Id == power.PowerGroupId);
     private bool IsRitual(PowerOption power) => GroupOf(power)?.Kind == PowerGroupKind.BloodSorcery;
-    private List<PowerOption> Rituals => Granted.Where(IsRitual).ToList();
+    // Koldun is cast from its own panel, not as a Ritual.
+    private List<PowerOption> Rituals => Granted.Where(p => IsRitual(p) && !KoldunRules.IsKoldun(p.Name)).ToList();
     private List<PowerOption> Powers => Granted.Where(p => !IsRitual(p)).ToList();
     private DisciplineOption? Sorcery => Rituals.Select(GroupOf).FirstOrDefault();
 
@@ -341,6 +350,14 @@ else
         {
             _busy = false;
         }
+    }
+
+    /// <summary>For a child that needs the result: a plain delegate doesn't re-render this page as an EventCallback would.</summary>
+    private async Task<bool> ActAndRenderAsync(PlayAction action)
+    {
+        var saved = await ActAsync(action);
+        StateHasChanged();
+        return saved;
     }
 
     private Task<IEnumerable<string>> SearchCompelsAsync(string? text, CancellationToken cancellationToken)

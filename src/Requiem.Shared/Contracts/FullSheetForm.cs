@@ -17,6 +17,19 @@ public sealed class DisciplineEntry
     public int Dots { get; set; } = 1;
 }
 
+/// <summary>Koldun Thaumaturgy (KoldunRules): set exactly when its Ritual is learned.</summary>
+public sealed class KoldunEntry
+{
+    public const int MaxMethodLength = 500;
+
+    [Range(KoldunRules.MinDots, KoldunRules.MaxDots)] public int Dots { get; set; } = KoldunRules.MinDots;
+    public KoldunDomain? Domain { get; set; }
+    public List<KoldunArt> Arts { get; set; } = [];
+    [StringLength(MaxMethodLength)] public string? Method { get; set; }
+    /// <summary>Clears when it reaches 10 (the Dark Retribution), so it's held at 0–9.</summary>
+    [Range(0, KoldunRules.MaxAntipathia - 1)] public int Antipathia { get; set; }
+}
+
 public sealed class MeritEntry
 {
     /// <summary>Null for a custom merit or flaw that isn't in the catalog.</summary>
@@ -149,6 +162,8 @@ public sealed class FullSheetForm : IValidatableObject, ICharacterProfile
     /// powers each Investiture dot bought.
     /// </summary>
     public List<int> LearnedPowerIds { get; set; } = [];
+    /// <summary>Koldun Thaumaturgy's rating and choices; the server keeps it in step with its Ritual being learned.</summary>
+    public KoldunEntry? Koldun { get; set; }
     public List<MeritEntry> Merits { get; set; } = [];
     public List<WoundEntry> Wounds { get; set; } = [];
     public List<string> Stains { get; set; } = [];
@@ -253,6 +268,7 @@ public sealed class FullSheetForm : IValidatableObject, ICharacterProfile
         }
         Disciplines.Clear();
         LearnedPowerIds.Clear();
+        Koldun = null;
         CorruptionMarks.Clear();
     }
 
@@ -303,6 +319,18 @@ public sealed class FullSheetForm : IValidatableObject, ICharacterProfile
             yield return Error($"Discipline dots must be 0–{PowerRules.MaxDisciplineDots}.", nameof(Disciplines));
         if (Disciplines.GroupBy(d => d.PowerGroupId).Any(g => g.Count() > 1))
             yield return Error("Each Discipline can only be listed once.", nameof(Disciplines));
+
+        if (Koldun is { } koldun)
+        {
+            if (koldun.Dots is < KoldunRules.MinDots or > KoldunRules.MaxDots)
+                yield return Error($"Thaumaturgy is rated {KoldunRules.MinDots}–{KoldunRules.MaxDots}.", nameof(Koldun));
+            if (koldun.Arts.Count > KoldunRules.ArtsChosen || koldun.Arts.Distinct().Count() != koldun.Arts.Count)
+                yield return Error($"Choose at most {KoldunRules.ArtsChosen} different Koldun Arts.", nameof(Koldun));
+            if (koldun.Antipathia is < 0 or >= KoldunRules.MaxAntipathia)
+                yield return Error($"Antipathia is 0–{KoldunRules.MaxAntipathia - 1}; at {KoldunRules.MaxAntipathia} it clears.", nameof(Koldun));
+            if (koldun.Method?.Length > KoldunEntry.MaxMethodLength)
+                yield return Error($"Describe the Method in at most {KoldunEntry.MaxMethodLength} characters.", nameof(Koldun));
+        }
 
         if (Merits.Any(m => string.IsNullOrWhiteSpace(m.Name) || m.Name.Length > MaxTextLength))
             yield return Error("Each merit and flaw needs a name.", nameof(Merits));

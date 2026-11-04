@@ -11,6 +11,8 @@ public enum PurchaseKind
     /// <summary>Caitiff Disciplines and Disciplines gained through Diablerie.</summary>
     CaitiffDiscipline,
     Ritual,
+    /// <summary>Koldun Thaumaturgy's next dot, 2 to 5; the first is bought as its Ritual.</summary>
+    Thaumaturgy,
 }
 
 public sealed record XpQuote(int Cost, IReadOnlyList<RuleViolation> Violations)
@@ -36,6 +38,7 @@ public static class ExperienceRules
     /// Price to raise a rated trait from <paramref name="currentDots"/> to <paramref name="targetDots"/>.
     /// "New dots × N": each step costs the new rating times the multiplier.
     /// <see cref="PurchaseKind.Specialty"/> and <see cref="PurchaseKind.Ritual"/> have no rating: each is bought 0 → 1 at a flat price.
+    /// <see cref="PurchaseKind.Thaumaturgy"/> is a flat 10 a dot.
     /// </summary>
     /// <param name="bloodPotency">Required for Discipline purchases (dots may not exceed Blood Potency).</param>
     public static XpQuote Quote(PurchaseKind kind, int currentDots, int targetDots, int? bloodPotency = null)
@@ -53,6 +56,7 @@ public static class ExperienceRules
             PurchaseKind.Merit => 5,
             PurchaseKind.BloodPotency => BloodRules.MaxBloodPotency,
             PurchaseKind.BloodlineDiscipline or PurchaseKind.CaitiffDiscipline => PowerRules.MaxDisciplineDots,
+            PurchaseKind.Thaumaturgy => KoldunRules.MaxDots,
             _ => int.MaxValue,
         };
         if (targetDots > max)
@@ -75,6 +79,8 @@ public static class ExperienceRules
         {
             PurchaseKind.Specialty => (targetDots - currentDots) * SpecialtyCost,
             PurchaseKind.Ritual => (targetDots - currentDots) * RitualCost,
+            // "Each 10xp spent increased the dots you have in Thaumaturgy by 1."
+            PurchaseKind.Thaumaturgy => (targetDots - currentDots) * KoldunRules.CostPerDot,
             _ => SumOfNewDots(currentDots, targetDots) * Multiplier(kind),
         };
 

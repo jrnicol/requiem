@@ -37,6 +37,16 @@ public class CharacterDiscipline
     public int Dots { get; set; }
 }
 
+/// <summary>Koldun Thaumaturgy, for a Tzimisce who learned it (KoldunRules): its rating, choices and Antipathia.</summary>
+public class CharacterKoldun
+{
+    public int Dots { get; set; } = KoldunRules.MinDots;
+    public KoldunDomain? Domain { get; set; }
+    public List<KoldunArt> Arts { get; set; } = [];
+    public string? Method { get; set; }
+    public int Antipathia { get; set; }
+}
+
 /// <summary>An individually learned power: a Blood Sorcery ritual or Sabbat Ritae.</summary>
 public class CharacterPower
 {

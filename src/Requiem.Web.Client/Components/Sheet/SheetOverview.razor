@@ -75,6 +75,25 @@
     {
         <MudText Typo="Typo.body2" Class="mt-1"><b>Blood Sorcery:</b> @sorcery.Name</MudText>
     }
+    @if (Form.Koldun is { } koldun)
+    {
+        <MudText Typo="Typo.body2" Class="mt-1">
+            <b>@KoldunRules.RitualName</b> <span class="dots-inline">@(new string('●', koldun.Dots))</span>
+            · @(koldun.Domain?.ToString() ?? "no Domain")
+            @if (koldun.Arts.Count > 0)
+            {
+                <span> · @string.Join(", ", koldun.Arts.Select(KoldunRules.Label))</span>
+            }
+            @if (koldun.Antipathia > 0)
+            {
+                <span> · Antipathia @koldun.Antipathia</span>
+            }
+        </MudText>
+        @if (!string.IsNullOrWhiteSpace(koldun.Method))
+        {
+            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">Method: @koldun.Method</MudText>
+        }
+    }
     @if (Learned.Count > 0)
     {
         <MudText Typo="Typo.body2" Class="mt-1"><b>Learned:</b> @string.Join(", ", Learned.Select(p => p.Name))</MudText>

@@ -103,6 +103,8 @@ public class Character
     public List<CharacterSpecialty> Specialties { get; set; } = [];
     public List<CharacterDiscipline> Disciplines { get; set; } = [];
     public List<CharacterPower> LearnedPowers { get; set; } = [];
+    /// <summary>Set while the Koldun Thaumaturgy Ritual is among <see cref="LearnedPowers"/>.</summary>
+    public CharacterKoldun? Koldun { get; set; }
     public List<CharacterMerit> Merits { get; set; } = [];
     public List<CharacterWound> Wounds { get; set; } = [];
     public List<CharacterStain> Stains { get; set; } = [];

@@ -149,6 +149,10 @@ public static class FullSheetEndpoints
                 results.Add(new ValidationResult("Only Caitiff and Bloodline Disciplines take dots.", [nameof(form.Disciplines)]));
 
             results.AddRange(ValidateLearnedPowers(form, catalog));
+
+            // Koldun's rating and choices go with its Ritual: kept while it's learned (from 1 dot), gone when it's forgotten.
+            var knowsKoldun = form.LearnedPowerIds.Any(powerId => KoldunRules.IsKoldun(catalog.Power(powerId)?.Name));
+            form.Koldun = knowsKoldun ? form.Koldun ?? new KoldunEntry() : null;
         }
 
         var meritIds = form.Merits.Where(m => m.MeritDefinitionId is not null).Select(m => m.MeritDefinitionId!.Value).Distinct();

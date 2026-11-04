@@ -33,6 +33,9 @@ public sealed record PlayMotives(string? Concept, string? ConceptTrigger, string
     [JsonIgnore] public bool Any => Concept is not null || Virtue is not null || Vice is not null;
 }
 
+/// <summary>Koldun Thaumaturgy at the table (KoldunRules).</summary>
+public sealed record PlayKoldun(int Dots, KoldunDomain? Domain, IReadOnlyList<KoldunArt> Arts, string? Method, int Antipathia);
+
 /// <summary>
 /// Everything the GM needs to run one NPC at the table, full sheet or Supporting Cast alike.
 /// Changes go through <see cref="PlayAction"/> and save straight onto the character.
@@ -70,7 +73,8 @@ public sealed record PlayCharacter(
     string? GmNotes,
     bool IsPlayerCharacter = false,
     PlayMotives? Motives = null,
-    IReadOnlyList<TitleOption>? Titles = null)
+    IReadOnlyList<TitleOption>? Titles = null,
+    PlayKoldun? Koldun = null)
 {
     [JsonIgnore] public bool IsVampire => Kind == CharacterKind.Vampire;
     [JsonIgnore] public bool IsFullSheet => Tier == CharacterTier.FullSheet;
@@ -114,6 +118,15 @@ public enum PlayActionKind
     HealWithVitae,
     /// <summary>Acting on their Concept, Virtue or Vice restores Willpower: see <see cref="WillpowerRules.Regain"/>.</summary>
     RegainWillpower,
+    /// <summary>
+    /// Koldun: a spell's <see cref="PlayAction.Amount"/> successes add Antipathia; at 10 it clears (the Dark Retribution).
+    /// See <see cref="KoldunRules.Gain"/>.
+    /// </summary>
+    GainAntipathia,
+    /// <summary>Koldun: a botched spell clears Antipathia and brings the Dark Retribution at once.</summary>
+    BotchSpell,
+    /// <summary>Koldun: an Oblation takes 3 Antipathia off.</summary>
+    Oblation,
 }
 
 /// <summary>One change made at the table. Only the fields its <see cref="Kind"/> needs are read.</summary>

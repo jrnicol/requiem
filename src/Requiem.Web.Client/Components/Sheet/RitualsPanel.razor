@@ -33,6 +33,14 @@ else
     }
 }
 
+@if (Form.Koldun is { } koldun && Learned.Any(p => KoldunRules.IsKoldun(p.Name)))
+{
+    <MudPaper Outlined="true" Class="pa-3 mb-2">
+        <MudText Typo="Typo.subtitle2" Class="mb-2">@KoldunRules.RitualName</MudText>
+        <KoldunChoices Entry="koldun" ShowTrackers="true" Changed="Changed" />
+    </MudPaper>
+}
+
 @if (OwnSorcery is not null || AllowRitae)
 {
     <MudStack Row="true" AlignItems="AlignItems.Start" Spacing="2" Wrap="Wrap.Wrap" Class="mt-3">
@@ -53,6 +61,12 @@ else
     {
         <MudText Typo="Typo.caption" Color="Color.Secondary">@own.Name Rituals are listed first, then Sabbat Ritae.</MudText>
     }
+    @if (!AllowKoldun && OwnSorcery is { } house && Powers.Any(p => p.PowerGroupId == house.Id && KoldunRules.IsKoldun(p.Name)))
+    {
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+            @KoldunRules.RitualName is bought only with XP: buy it in the Starting XP step.
+        </MudText>
+    }
 }
 <ValidationMessage For="() => Form.LearnedPowerIds" class="mud-error-text mud-typography-caption" />
 
@@ -63,6 +77,8 @@ else
     [Parameter] public EventCallback Changed { get; set; }
     /// <summary>Offer Sabbat Ritae too; off in the creation wizard, where they aren't chosen.</summary>
     [Parameter] public bool AllowRitae { get; set; } = true;
+    /// <summary>Offer Koldun Thaumaturgy; off in the creation wizard, since it's bought only with XP.</summary>
+    [Parameter] public bool AllowKoldun { get; set; } = true;
 
     private PowerOption? _pick;
 
@@ -102,7 +118,7 @@ else
 
     /// <summary>What the search offers: the own House's Rituals, and Ritae where they're allowed.</summary>
     private bool CanLearn(PowerOption power) =>
-        power.PowerGroupId == OwnSorcery?.Id
+        power.PowerGroupId == OwnSorcery?.Id && (AllowKoldun || !KoldunRules.IsKoldun(power.Name))
         || AllowRitae && Options.FirstOrDefault(o => o.Id == power.PowerGroupId)?.Kind == PowerGroupKind.SabbatRitae;
 
     private string GroupName(int id) => Options.FirstOrDefault(o => o.Id == id)?.Name ?? "Unknown";
@@ -124,6 +140,7 @@ else
     {
         if (_pick is null || Form.LearnedPowerIds.Contains(_pick.Id)) return;
         Form.LearnedPowerIds.Add(_pick.Id);
+        if (KoldunRules.IsKoldun(_pick.Name)) Form.Koldun ??= new KoldunEntry();
         _pick = null;
         await Changed.InvokeAsync();
     }
@@ -131,6 +148,7 @@ else
     private async Task RemoveAsync(PowerOption power)
     {
         Form.LearnedPowerIds.Remove(power.Id);
+        if (KoldunRules.IsKoldun(power.Name)) Form.Koldun = null;
         await Changed.InvokeAsync();
     }
 }

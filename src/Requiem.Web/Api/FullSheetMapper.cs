@@ -50,6 +50,9 @@ internal static class FullSheetMapper
         Disciplines = c.Disciplines.OrderBy(d => d.PowerGroupId)
             .Select(d => new DisciplineEntry { PowerGroupId = d.PowerGroupId, Dots = d.Dots }).ToList(),
         LearnedPowerIds = c.LearnedPowers.Select(p => p.PowerId).Order().ToList(),
+        Koldun = c.Koldun is { } k
+            ? new KoldunEntry { Dots = k.Dots, Domain = k.Domain, Arts = [.. k.Arts], Method = k.Method, Antipathia = k.Antipathia }
+            : null,
         Merits = c.Merits.OrderBy(m => m.Kind).ThenBy(m => m.Id).Select(m => new MeritEntry
         {
             MeritDefinitionId = m.MeritDefinitionId, Name = m.Name, Kind = m.Kind, Dots = m.Dots,
@@ -166,6 +169,13 @@ internal static class FullSheetMapper
         c.LearnedPowers.RemoveAll(p => !learned.Contains(p.PowerId));
         foreach (var powerId in learned.Where(id => c.LearnedPowers.All(p => p.PowerId != id)))
             c.LearnedPowers.Add(new CharacterPower { PowerId = powerId });
+        c.Koldun = form.Koldun is { } koldun
+            ? new CharacterKoldun
+            {
+                Dots = koldun.Dots, Domain = koldun.Domain, Arts = koldun.Arts.Distinct().ToList(), Method = Clean(koldun.Method),
+                Antipathia = koldun.Antipathia,
+            }
+            : null;
 
         Replace(c.Merits, _ => true,
             c.Merits.OrderBy(m => m.Kind).ThenBy(m => m.Id).Select(m => (m.MeritDefinitionId, m.Name, m.Kind, m.Dots, m.Qualifier, m.Notes)),

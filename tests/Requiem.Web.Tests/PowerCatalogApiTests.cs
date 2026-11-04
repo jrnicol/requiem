@@ -144,6 +144,51 @@ public class PowerCatalogApiTests(RequiemWebFactory factory) : IClassFixture<Req
     }
 
     [Fact]
+    public async Task Koldun_keeps_its_choices_while_learned_and_gathers_antipathia_at_the_table()
+    {
+        var koldun = (await PowersAsync()).Single(p => p.Name == KoldunRules.RitualName);
+        Assert.Equal(await GroupIdAsync("Vishap"), koldun.PowerGroupId);
+        var created = await CreateAsync(new FullSheetForm
+        {
+            Name = "Ilya", BloodlineId = await BloodlineIdAsync("Tzimisce"), BloodPotency = 2, LearnedPowerIds = [koldun.Id],
+        });
+        // Learning it starts it at 1 dot, with its choices still to make.
+        Assert.Equal((1, null), (created.Koldun!.Dots, created.Koldun.Domain));
+
+        created.Koldun = new KoldunEntry
+        {
+            Dots = 2, Domain = KoldunDomain.Destruction, Arts = [KoldunArt.AffectSelf, KoldunArt.AffectArea, KoldunArt.AffectInanimate],
+            Method = "Bone flutes", Antipathia = 8,
+        };
+        var saved = await _http.PutAsJsonAsync($"/api/characters/{created.Id}/full-sheet", created, RequiemJson.Options);
+        Assert.True(saved.IsSuccessStatusCode, await saved.Content.ReadAsStringAsync());
+
+        var play = (await _http.GetFromJsonAsync<PlayCharacter>($"/api/characters/{created.Id}/play", RequiemJson.Options))!;
+        Assert.Equal((2, KoldunDomain.Destruction, 8), (play.Koldun!.Dots, play.Koldun.Domain, play.Koldun.Antipathia));
+        Assert.DoesNotContain(play.Pools, p => p.Label == KoldunRules.RitualName);
+
+        // 8 + 3 successes reaches 10: it clears (the Dark Retribution); an Oblation can't go below 0.
+        play = await ActAsync(created.Id!.Value, new PlayAction { Kind = PlayActionKind.GainAntipathia, Amount = 3 });
+        Assert.Equal(0, play.Koldun!.Antipathia);
+        play = await ActAsync(created.Id.Value, new PlayAction { Kind = PlayActionKind.GainAntipathia, Amount = 5 });
+        play = await ActAsync(created.Id.Value, new PlayAction { Kind = PlayActionKind.Oblation });
+        Assert.Equal(2, play.Koldun!.Antipathia);
+
+        // Forgetting the Ritual drops Thaumaturgy with it.
+        var sheet = (await _http.GetFromJsonAsync<FullSheetForm>($"/api/characters/{created.Id}/full-sheet", RequiemJson.Options))!;
+        sheet.LearnedPowerIds.Clear();
+        saved = await _http.PutAsJsonAsync($"/api/characters/{created.Id}/full-sheet", sheet, RequiemJson.Options);
+        Assert.Null((await saved.Content.ReadFromJsonAsync<FullSheetForm>(RequiemJson.Options))!.Koldun);
+    }
+
+    private async Task<PlayCharacter> ActAsync(Guid id, PlayAction action)
+    {
+        var response = await _http.PostAsJsonAsync($"/api/characters/{id}/play", action, RequiemJson.Options);
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+        return (await response.Content.ReadFromJsonAsync<PlayCharacter>(RequiemJson.Options))!;
+    }
+
+    [Fact]
     public async Task Mortals_drop_learned_rituals()
     {
         var ritual = (await PowersAsync()).First(p => p.Name == "Banishing Sign");

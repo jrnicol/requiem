@@ -75,6 +75,18 @@ public static class CatalogSeeder
         Converters = { new JsonStringEnumConverter(allowIntegerValues: false) },
     };
 
+    /// <summary>
+    /// Imports that went wrong and were fixed in the seed: an unreviewed entry still in the table under
+    /// <c>From</c> is replaced by the seed's <c>To</c>, keeping its id, so characters who learned it keep it. Reviewed
+    /// entries are the admin's and stay as they are.
+    /// </summary>
+    public static readonly IReadOnlyList<(string FromGroup, string FromName, string ToGroup, string ToName)> Reimports =
+    [
+        // Koldun's page was read as the end of Hekate: its text ran into Debitum and became a Tremere "Invoke a Spell".
+        ("Hekate", "Debitum", "Hekate", "Debitum"),
+        ("Hekate", "Invoke a Spell", "Vishap", "Koldun Thaumaturgy"),
+    ];
+
     /// <summary>Reads and validates the embedded seed files without touching a database.</summary>
     public static CatalogSeedData Load()
     {

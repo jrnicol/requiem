@@ -77,7 +77,8 @@ internal static class PlayMapper
             c.Items.Where(i => i.Kind == ItemKind.Asset).OrderBy(i => i.SortOrder).Select(i => i.Name).ToList(),
             c.Notes,
             c.GmNotes,
-            c.IsPlayerCharacter);
+            c.IsPlayerCharacter,
+            Koldun: c.Koldun is { } k ? new PlayKoldun(k.Dots, k.Domain, k.Arts, k.Method, k.Antipathia) : null);
     }
 
     /// <summary>

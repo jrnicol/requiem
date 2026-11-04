@@ -24,6 +24,10 @@ public sealed class XpPurchase
     public int? PowerGroupId { get; set; }
     /// <summary>The Ritual learned, or the power an Investiture-style dot buys.</summary>
     public int? PowerId { get; set; }
+    /// <summary>Koldun Thaumaturgy's first dot comes with these choices (KoldunRules).</summary>
+    public KoldunDomain? KoldunDomain { get; set; }
+    public List<KoldunArt>? KoldunArts { get; set; }
+    public string? KoldunMethod { get; set; }
 }
 
 /// <param name="Trait">What it buys, e.g. "Strength" or "Allies (Harbor Police)".</param>
@@ -47,7 +51,8 @@ public sealed record XpPurchaseQuote(string Trait, int FromDots, int ToDots, int
 /// or 4 Links (mortals and ghouls). It stays open for a spending session; when the player is done, the
 /// count resets (house ruling 2026-10-24).</item>
 /// <item>Prices: Attribute new dots × 5, Skill × 3, Specialty 5, Merit × 5; Blood Potency × 5, own Bloodline
-/// Discipline × 5, Caitiff or diablerized Discipline × 6, Ritual 10.</item>
+/// Discipline × 5, Caitiff or diablerized Discipline × 6, Ritual 10, Koldun Thaumaturgy 10 a dot (Tzimisce only, and
+/// only with XP: its first dot is its Ritual).</item>
 /// <item>Not for sale: Attributes at 1 (a plot event raises those), Willpower, Morality and Humanity (Milestones),
 /// new Disciplines (diablerie) and Sabbat Ritae (taught by elders). The Storyteller grants those.</item>
 /// </list>
@@ -143,8 +148,19 @@ public static class AdvancementRules
             case PurchaseKind.Ritual when sheet.IsVampire:
                 return PriceRitual(sheet, purchase, catalog, violations);
 
+            case PurchaseKind.Thaumaturgy when sheet.IsVampire:
+            {
+                if (sheet.Koldun is not { } koldun)
+                {
+                    violations.Add(new("koldun.not-known", $"Learn {KoldunRules.RitualName} first; its Ritual is the first dot."));
+                    return (KoldunRules.RitualName, 0, 1, new XpQuote(0, []));
+                }
+                return (KoldunRules.RitualName, koldun.Dots, koldun.Dots + 1, ExperienceRules.Quote(PurchaseKind.Thaumaturgy, koldun.Dots, koldun.Dots + 1));
+            }
+
             default:
-                var vampireOnly = purchase.Kind is PurchaseKind.BloodPotency or PurchaseKind.BloodlineDiscipline or PurchaseKind.CaitiffDiscipline or PurchaseKind.Ritual;
+                var vampireOnly = purchase.Kind is PurchaseKind.BloodPotency or PurchaseKind.BloodlineDiscipline or PurchaseKind.CaitiffDiscipline
+                    or PurchaseKind.Ritual or PurchaseKind.Thaumaturgy;
                 violations.Add(new("xp.not-for-sale", vampireOnly && !sheet.IsVampire
                     ? "Only vampires buy Blood Potency, Disciplines and Rituals."
                     : "Choose what to buy."));
@@ -230,6 +246,10 @@ public static class AdvancementRules
             violations.Add(new("ritual.other-house", PowerRules.RitualProblem("That Ritual", group.Name, group.BloodlineName)));
         if (purchase.PowerId is { } id && sheet.LearnedPowerIds.Contains(id))
             violations.Add(new("ritual.owned", "You already know that Ritual."));
+        // Koldun's first dot: its Domain, Arts and Method are chosen as it's bought.
+        else if (purchase.PowerId is { } koldun && catalog.IsKoldun(koldun))
+            violations.AddRange(KoldunRules.Missing(purchase.KoldunDomain, purchase.KoldunArts ?? [], purchase.KoldunMethod)
+                .Select(m => new RuleViolation("koldun.choices", m)));
 
         // Each Ritual is known or not, so it's bought 0 → 1 at a flat 10 whatever else is known (VtR p.137). Pricing
         // it as a count would let a Ritual picked at creation afterwards break one already bought with starting XP.
@@ -277,6 +297,14 @@ public static class AdvancementRules
                 break;
             case PurchaseKind.Ritual:
                 sheet.LearnedPowerIds.Add(purchase.PowerId!.Value);
+                if (catalog.IsKoldun(purchase.PowerId.Value))
+                    sheet.Koldun = new KoldunEntry
+                    {
+                        Domain = purchase.KoldunDomain, Arts = [.. purchase.KoldunArts ?? []], Method = purchase.KoldunMethod?.Trim(),
+                    };
+                break;
+            case PurchaseKind.Thaumaturgy:
+                sheet.Koldun!.Dots = quote.ToDots;
                 break;
         }
     }
@@ -318,8 +346,16 @@ public static class AdvancementRules
                 if (purchase.PowerId is { } pick) sheet.LearnedPowerIds.Remove(pick);
                 return true;
             }
+            case PurchaseKind.Ritual when purchase.PowerId is { } ritual && catalog.IsKoldun(ritual):
+                // Not once raised: undo the later dots first.
+                if (sheet.Koldun is { Dots: > KoldunRules.MinDots } || !sheet.LearnedPowerIds.Remove(ritual)) return false;
+                sheet.Koldun = null;
+                return true;
             case PurchaseKind.Ritual:
-                return purchase.PowerId is { } ritual && sheet.LearnedPowerIds.Remove(ritual);
+                return purchase.PowerId is { } learned && sheet.LearnedPowerIds.Remove(learned);
+            case PurchaseKind.Thaumaturgy when sheet.Koldun is { } koldun && koldun.Dots == quote.ToDots:
+                koldun.Dots = quote.FromDots;
+                return true;
             default:
                 return false;
         }

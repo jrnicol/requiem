@@ -1,5 +1,5 @@
 @* Buying with XP: choose what, see the price and any rule it breaks, then buy (WoD Core p.75, VtR p.137).
-   The server prices it again and applies it. *@
+   The server prices it again and applies it. Koldun Thaumaturgy's first dot is its Ritual, bought with its choices. *@
 
 <MudGrid Spacing="2">
     <MudItem xs="12" sm="5">
@@ -77,6 +77,13 @@
                         <MudSelectItem T="int?" Value="ritual.Id">@ritual.Name</MudSelectItem>
                     }
                 </MudSelect>
+                @if (BuysKoldun)
+                {
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2 mb-1">
+                        Thaumaturgy starts at 1 dot (10 XP each after). Choose its Domain, Arts and Method.
+                    </MudText>
+                    <KoldunChoices Entry="_koldun" Changed="StateHasChanged" />
+                }
                 break;
         }
     </MudItem>
@@ -133,17 +140,27 @@
             yield return (PurchaseKind.BloodPotency, "Blood Potency (new dots × 5)");
             yield return (PurchaseKind.CaitiffDiscipline, "A Discipline dot (× 5 own Bloodline, × 6 otherwise)");
             if (OwnRituals.Any()) yield return (PurchaseKind.Ritual, "A Ritual of your house (10)");
+            if (Sheet.Koldun is { Dots: < KoldunRules.MaxDots })
+                yield return (PurchaseKind.Thaumaturgy, $"A {KoldunRules.RitualName} dot ({KoldunRules.CostPerDot})");
         }
     }
 
     // A Discipline dot is priced by whose Discipline it is, whichever Discipline kind the purchase names.
-    private XpPurchaseQuote Quote => AdvancementRules.Quote(Sheet, _purchase, Catalog, Progress);
+    private XpPurchaseQuote Quote => AdvancementRules.Quote(Sheet, Clone(), Catalog, Progress);
+
+    /// <summary>Koldun's choices while its Ritual is the one chosen; copied into the purchase.</summary>
+    private KoldunEntry _koldun = new();
+
+    private bool BuysKoldun => _purchase.Kind == PurchaseKind.Ritual && KoldunRules.IsKoldun(Powers.FirstOrDefault(p => p.Id == _purchase.PowerId)?.Name);
 
     private XpPurchase Clone() => new()
     {
         Kind = _purchase.Kind, Attribute = _purchase.Attribute, Skill = _purchase.Skill, SpecialtyName = _purchase.SpecialtyName,
         MeritDefinitionId = _purchase.MeritDefinitionId, MeritName = _purchase.MeritName, MeritQualifier = _purchase.MeritQualifier,
         MeritDots = _purchase.MeritDots, PowerGroupId = _purchase.PowerGroupId, PowerId = _purchase.PowerId,
+        KoldunDomain = BuysKoldun ? _koldun.Domain : null,
+        KoldunArts = BuysKoldun ? [.. _koldun.Arts] : null,
+        KoldunMethod = BuysKoldun ? _koldun.Method : null,
     };
 
     private List<PowerOption> Picks => _purchase.PowerGroupId is { } groupId
@@ -163,6 +180,7 @@
     {
         _purchase = new XpPurchase { Kind = kind };
         _merit = null;
+        _koldun = new KoldunEntry();
     }
 
     private void SetDiscipline(int? id)

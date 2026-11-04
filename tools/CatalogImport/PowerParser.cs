@@ -69,7 +69,8 @@ public static partial class PowerParser
         new("Obfuscate", 189, 191, Mode.Dots),
         new("Protean", 192, 195, Mode.Dots),
         new("Tartarus", 196, 198, Mode.Dots),
-        new("Hekate", 200, 207, Mode.Sorcery),
+        // Page 207 is Koldun Thaumaturgy, House Tzimisce's (house ruling 2026-11-04): see KoldunPowers.
+        new("Hekate", 200, 206, Mode.Sorcery),
         new("Vishap", 208, 213, Mode.Sorcery),
         new("Mayaparisatya", 214, 218, Mode.Sorcery),
         new("Noctis", 219, 223, Mode.Sorcery),
@@ -87,7 +88,6 @@ public static partial class PowerParser
         ["Brother 's Gift"] = "Brother's Gift",
         ["Dark Met Amorphosis"] = "Dark Metamorphosis",
         ["Udhiyah"] = "Udhiyah",
-        ["In voke a Spell"] = "Invoke a Spell",
         ["Adapta tion"] = "Adaptation",
         ["Mirrors tep"] = "Mirrorstep",
         ["Oblivion 's Sight"] = "Oblivion's Sight",
@@ -107,6 +107,7 @@ public static partial class PowerParser
             powers.AddRange(ParseGroup(group, lines));
         }
         powers.AddRange(GhoulPowers());
+        powers.AddRange(KoldunPowers());
 
         foreach (var power in powers) Finish(power);
         var duplicates = powers.GroupBy(p => (p.Group, p.Name)).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
@@ -272,6 +273,44 @@ public static partial class PowerParser
             Group = "Ghoul Powers", Name = "Immortality", SourcePage = 66,
             Flavor = "While a ghoul has the blood of a vampire in their veins, they do not age. Each day 1 point of Vitae is scoured from their body; when none is left, the ghoul instantly ages to their proper mortal lifetime.",
             Notes = "Ghouls can drink up to 8 points of Vitae in one night. It must be fresh from a vampire's veins, and not from a vampire who fed on them that night.",
+        };
+    }
+
+    private static IEnumerable<PowerSeed> KoldunPowers()
+    {
+        // VtR p.203 (PDF 207): a rated sorcery with its own casting rules and a Retribution table the OCR splits into
+        // columns, transcribed by hand. The book prints four results for a d10; house ruling 2026-11-04 spreads them.
+        yield return new PowerSeed
+        {
+            Group = "Vishap", Name = KoldunRules.RitualName, Category = "Koldun", SourcePage = 207,
+            Flavor = "You are a force of mystical will, taught how to wield your desires to bend and shape reality to your designs.",
+            VitaeCost = 1, CostText = "1 Vitae, plus any extra Vitae spent for dice",
+            DicePoolText = "Thaumaturgy + extra Vitae + Eruditions (no Willpower)",
+            ActionText = "Invoke a Spell: call upon a narrative effect that relates to your Domain and matches one of your Arts. If the "
+                + "Storyteller agrees, spend 1 Vitae, say what you want to have happen and how you go about casting it, and roll.",
+            Duration = "Instant; a point of Willpower makes it last the scene, if appropriate.",
+            HowToLearn = "Unlike other Rituals, Thaumaturgy has a rating of 1 through 5; each 10 XP spent raises it by 1. Choose your "
+                + "Domain of power, 3 Arts which define aspects of your knowledge of it, and a Method by which you were taught to focus "
+                + "your mind and practice your sorcery.",
+            DramaticFailureText = "Your Antipathia clears out and you immediately suffer the Dark Retribution.",
+            SuccessText = "The successes are how much the subject is affected: how many points of damage a wound is healed, how much "
+                + "Potence you give yourself, how much a person's dice pool is reduced, and so on. You gain Antipathia equal to the successes.",
+            Notes = "You may only use Thaumaturgy if you have recently fed off a mortal magi or have access to a mortal magi's blood. "
+                + "Mortal magi blood ingested recently counts as your entire blood pool; anything external counts as its container's size. "
+                + "Or, use the blood of a mortal magi as an Erudition and gain no Antipathia. Blood with a Passion related to the spell counts as an Erudition.\n\n"
+                + "Domains: Regeneration (heal and repair), Destruction (destroy and burn), Protection (make tougher or harder to find), "
+                + "Alteration (change shape or function).\n\n"
+                + "Arts: Affect self, Affect other undead, Affect other living, Affect inanimate, Affect area, Affect at distance.\n\n"
+                + "You have a pool of bonus dice to spend from, called Vitae, equal to your Blood Potency.\n\n"
+                + "Antipathia: once it reaches 10, it clears out and you suffer the Dark Retribution. Oblations: destroy or murder something "
+                + "of meaning, value or aid to your character or someone in their life (relics, blood, something of symbolic significance "
+                + "to your Method) to reduce Antipathia by 3.\n\n"
+                + "Dark Retribution (roll 1d10; the Storyteller works it into the fiction):\n"
+                + "1–3 Manic: your Flaws affect you as badly as they can until the next night's sunrise, plus a night for every Vitae spent on the spell.\n"
+                + "4–5 Backlash: Lethal damage equal to the Antipathia just gained plus any extra Vitae used; Aggravated if you botched.\n"
+                + "6–7 Madness: you see the infinite permutations of reality. Burn a dot of Intelligence.\n"
+                + "8–10 Haunted: for 1 day per dot of Blood Potency, spirits terrorize you; fail a Wits + Resolve roll and you are at a "
+                + "penalty equal to the Vitae spent on the spell until the next sunrise, when you may roll again.",
         };
     }
 

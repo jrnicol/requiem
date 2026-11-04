@@ -240,6 +240,37 @@ public class CatalogSeederTests : IDisposable
     }
 
     [Fact]
+    public async Task A_fixed_import_replaces_the_unreviewed_entries_it_left_behind()
+    {
+        // A table seeded before the fix: Koldun was a Hekate "Invoke a Spell", and its text ran into Debitum.
+        await SeedAsync();
+        var catalog = await CatalogAsync();
+        var hekate = catalog.PowerGroups.Single(g => g.Name == "Hekate").Id;
+        var koldunId = catalog.Powers.Single(p => p.Name == "Koldun Thaumaturgy").Id;
+        var debitumId = catalog.Powers.Single(p => p.Name == "Debitum").Id;
+        await using (var scope = _table.Scope())
+        {
+            var store = scope.ServiceProvider.GetRequiredService<ICatalogStore>();
+            var old = (await store.FindPowerAsync(koldunId, CancellationToken.None))!;
+            old.PowerGroupId = hekate;
+            old.Name = "Invoke a Spell";
+            await store.SavePowerAsync(old, CancellationToken.None);
+            var debitum = (await store.FindPowerAsync(debitumId, CancellationToken.None))!;
+            debitum.SuccessText += " Koldun You are a force of mystical will.";
+            await store.SavePowerAsync(debitum, CancellationToken.None);
+        }
+
+        Assert.Equal(2, (await SeedAsync(force: true)).Powers);
+        catalog = await CatalogAsync();
+        // The same id, so a character who learned it keeps it, now Tzimisce's.
+        var koldun = catalog.Powers.Single(p => p.Id == koldunId);
+        Assert.Equal(("Koldun Thaumaturgy", "Vishap"), (koldun.Name, koldun.PowerGroup.Name));
+        Assert.DoesNotContain(catalog.Powers, p => p.Name == "Invoke a Spell");
+        Assert.DoesNotContain("Koldun", catalog.Powers.Single(p => p.Id == debitumId).SuccessText);
+        Assert.Equal(0, (await SeedAsync(force: true)).Powers);
+    }
+
+    [Fact]
     public async Task A_deleted_entry_is_restored_when_the_seed_is_compared()
     {
         await SeedAsync();

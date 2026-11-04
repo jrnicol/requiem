@@ -1,0 +1,57 @@
+@* Koldun Thaumaturgy's choices (KoldunRules): a Domain, 3 Arts and a Method, made when its first dot is bought. The
+   editor also sets the rating and Antipathia. *@
+
+<div class="d-flex flex-column gap-2">
+    @if (ShowTrackers)
+    {
+        <MudStack Row="true" Spacing="4" AlignItems="AlignItems.Center" Wrap="Wrap.Wrap">
+            <DotRating Label="Thaumaturgy" Value="Entry.Dots" Min="KoldunRules.MinDots" Max="KoldunRules.MaxDots" Size="Size.Medium"
+                       ValueChanged="v => SetAsync(() => Entry.Dots = v)" />
+            <MudNumericField T="int" Value="Entry.Antipathia" ValueChanged="v => SetAsync(() => Entry.Antipathia = v)" Label="Antipathia"
+                             Min="0" Max="KoldunRules.MaxAntipathia - 1" Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:9rem" />
+        </MudStack>
+    }
+
+    <MudSelect T="KoldunDomain?" Value="Entry.Domain" ValueChanged="v => SetAsync(() => Entry.Domain = v)" Label="Domain"
+               Variant="Variant.Outlined" Margin="Margin.Dense" ToStringFunc="@(d => d is { } domain ? $"{domain} ({KoldunRules.Describe(domain)})" : "")">
+        @foreach (var domain in Enum.GetValues<KoldunDomain>())
+        {
+            <MudSelectItem T="KoldunDomain?" Value="domain">@domain (@KoldunRules.Describe(domain))</MudSelectItem>
+        }
+    </MudSelect>
+
+    <div>
+        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block">
+            Arts: choose @KoldunRules.ArtsChosen (@Entry.Arts.Count chosen)
+        </MudText>
+        <div class="d-flex flex-wrap gap-1" role="group" aria-label="Koldun Arts">
+            @foreach (var art in Enum.GetValues<KoldunArt>())
+            {
+                var a = art;
+                var on = Entry.Arts.Contains(a);
+                <MudChip T="string" Size="Size.Small" Variant="@(on ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
+                         Disabled="@(!on && Entry.Arts.Count >= KoldunRules.ArtsChosen)" aria-pressed="@(on ? "true" : "false")"
+                         OnClick="() => SetAsync(() => { if (!Entry.Arts.Remove(a)) Entry.Arts.Add(a); })">
+                    @KoldunRules.Label(a)
+                </MudChip>
+            }
+        </div>
+    </div>
+
+    <MudTextField T="string" Value="Entry.Method" ValueChanged="v => SetAsync(() => Entry.Method = v)" Label="Method"
+                  HelperText="How you were taught to focus your mind and practice your sorcery." Variant="Variant.Outlined" Margin="Margin.Dense"
+                  Lines="2" AutoGrow="true" MaxLength="KoldunEntry.MaxMethodLength" Immediate="true" />
+</div>
+
+@code {
+    [Parameter, EditorRequired] public KoldunEntry Entry { get; set; } = null!;
+    /// <summary>The rating and Antipathia too, for the editor; buying with XP sets those itself.</summary>
+    [Parameter] public bool ShowTrackers { get; set; }
+    [Parameter] public EventCallback Changed { get; set; }
+
+    private async Task SetAsync(Action change)
+    {
+        change();
+        await Changed.InvokeAsync();
+    }
+}

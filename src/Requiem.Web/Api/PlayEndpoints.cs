@@ -156,6 +156,18 @@ public static class PlayEndpoints
                 return null;
             }
 
+            case PlayActionKind.GainAntipathia or PlayActionKind.BotchSpell or PlayActionKind.Oblation:
+            {
+                if (c.Koldun is not { } koldun) return $"Only those who know {KoldunRules.RitualName} gather Antipathia.";
+                if (action.Kind == PlayActionKind.Oblation)
+                {
+                    if (koldun.Antipathia == 0) return "No Antipathia to take off.";
+                    koldun.Antipathia = KoldunRules.Oblation(koldun.Antipathia);
+                }
+                else koldun.Antipathia = KoldunRules.Gain(koldun.Antipathia, action.Amount, action.Kind == PlayActionKind.BotchSpell).Antipathia;
+                return null;
+            }
+
             case PlayActionKind.ClearBoosts:
                 c.PotenceBoost = c.CelerityBoost = c.FortitudeBoost = 0;
                 return null;

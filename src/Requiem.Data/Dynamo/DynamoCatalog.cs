@@ -175,7 +175,9 @@ internal static class DynamoCatalog
             .Concat(writes.Where(w => w.PutRequest.Item[Keys.SK].S!.StartsWith(Kinds.PowerGroup + "#", StringComparison.Ordinal))
                 .Select(w => Documents.Read<PowerGroup>(w.PutRequest.Item)).Select(g => (g.Name, g.Id)))
             .GroupBy(g => g.Name).ToDictionary(g => g.Key, g => g.First().Id);
-        var powers = AddMissing(Kinds.Power, current.Powers, data.Powers
+        var existingPowers = current.Powers.ToList();
+        var reimported = Reimport(existingPowers, data, groupIds, writes);
+        var powers = reimported + AddMissing(Kinds.Power, existingPowers, data.Powers
             // A group the GM renamed or removed skips its powers rather than failing startup.
             .Where(p => groupIds.ContainsKey(p.Group))
             .Select(p => CatalogSeeder.ToEntity(p, groupIds)).ToList(), p => (p.PowerGroupId, p.Name), p => p.Id, (p, id) => p.Id = id);
@@ -190,6 +192,30 @@ internal static class DynamoCatalog
             ExpressionAttributeValues = new() { [":one"] = N(1), [":hash"] = S(seedHash) },
         }, ct);
         return new CatalogSeedResult(bloodlines, predators, merits, compels, edges, groups, powers, concepts, titles);
+    }
+
+    /// <summary>Applies <see cref="CatalogSeeder.Reimports"/> to <paramref name="powers"/>, in place, writing each one replaced.</summary>
+    private static int Reimport(List<Power> powers, CatalogSeedData data, IReadOnlyDictionary<string, int> groupIds, List<WriteRequest> writes)
+    {
+        var count = 0;
+        foreach (var (fromGroup, fromName, toGroup, toName) in CatalogSeeder.Reimports)
+        {
+            if (!groupIds.TryGetValue(fromGroup, out var fromId) || !groupIds.TryGetValue(toGroup, out var toId)) continue;
+            var index = powers.FindIndex(p => p.PowerGroupId == fromId && p.Name == fromName && !p.IsReviewed);
+            var seed = data.Powers.FirstOrDefault(p => p.Group == toGroup && p.Name == toName);
+            // Moved elsewhere and already there (e.g. the admin added it): leave the old one for the admin.
+            if (index < 0 || seed is null || (fromGroup, fromName) != (toGroup, toName) && powers.Any(p => p.PowerGroupId == toId && p.Name == toName))
+                continue;
+
+            var replacement = CatalogSeeder.ToEntity(seed, groupIds);
+            replacement.Id = powers[index].Id;
+            // Already corrected on an earlier run.
+            if (Documents.Write(replacement).S == Documents.Write(powers[index]).S) continue;
+            powers[index] = replacement;
+            writes.Add(new WriteRequest { PutRequest = new PutRequest { Item = Item(Kinds.Power, replacement.Id, replacement) } });
+            count++;
+        }
+        return count;
     }
 
     /// <summary>A fingerprint of the embedded seed files.</summary>
