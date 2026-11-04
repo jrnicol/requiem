@@ -1,9 +1,18 @@
 @* Build any roll from the sheet: Attribute + Skill, plus a Specialty, Willpower and a situational
-   modifier. The total shows the wound penalty taken off and Hunger dice split out, like the pools above. *@
+   modifier. The total shows the wound penalty taken off and Hunger dice split out, like the pools above.
+   Casting a Ritual adds its sorcery's Eruditions and takes off the target's Blood Potency. *@
 
 <div class="roll-builder">
     <div class="roll-builder-head">
-        <MudText Typo="Typo.subtitle2">Build a roll</MudText>
+        @if (Ritual is { } ritual)
+        {
+            <MudText Typo="Typo.subtitle2" Style="flex:1">Casting @ritual.Name</MudText>
+            <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="StopCasting">Stop casting</MudButton>
+        }
+        else
+        {
+            <MudText Typo="Typo.subtitle2">Build a roll</MudText>
+        }
     </div>
 
     <div class="roll-builder-fields">
@@ -56,6 +65,33 @@
         </div>
     </div>
 
+    @if (Ritual is { } casting)
+    {
+        @* Eruditions: +2 dice, +1 hour and one narrative element each. Necromancy's lists split by path. *@
+        <div class="roll-builder-sorcery">
+            <div class="roll-builder-extras" role="group" aria-label="Eruditions">
+                @foreach (var erudition in RitualEruditions)
+                {
+                    var e = erudition;
+                    var on = _eruditions.Contains(e);
+                    <MudChip T="string" Size="Size.Small" Variant="@(on ? Variant.Filled : Variant.Outlined)" Color="Color.Primary"
+                             OnClick="() => ToggleErudition(e)" aria-pressed="@Pressed(on)">
+                        @e.Name@(e.Path is { } path && ShowPaths ? $" ({path})" : "") +@SorceryRules.DicePerErudition
+                    </MudChip>
+                }
+            </div>
+            <MudNumericField T="int" @bind-Value="_targetBloodPotency" Min="0" Max="10" Label="Target's Blood Potency"
+                             Variant="Variant.Outlined" Margin="Margin.Dense" Style="max-width:12rem" />
+            <MudText Typo="Typo.caption" Color="Color.Secondary">
+                Casting time: @SorceryRules.CastingTime(casting.CastingDuration, _eruditions.Count).
+                @if (_eruditions.Count > 0)
+                {
+                    <span> Each Erudition adds one simple narrative element to the spell, if the Storyteller allows it.</span>
+                }
+            </MudText>
+        </div>
+    }
+
     <div class="roll-builder-result">
         <MudText Typo="Typo.caption" Color="Color.Secondary" Class="roll-builder-breakdown">@Breakdown</MudText>
         <PoolDice Npc="Npc" Dice="Math.Max(0, Dice)" />
@@ -64,8 +100,44 @@
 
 @code {
     [Parameter, EditorRequired] public PlayCharacter Npc { get; set; } = null!;
+    /// <summary>A Ritual being cast: its pool is set up, with its sorcery's Eruditions and the target's Blood Potency.</summary>
+    [Parameter] public PowerOption? Ritual { get; set; }
+    [Parameter] public IReadOnlyList<Erudition> Eruditions { get; set; } = [];
+    [Parameter] public EventCallback RitualChanged { get; set; }
 
     private const int MaxModifier = 10;
+
+    private PowerOption? _castFor;
+    private readonly HashSet<Erudition> _eruditions = [];
+    private int _targetBloodPotency;
+
+    protected override void OnParametersSet()
+    {
+        if (Ritual == _castFor) return;
+        _castFor = Ritual;
+        _eruditions.Clear();
+        _targetBloodPotency = 0;
+        if (Ritual is null) return;
+        // The Ritual's own pool; one with no printed pool keeps what was there.
+        if (Ritual.DicePoolAttribute is { } attribute) _attribute = attribute;
+        if (Ritual.DicePoolAttribute is not null || Ritual.DicePoolSkill is not null) SetSkill(Ritual.DicePoolSkill);
+        _willpower = false;
+        _modifier = 0;
+    }
+
+    // Necromancy's Animus and Mortuus lists apply to their own Rituals; the import files every Ritual under "Rituals",
+    // so a Ritual whose path isn't known is offered both, labelled.
+    private IEnumerable<Erudition> RitualEruditions =>
+        Eruditions.Any(e => e.Path == Ritual?.Category) ? Eruditions.Where(e => e.Path == Ritual?.Category) : Eruditions;
+
+    private bool ShowPaths => RitualEruditions.Select(e => e.Path).Distinct().Count() > 1;
+
+    private void ToggleErudition(Erudition erudition)
+    {
+        if (!_eruditions.Remove(erudition)) _eruditions.Add(erudition);
+    }
+
+    private Task StopCasting() => RitualChanged.InvokeAsync();
 
     private CharacterAttribute _attribute = CharacterAttribute.Dexterity;
     private Skill? _skill = Skill.Brawl;
@@ -81,7 +153,8 @@
 
     /// <summary>Dice before the wound penalty (PoolDice takes that off).</summary>
     private int Dice => AttributeDots + SkillDots + (_specialty is null ? 0 : 1)
-                        + (_willpower ? DerivedStats.DicePerWillpowerPoint : 0) + _modifier;
+                        + (_willpower ? DerivedStats.DicePerWillpowerPoint : 0) + _modifier
+                        + (Ritual is null ? 0 : SorceryRules.CastingDice(0, _eruditions.Count, _targetBloodPotency));
 
     private string Breakdown
     {
@@ -92,6 +165,9 @@
             if (_specialty is { } specialty) parts.Add($"+ {specialty} 1");
             if (_willpower) parts.Add($"+ Willpower {DerivedStats.DicePerWillpowerPoint}");
             if (_modifier != 0) parts.Add(_modifier > 0 ? $"+ {_modifier}" : $"− {-_modifier}");
+            if (Ritual is not null && _eruditions.Count > 0)
+                parts.Add($"+ {(_eruditions.Count == 1 ? "Erudition" : $"{_eruditions.Count} Eruditions")} {_eruditions.Count * SorceryRules.DicePerErudition}");
+            if (Ritual is not null && _targetBloodPotency > 0) parts.Add($"− target's Blood Potency {_targetBloodPotency}");
             if (Npc.Status.DicePenalty > 0) parts.Add($"− wounds {Npc.Status.DicePenalty}");
             return string.Join(" ", parts);
         }

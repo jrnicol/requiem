@@ -28,11 +28,12 @@ Built tablet-first and usable on a phone. Its data is in DynamoDB (DynamoDB Loca
 - **Powers catalog** (`/catalog/powers`). Everyone can search the full rules text. The site admin corrects imported entries against the book, marking each one reviewed.
 - **Powers on the sheet:**
   - Each Discipline lists the powers its dots grant, with the full text.
-  - Blood Sorcery rituals and Sabbat Ritae are learned one at a time.
+  - Blood Sorcery Rituals and Sabbat Ritae are learned one at a time. A Magi has their House's sorcery and learns only its Rituals.
   - Investiture records which power each dot bought.
 - **Table mode:**
   - **Scenes** (on each campaign's page) group the NPCs you run together. Each NPC gets a card with Health and described wounds, Willpower and Vitae boxes, Hunger dice, compels and conditions.
   - **The play view** (`/play/{id}`) adds dice pools ready to roll physically, with the wound penalty taken off and Hunger dice split out. It also has Fortify Form and a "spend Vitae" button on each power that costs Vitae.
+  - Magi cast their Rituals there: Cast spends the Vitae and sets up the roll, where each Erudition picked adds 2 dice and an hour and the target's Blood Potency comes off. A Daytime switch stops Disciplines and leaves sorcery working.
   - Full-sheet characters show their Concept, Virtue and Vice with what restores Willpower from each, and a button for each trigger: Concept +1, Virtue refills, Vice +1 (once per scene, which the table tracks). At 0 Willpower it warns that the Vice applies as a Condition.
   - Every change saves straight onto the character.
 - **Accounts.** ASP.NET Core Identity with a cookie session. Every account is alike; anyone can sign up at `/register`. The first visit runs a setup that creates the first account, the site admin, who looks after the shared catalog.

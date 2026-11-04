@@ -148,13 +148,23 @@ else
                             <div>@pool.Label</div>
                             <MudText Typo="Typo.caption" Color="Color.Secondary">@pool.Detail</MudText>
                         </div>
-                        <PoolDice Npc="_npc" Dice="pool.Dice" />
+                        @if (_daytime && pool.Group == "Powers" && !WorksByDay(pool.Label))
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">Not by day</MudText>
+                        }
+                        else
+                        {
+                            <PoolDice Npc="_npc" Dice="pool.Dice" />
+                        }
                     </div>
                 }
 
                 @if (_npc.IsFullSheet)
                 {
-                    <RollBuilder Npc="_npc" />
+                    <div @ref="_rollBuilder" tabindex="-1" style="outline:none">
+                        <RollBuilder Npc="_npc" Ritual="_casting" Eruditions="SorceryRules.Eruditions(Sorcery?.Name)"
+                                     RitualChanged="() => _casting = null" />
+                    </div>
                 }
 
                 @if (!_npc.IsFullSheet && (_npc.Specialties.Count > 0 || _npc.Assets.Count > 0))
@@ -172,13 +182,44 @@ else
                 }
             </MudPaper>
 
+            @if (Rituals.Count > 0)
+            {
+                <MudPaper Class="pa-3 mb-3" Elevation="1">
+                    <MudText Typo="Typo.subtitle1">Rituals</MudText>
+                    <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mb-2">
+                        @(Sorcery is { } sorcery ? $"{sorcery.Name}. " : "")Cast by night or day; each Erudition adds @SorceryRules.DicePerErudition dice and an hour.
+                    </MudText>
+                    <PowerList Powers="Rituals">
+                        <Actions Context="ritual">
+                            @{ var cost = _npc.HoldsVitae ? ritual.VitaeCost ?? 0 : 0; }
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2"
+                                       StartIcon="@Icons.Material.Outlined.AutoFixHigh"
+                                       Disabled="_busy || _npc.VitaeCurrent < cost"
+                                       OnClick="() => CastAsync(ritual, cost)">Cast@(cost > 0 ? $": spend {cost} Vitae" : "")</MudButton>
+                        </Actions>
+                    </PowerList>
+                </MudPaper>
+            }
+
             @if (Powers.Count > 0)
             {
                 <MudPaper Class="pa-3 mb-3" Elevation="1">
-                    <MudText Typo="Typo.subtitle1" Class="mb-2">Powers</MudText>
+                    <div class="d-flex align-center flex-wrap gap-2 mb-2">
+                        <MudText Typo="Typo.subtitle1" Style="flex:1">Powers</MudText>
+                        @if (Powers.Any(p => !WorksByDay(p)))
+                        {
+                            <MudSwitch T="bool" @bind-Value="_daytime" Color="Color.Warning" Label="Daytime" />
+                        }
+                    </div>
+                    @if (_daytime)
+                    {
+                        <MudAlert Severity="Severity.Warning" Dense="true" Class="mb-2">
+                            By day Disciplines can't be used. Blood Sorcery, healing and Fortify Form still work.
+                        </MudAlert>
+                    }
                     <PowerList Powers="Powers">
                         <Actions Context="power">
-                            @if (_npc.HoldsVitae && power.VitaeCost is > 0 and var cost)
+                            @if ((!_daytime || WorksByDay(power)) && _npc.HoldsVitae && power.VitaeCost is > 0 and var cost)
                             {
                                 <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2"
                                            Disabled="_busy || _npc.VitaeCurrent < cost"
@@ -224,7 +265,12 @@ else
     private bool _notFound;
     private bool _busy;
     private IReadOnlyList<PowerOption> _catalog = [];
+    private IReadOnlyList<DisciplineOption> _groups = [];
     private IReadOnlyList<CompelOption> _compels = [];
+    /// <summary>The scene is by day: Disciplines stop, sorcery goes on. Only this view's; nothing is saved.</summary>
+    private bool _daytime;
+    private PowerOption? _casting;
+    private ElementReference _rollBuilder;
 
     private string? _compelName;
     private int _compelRating = 1;
@@ -236,6 +282,7 @@ else
         _npc = await Api.GetPlayAsync(Id);
         _notFound = _npc is null;
         _catalog = await Api.GetPowersAsync();
+        _groups = await Api.GetDisciplinesAsync();
         _compels = await Api.GetCompelsAsync();
     }
 
@@ -265,10 +312,20 @@ else
         }
     }
 
-    private List<PowerOption> Powers => _npc!.PowerIds
+    private List<PowerOption> Granted => _npc!.PowerIds
         .Select(id => _catalog.FirstOrDefault(p => p.Id == id))
         .OfType<PowerOption>()
         .ToList();
+
+    private DisciplineOption? GroupOf(PowerOption power) => _groups.FirstOrDefault(g => g.Id == power.PowerGroupId);
+    private bool IsRitual(PowerOption power) => GroupOf(power)?.Kind == PowerGroupKind.BloodSorcery;
+    private List<PowerOption> Rituals => Granted.Where(IsRitual).ToList();
+    private List<PowerOption> Powers => Granted.Where(p => !IsRitual(p)).ToList();
+    private DisciplineOption? Sorcery => Rituals.Select(GroupOf).FirstOrDefault();
+
+    private bool WorksByDay(PowerOption power) => GroupOf(power) is not { } group || SorceryRules.WorksByDay(group.Kind);
+    // Pools are labelled with their power's name.
+    private bool WorksByDay(string poolLabel) => Granted.FirstOrDefault(p => p.Name == poolLabel) is not { } power || WorksByDay(power);
 
     private async Task<bool> ActAsync(PlayAction action)
     {
@@ -313,6 +370,17 @@ else
         var text = _condition.Trim();
         _condition = null;
         await ActAsync(new PlayAction { Kind = PlayActionKind.AddCondition, Text = text });
+    }
+
+    /// <summary>Spends the Ritual's Vitae, then sets up its roll in the builder (full sheets) for Eruditions and the target.</summary>
+    private async Task CastAsync(PowerOption ritual, int cost)
+    {
+        if (cost > 0 && !await ActAsync(new PlayAction { Kind = PlayActionKind.AdjustVitae, Amount = -cost })) return;
+        Snackbar.Add(cost > 0 ? $"{ritual.Name}: spent {cost} Vitae." : $"Casting {ritual.Name}.", Severity.Info);
+        if (!_npc!.IsFullSheet) return;
+        _casting = ritual;
+        StateHasChanged();
+        await _rollBuilder.FocusAsync(); // brings the builder into view, above the Rituals
     }
 
     private async Task SpendForPowerAsync(PowerOption power, int cost)

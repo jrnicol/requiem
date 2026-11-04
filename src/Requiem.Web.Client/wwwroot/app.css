@@ -462,13 +462,38 @@ body:has(.mud-layout) .boot-splash {
     grid-template-areas:
         "head head"
         "fields result"
-        "extras result";
+        "extras result"
+        "sorcery result";
     grid-template-columns: minmax(0, 1fr) auto;
     margin-top: 0.75rem;
     padding: 0.75rem;
 }
 
-.roll-builder-head { grid-area: head; }
+.roll-builder-head {
+    align-items: center;
+    display: flex;
+    gap: 0.5rem;
+    grid-area: head;
+}
+
+/* Casting a Ritual: its sorcery's Eruditions, the target's Blood Potency and the casting time. */
+.roll-builder-sorcery {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    grid-area: sorcery;
+}
+
+/* Some Eruditions are a phrase long: let them wrap on a phone rather than run off the edge. */
+.roll-builder-sorcery .mud-chip {
+    height: auto;
+    max-width: 100%;
+    min-height: 24px;
+}
+
+.roll-builder-sorcery .mud-chip-content {
+    white-space: normal;
+}
 
 .roll-builder-fields {
     display: grid;
@@ -534,6 +559,7 @@ body:has(.mud-layout) .boot-splash {
             "head"
             "fields"
             "extras"
+            "sorcery"
             "result";
         grid-template-columns: minmax(0, 1fr);
     }
