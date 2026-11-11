@@ -46,11 +46,15 @@ phases:
       - DISTRIBUTION=$(aws cloudformation describe-stacks --stack-name "$APP_STACK" --query "Stacks[0].Outputs[?OutputKey=='DistributionId'].OutputValue" --output text)
       - SITE=$(aws cloudformation describe-stacks --stack-name "$APP_STACK" --query "Stacks[0].Outputs[?OutputKey=='SiteUrl'].OutputValue" --output text)
 
-      # _framework files have fingerprinted names, so they're cached for a year. CloudFront compresses on the
-      # way out, so the .gz/.br copies aren't uploaded. .wasm needs its own type for streaming compilation.
+      # _framework files have fingerprinted names, so they're cached for a year. They go up as the build's own Brotli
+      # copies under their plain names: smaller than CloudFront's on-the-fly compression (about 3.2 MB against 4.2 MB
+      # measured 2026-11-10), and CloudFront doesn't compress some types at all. Every browser takes Brotli over HTTPS.
+      # .wasm needs its own type for streaming compilation.
       - WWW=out/client/wwwroot
-      - aws s3 sync "$WWW/_framework" "s3://${BUCKET}/_framework" --delete --exclude "*.gz" --exclude "*.br" --exclude "*.wasm" --cache-control "public, max-age=31536000, immutable"
-      - aws s3 sync "$WWW/_framework" "s3://${BUCKET}/_framework" --delete --exclude "*" --include "*.wasm" --content-type application/wasm --cache-control "public, max-age=31536000, immutable"
+      - mkdir -p out/framework-br
+      - for f in "$WWW"/_framework/*.br; do cp "$f" "out/framework-br/$(basename "${f%.br}")"; done
+      - aws s3 sync out/framework-br "s3://${BUCKET}/_framework" --delete --exclude "*.wasm" --content-encoding br --cache-control "public, max-age=31536000, immutable"
+      - aws s3 sync out/framework-br "s3://${BUCKET}/_framework" --delete --exclude "*" --include "*.wasm" --content-type application/wasm --content-encoding br --cache-control "public, max-age=31536000, immutable"
       # Everything else (index.html, app.css, MudBlazor's files) keeps its name between builds: always revalidate.
       - aws s3 sync "$WWW" "s3://${BUCKET}" --delete --exclude "_framework/*" --exclude "*.gz" --exclude "*.br" --cache-control "no-cache"
       - aws cloudfront create-invalidation --distribution-id "$DISTRIBUTION" --paths "/*"

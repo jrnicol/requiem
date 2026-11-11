@@ -32,6 +32,25 @@ html, body {
     color: #b3a9ad;
 }
 
+.boot-splash-bar {
+    background: #3a2a2e;
+    border-radius: 2px;
+    height: 4px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+    position: relative;
+    width: min(16rem, 70vw);
+}
+
+.boot-splash-bar::after {
+    background: #c62828;
+    content: "";
+    inset: 0 auto 0 0;
+    position: absolute;
+    transition: width 0.2s ease-out;
+    width: var(--blazor-load-percentage, 0%);
+}
+
 body:has(.mud-layout) .boot-splash {
     display: none;
 }

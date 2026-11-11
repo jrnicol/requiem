@@ -144,8 +144,13 @@ Resources:
       Architectures: [arm64]
       Handler: Requiem.Web
       # Memory also sets CPU. Measured 2026-10-26: a cold start's first request took 0.7 s at 1 GB, 0.4 s at
-      # 2 GB and 0.27 s at 3 GB; at this traffic the extra memory stays within Lambda's free allowance.
-      MemorySize: 3008
+      # 2 GB and 0.27 s at 3 GB. With SnapStart the start-up work happens once, when a version is published, and
+      # SnapStart for .NET bills the cached snapshot by its memory, so 1 GB keeps that near $4 a month (2026-11-10).
+      MemorySize: 1024
+      # Cold starts restore a snapshot taken after start-up (seeding, the catalog, the sign-in keys) instead of
+      # running it. Applies to published versions only: API Gateway calls the ApiLive alias.
+      SnapStart:
+        ApplyOn: PublishedVersions
       Timeout: 30
       Role: !GetAtt ApiRole.Arn
       Code:
@@ -165,6 +170,27 @@ Resources:
           # A one-time code, useless once the first account exists; visible only to the project's admins.
           Auth__SetupCode: !Sub '{{resolve:secretsmanager:${SetupCode}:SecretString}}'
 
+  ApiVersion:
+    Type: AWS::Lambda::Version
+    Metadata:
+      com.aws.cloudformation.Context:
+        why: >-
+          SnapStart snapshots a published version. Every property of a Version forces a new one, so describing it
+          by the build's CodeKey publishes (and snapshots) a fresh version on each deploy.
+        must: >-
+          A change to the function's settings alone (no new build) publishes no version: the alias keeps the old
+          settings until the next build goes out.
+    Properties:
+      FunctionName: !Ref ApiFunction
+      Description: !Ref CodeKey
+
+  ApiLive:
+    Type: AWS::Lambda::Alias
+    Properties:
+      FunctionName: !Ref ApiFunction
+      FunctionVersion: !GetAtt ApiVersion.Version
+      Name: live
+
   HttpApi:
     Type: AWS::ApiGatewayV2::Api
     Metadata:
@@ -181,7 +207,7 @@ Resources:
     Properties:
       ApiId: !Ref HttpApi
       IntegrationType: AWS_PROXY
-      IntegrationUri: !GetAtt ApiFunction.Arn
+      IntegrationUri: !Ref ApiLive
       PayloadFormatVersion: '2.0'
 
   ApiRoute:
@@ -216,7 +242,7 @@ Resources:
   ApiInvokePermission:
     Type: AWS::Lambda::Permission
     Properties:
-      FunctionName: !Ref ApiFunction
+      FunctionName: !Ref ApiLive
       Action: lambda:InvokeFunction
       Principal: apigateway.amazonaws.com
       SourceArn: !Sub 'arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${HttpApi}/*'

@@ -67,8 +67,21 @@
     [Parameter] public Guid? SceneId { get; set; }
     [Parameter] public EventCallback<PlayCharacter> OnRemove { get; set; }
 
-    private bool _busy;
+    private PlayChannel? _channel;
+    /// <summary>Only while an action the browser can't predict (adding a wound or condition) is on its way.</summary>
+    private bool _busy => _channel?.Waiting == true;
     private string? _condition;
+
+    protected override void OnInitialized() =>
+        _channel = new PlayChannel(Api, Npc.Id, () => Npc, ShowAsync, message => Snackbar.Add(message, Severity.Warning));
+
+    // The scene holds the character: hand it the new state, and show it here at once without waiting for the scene.
+    private async Task ShowAsync(PlayCharacter character)
+    {
+        Npc = character;
+        StateHasChanged();
+        await NpcChanged.InvokeAsync(character);
+    }
 
     private string PlayUrl => SceneId is { } scene ? $"play/{Npc.Id}?scene={scene}" : $"play/{Npc.Id}";
 
@@ -77,20 +90,7 @@
         Npc.Kind.ToString(), Npc.BloodlineName, Npc.IsFullSheet ? null : "Supporting Cast",
     }.Where(s => !string.IsNullOrEmpty(s)));
 
-    private async Task ActAsync(PlayAction action)
-    {
-        _busy = true;
-        try
-        {
-            var result = await Api.PlayAsync(Npc.Id, action);
-            if (result.Saved is { } saved) await NpcChanged.InvokeAsync(saved);
-            else Snackbar.Add(result.Message ?? "That didn't save.", Severity.Warning);
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
+    private Task ActAsync(PlayAction action) => _channel!.SendAsync(action);
 
     private async Task OnConditionKeyAsync(KeyboardEventArgs e)
     {

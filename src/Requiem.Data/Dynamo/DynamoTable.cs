@@ -216,6 +216,8 @@ internal static class AuditIds
             _lastMs = ms;
             sequence = _sequence;
         }
-        return $"{ms:x12}{sequence:x4}{Random.Shared.Next():x8}";
+        // The OS generator, not Random.Shared: Lambda SnapStart restores every instance from one snapshot, which would
+        // give them all the same Random state, so two could mint the same id in the same millisecond.
+        return $"{ms:x12}{sequence:x4}{System.Security.Cryptography.RandomNumberGenerator.GetInt32(int.MaxValue):x8}";
     }
 }

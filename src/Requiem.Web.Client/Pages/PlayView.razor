@@ -204,7 +204,7 @@ else
             @if (_npc.Koldun is { } koldun)
             {
                 <MudPaper Class="pa-3 mb-3" Elevation="1">
-                    <KoldunPanel Npc="_npc" Koldun="koldun" Busy="_busy" Act="ActAndRenderAsync"
+                    <KoldunPanel Npc="_npc" Koldun="koldun" Busy="_busy" Act="ActAsync"
                                  Eruditions="[.. SorceryRules.Eruditions(KoldunRules.Sorcery), .. KoldunRules.Eruditions]" />
                 </MudPaper>
             }
@@ -271,7 +271,9 @@ else
 
     private PlayCharacter? _npc;
     private bool _notFound;
-    private bool _busy;
+    private PlayChannel? _channel;
+    /// <summary>Only while an action the browser can't predict (adding a wound, compel or condition) is on its way.</summary>
+    private bool _busy => _channel?.Waiting == true;
     private IReadOnlyList<PowerOption> _catalog = [];
     private IReadOnlyList<DisciplineOption> _groups = [];
     private IReadOnlyList<CompelOption> _compels = [];
@@ -289,6 +291,7 @@ else
     {
         _npc = await Api.GetPlayAsync(Id);
         _notFound = _npc is null;
+        _channel = new PlayChannel(Api, Id, () => _npc!, ShowAsync, message => Snackbar.Add(message, Severity.Warning));
         _catalog = await Api.GetPowersAsync();
         _groups = await Api.GetDisciplinesAsync();
         _compels = await Api.GetCompelsAsync();
@@ -336,28 +339,15 @@ else
     // Pools are labelled with their power's name.
     private bool WorksByDay(string poolLabel) => Granted.FirstOrDefault(p => p.Name == poolLabel) is not { } power || WorksByDay(power);
 
-    private async Task<bool> ActAsync(PlayAction action)
-    {
-        _busy = true;
-        try
-        {
-            var result = await Api.PlayAsync(Id, action);
-            if (result.Saved is { } saved) _npc = saved;
-            else Snackbar.Add(result.Message ?? "That didn't save.", Severity.Warning);
-            return result.Succeeded;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
+    /// <summary>Shows the result at once and saves it behind the scenes (see <see cref="PlayChannel"/>).</summary>
+    private Task<bool> ActAsync(PlayAction action) => _channel?.SendAsync(action) ?? Task.FromResult(false);
 
-    /// <summary>For a child that needs the result: a plain delegate doesn't re-render this page as an EventCallback would.</summary>
-    private async Task<bool> ActAndRenderAsync(PlayAction action)
+    // Re-renders explicitly: the channel calls back outside any event handler (e.g. when a save settles).
+    private Task ShowAsync(PlayCharacter character)
     {
-        var saved = await ActAsync(action);
+        _npc = character;
         StateHasChanged();
-        return saved;
+        return Task.CompletedTask;
     }
 
     private Task<IEnumerable<string>> SearchCompelsAsync(string? text, CancellationToken cancellationToken)

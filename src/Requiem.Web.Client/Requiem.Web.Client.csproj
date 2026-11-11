@@ -8,6 +8,9 @@
     <!-- A standalone app (served from S3 when hosted): fill in index.html's fingerprinted asset names at build. -->
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <BlazorDisableThrowNavigationException>true</BlazorDisableThrowNavigationException>
+    <!-- English-only, so no ICU locale data (over 500 KB) to download. Dates still show in the viewer's time zone,
+         which is separate time zone data. -->
+    <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
 
   <ItemGroup>

@@ -33,6 +33,8 @@ builder.Services.ConfigureHttpJsonOptions(o => RequiemJson.Configure(o.Serialize
 builder.Services.AddHealthChecks();
 // On AWS the API runs in Lambda behind API Gateway's HTTP API (SERVERLESS.md); elsewhere this does nothing.
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
+// With SnapStart, run a request through the pipeline before the snapshot, so a restored instance starts warm.
+builder.Services.AddAWSLambdaBeforeSnapshotRequest(new HttpRequestMessage(HttpMethod.Get, "/healthz"));
 
 var app = builder.Build();
 

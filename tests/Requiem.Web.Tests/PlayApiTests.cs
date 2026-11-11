@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Requiem.Shared.Characters;
 using Requiem.Shared.Contracts;
 using Requiem.Shared.Rules;
@@ -301,6 +302,89 @@ public class PlayApiTests(RequiemWebFactory factory) : IClassFixture<RequiemWebF
     public async Task Scenes_need_a_campaign() =>
         Assert.Equal(HttpStatusCode.BadRequest, (await _http.PostAsJsonAsync("/api/scenes",
             new SceneForm { Name = "Nowhere" }, RequiemJson.Options)).StatusCode);
+
+    // ---------- The browser's prediction ----------
+
+    /// <summary>
+    /// The browser shows each action's result before the server answers (PlayPrediction). Run both side by side:
+    /// where the browser predicts, it must match the server exactly, refusals included.
+    /// </summary>
+    [Fact]
+    public async Task The_browsers_prediction_matches_the_server_action_for_action()
+    {
+        var vampire = (await CreateVampireAsync("Brujah")).Id!.Value;
+        var ghoul = (await CreateGhoulAsync(vitae: 2)).Id!.Value;
+        var response = await _http.PostAsJsonAsync("/api/characters/supporting-cast",
+            new SupportingCastForm { Name = "Doorman", CampaignId = _campaign, Physical = 3, Mental = 2, Social = 2 }, RequiemJson.Options);
+        var cast = (await response.Content.ReadFromJsonAsync<SupportingCastForm>(RequiemJson.Options))!.Id!.Value;
+
+        await CompareAsync(vampire,
+            new() { Kind = PlayActionKind.AddWound, Text = "Shotgun", Amount = 3, DamageType = DamageType.Lethal },
+            new() { Kind = PlayActionKind.AddWound, Text = "Sunlight", Amount = 2, DamageType = DamageType.Aggravated },
+            new() { Kind = PlayActionKind.AddCompel, Text = "Rage", Amount = 2 },
+            new() { Kind = PlayActionKind.AddCondition, Text = "Blinded" },
+            new() { Kind = PlayActionKind.AdjustWillpower, Amount = -2 },
+            new() { Kind = PlayActionKind.AdjustWillpower, Amount = -9 },
+            new() { Kind = PlayActionKind.RegainWillpower, Source = WillpowerSource.Concept },
+            new() { Kind = PlayActionKind.RegainWillpower, Source = WillpowerSource.Virtue },
+            new() { Kind = PlayActionKind.RegainWillpower, Source = WillpowerSource.Vice },
+            new() { Kind = PlayActionKind.AdjustVitae, Amount = -3 },
+            new() { Kind = PlayActionKind.AdjustVitae, Amount = 50 },
+            new() { Kind = PlayActionKind.AdjustVitae, Amount = -99 },
+            new() { Kind = PlayActionKind.AdjustBoost, Boost = FortifyDiscipline.Potence, Amount = 2 },
+            new() { Kind = PlayActionKind.AdjustBoost, Boost = FortifyDiscipline.Potence, Amount = 9 },
+            new() { Kind = PlayActionKind.AdjustBoost, Boost = FortifyDiscipline.Potence, Amount = -1 },
+            new() { Kind = PlayActionKind.ClearBoosts },
+            new() { Kind = PlayActionKind.HealWound, TargetId = -1 },
+            new() { Kind = PlayActionKind.GainAntipathia, Amount = 2 });
+
+        var play = await PlayAsync(vampire);
+        var shotgun = play.Wounds.Single(w => w.Description == "Shotgun").Id;
+        var sunlight = play.Wounds.Single(w => w.Description == "Sunlight").Id;
+        await CompareAsync(vampire,
+            new() { Kind = PlayActionKind.HealWound, TargetId = shotgun, Amount = 1 },
+            new() { Kind = PlayActionKind.HealWithVitae, TargetId = sunlight },
+            new() { Kind = PlayActionKind.HealWithVitae, TargetId = shotgun },
+            new() { Kind = PlayActionKind.RemoveWound, TargetId = shotgun },
+            new() { Kind = PlayActionKind.RemoveCompel, TargetId = play.Compels.Single().Id },
+            new() { Kind = PlayActionKind.RemoveCondition, TargetId = play.Conditions.Single().Id });
+
+        await CompareAsync(ghoul,
+            new() { Kind = PlayActionKind.AdjustBoost, Boost = FortifyDiscipline.Celerity, Amount = 2 },
+            new() { Kind = PlayActionKind.AdjustBoost, Boost = FortifyDiscipline.Celerity, Amount = 1 },
+            new() { Kind = PlayActionKind.AdjustBoost, Boost = FortifyDiscipline.Potence, Amount = 1 },
+            new() { Kind = PlayActionKind.AdjustBoost, Boost = FortifyDiscipline.Fortitude, Amount = 1 });
+
+        await CompareAsync(cast,
+            new() { Kind = PlayActionKind.AdjustWillpower, Amount = -1 },
+            new() { Kind = PlayActionKind.AdjustVitae, Amount = -1 },
+            new() { Kind = PlayActionKind.AddWound, Text = "Punch", Amount = 1, DamageType = DamageType.Bashing });
+    }
+
+    private async Task CompareAsync(Guid id, params PlayAction[] actions)
+    {
+        var current = await PlayAsync(id);
+        foreach (var action in actions)
+        {
+            var (predicted, error) = PlayPrediction.Apply(current, action);
+            var response = await _http.PostAsJsonAsync($"/api/characters/{id}/play", action, RequiemJson.Options);
+            if (response.IsSuccessStatusCode)
+            {
+                var saved = (await response.Content.ReadFromJsonAsync<PlayCharacter>(RequiemJson.Options))!;
+                Assert.True(error is null, $"{action.Kind}: predicted \"{error}\", but the server applied it.");
+                if (predicted is not null)
+                    Assert.Equal(Json(saved), Json(predicted));
+                current = saved;
+            }
+            else
+            {
+                var problem = (await response.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Mvc.ValidationProblemDetails>(RequiemJson.Options))!;
+                Assert.Equal(problem.Errors[""].Single(), error);
+            }
+        }
+
+        static string Json(PlayCharacter c) => JsonSerializer.Serialize(c, RequiemJson.Options);
+    }
 
     // ---------- Helpers ----------
 
